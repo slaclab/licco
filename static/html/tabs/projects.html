@@ -1,0 +1,98 @@
+<div class="tabcontainer" id="projects_tab">
+    <div id="projects_mdl_holder"></div>
+    <div class="maincontent">
+    </div>
+</div>
+
+<script type="text/javascript">
+  let displayProjects = function() {
+    $.getJSON("ws/projects/")
+    .done((data) => {
+      let projects = data.value, projstmpl = `<div class="table-responsive">
+        <table class="table table-condensed table-striped table-bordered" id="projectstbl">
+          <thead><tr><th></th><th>Name</th><th>Status</th><th>Owner</th><th>Editors</th></tr></thead>
+          <tbody>{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
+            <td>
+              <span class="icn diff" title="Compare ( diff) with another project"><i class="fas fa-code-compare fa-lg"></i></span>
+              <span class="icn clone" title="Clone this project"><i class="fas fa-clone fa-lg"></i></span>
+              {{^_submitted}}{{^_approved}}<span class="icn seek" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
+              {{#_submitted}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_submitted}}
+            </td>
+            <td><span class="prjnm">{{name}}</span></td><td>{{status}}</td><td>{{owner}}</td><td>{{editors}}</td></tr>{{/projects}}</tbody>
+        </table>
+      </div>`; Mustache.parse(projstmpl);
+      _.each(projects, (p) => { p["_submitted"] = _.get(p, "status", "development") == "submitted"; p["_approved"] = _.get(p, "status", "development") == "approved"; })
+      let rendered = $(Mustache.render(projstmpl, { projects : projects }));
+      rendered.find(".prjnm").on("click", function() { let prjid = $(this).closest("tr").attr("data-id"); console.log(prjid); displayProject(prjid); } )
+      rendered.find(".seek").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.getJSON("ws/projects/" + prjid + "/submit_for_approval").done(function(){ window.location.reload(); })
+      })
+      rendered.find(".approve").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.getJSON("ws/projects/" + prjid + "/approve_project").done(function(){ window.location.reload(); })
+      })
+      rendered.find(".diff").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.when($.ajax("static/html/tabs/pickprj.html"), $.getJSON("ws/projects/"))
+        .done(function(d0, d1){
+          let ppjtmpl=d0[0], allprjs=d1[0].value; Mustache.parse(ppjtmpl);
+          let otherPrjs = _.reject(allprjs, (p) => { return p["_id"] == prjid });
+          $("#projects_mdl_holder").empty().append(Mustache.render(ppjtmpl, {projects: otherPrjs}));
+          $("#projects_mdl_holder").find(".modal").modal("show");
+          $("#projects_mdl_holder").find(".sbm").on("click", function(){
+            let selPrjId = $("#projects_mdl_holder").find(".prjsel").val();
+            if(_.isEmpty(selPrjId)) { $("#projects_mdl_holder").find(".errormsg").text("Please select a project").removeClass("d-none"); return; }
+            $("#projects_mdl_holder").find(".modal").modal("hide");
+            $("#projects_mdl_holder").empty();
+            $.when($.ajax("static/html/tabs/prjdiff.html"), $.getJSON("ws/projects/" + prjid + "/diff_with", {other_id: selPrjId}))
+            .done(function(e0, e1) {
+              let difftmpl = e0[0], diffdata = e1[0].value; Mustache.parse(difftmpl);
+              $("#projects_mdl_holder").empty().append(Mustache.render(difftmpl, {myprj: prjid, otprj: selPrjId, diffs: diffdata}));
+              $("#projects_mdl_holder").find(".modal").modal("show");
+            })
+          })
+        })
+      })
+      rendered.find(".clone").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.ajax("static/html/tabs/nmdsmdl.html")
+        .done(function(d0) {
+          Mustache.parse(d0);
+          $("#projects_mdl_holder").empty().append(Mustache.render(d0, {"title": "Cloned Project details"}));
+          $("#projects_mdl_holder").find(".modal").modal("show");
+          $("#projects_mdl_holder").find(".sbm").on("click", function(){
+            $("#projects_mdl_holder").find(".errormsg").empty().addClass("d-none");
+            let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#projects_mdl_holder").find("[name="+k+"]").val()]}));
+            console.log(newprj);
+            $.post({url: "ws/projects/" + prjid + "/clone", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
+            .done(function(data, textStatus, jqXHR) {
+              if(!_.get(data, "success", false)) {
+                $("#projects_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+                return
+              }
+              $("#projects_mdl_holder").find(".modal").modal("hide");
+              $("#projects_mdl_holder").empty();
+              window.location.reload();
+            }).fail(function(data, textStatus, jqXHR) {
+              $("#projects_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+              return
+            })
+          })
+        })
+      })
+
+
+      $("#projects_tab").find(".maincontent").empty().append(rendered);
+    })
+  }
+
+  let displayProject = function(id) {
+    window.location.assign("projects/"+id+"/index.html");
+  }
+
+
+  $("#projects_tab").on("lg.loaded.bs.tab", function() {
+    displayProjects();
+  });
+</script>

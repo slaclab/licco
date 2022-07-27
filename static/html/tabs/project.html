@@ -1,0 +1,201 @@
+<div class="tabcontainer" id="project_tab">
+    <div id="project_mdl_holder"></div>
+    <div class="maincontent">
+        <div class="current_filters"></div>
+        <div class="table-responsive">
+          <table class="table table-condensed table-striped table-bordered fcstbl">
+            <thead><tr><th></th><th>Name</th><th>State</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+  let showallentries = false, srchparm = { name: null, state: null, asoftimestamp: null };
+
+  let editfc = function(fcid, prj, fcs) {
+    $.when($.ajax("../../static/html/tabs/fcvals.html"), $.getJSON("../../ws/enums/FCState"))
+    .done(function(d0, d1) {
+      let tmpl=d0[0], fcstates=_.sortBy(_.map(d1[0].value, (v,k) => { return _.defaults({}, v, {"value": k}) }), "sortorder"); Mustache.parse(tmpl);
+      let thefc = _.find(fcs, ["_id", fcid]);
+      _.find(fcstates, ["value", _.get(thefc, "state", "Conceptual")])["selected"] = true;
+      $("#project_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, fc: thefc, fcstates: fcstates }));
+      $("#project_mdl_holder").find(".modal").modal("show");
+      $("#project_mdl_holder").find(".sbm").on("click", function(){
+        $("#project_mdl_holder").find(".errormsg").empty().addClass("d-none");
+        let newfc = _.fromPairs(_.map(["state", "x", "y", "z"], function(k){ return [k, $("#project_mdl_holder").find("[name="+k+"]").val()]}));
+        console.log(newfc);
+        $.post({url: "../../ws/projects/" + prj["_id"] + "/fcs/" + fcid, data: JSON.stringify(newfc), contentType: "application/json; charset=utf-8", dataType: "json"})
+        .done(function(data, textStatus, jqXHR) {
+          if(!_.get(data, "success", false)) {
+            $("#project_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+            return
+          }
+          $("#project_mdl_holder").find(".modal").modal("hide");
+          $("#project_mdl_holder").empty();
+          window.location.reload();
+        }).fail(function(data, textStatus, jqXHR) {
+          $("#project_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+          return
+        })
+      })
+    });
+  }
+
+  let displayFilters = function(matchingtags) {
+    console.log(matchingtags);
+    if(!showallentries || !_.every(_.values(srchparm), _.isEmpty)) {
+      let tmpl = `<div class="d-flex">Filters are being applied - to clear all please use the <i class="fa-solid fa-broom"></i>button in the toolbar ( top right )
+        {{^showallentries}}<div class="filt">Currently showing only functional components modified since project creation</div>{{/showallentries}}
+        {{#srchparm.name}}<div class="filt"><span class="fl">Name:</span> {{srchparm.name}}</div>{{/srchparm.name}}
+        {{#srchparm.state}}<div class="filt"><span class="fl">State:</span> {{srchparm.state}}</div>{{/srchparm.state}}
+        {{#srchparm.asoftimestamp}}<div class="filt"><span class="fl">Asof:</span> {{#FormatDateTime}}{{srchparm.asoftimestamp}}{{/FormatDateTime}} ( {{#matchingtags}}{{.}}{{/matchingtags}}</div>{{/srchparm.asoftimestamp}} )
+        </ul></div>
+      `;
+      Mustache.parse(tmpl);
+      let fp = { showallentries: showallentries, srchparm: srchparm, matchingtags: matchingtags };
+      fp.FormatDateTime = licco_formatdatetime;
+      let rdrd = $(Mustache.render(tmpl, fp));
+      $("#project_tab").find(".current_filters").empty().html(rdrd);
+      if(_.every(_.values(srchparm), _.isEmpty)) { $("#toolbar_for_tab").find(".tag").removeClass("d-none") } else { $("#toolbar_for_tab").find(".tag").addClass("d-none") }
+    } else {
+      $("#project_tab").find(".current_filters").empty();
+    }
+  }
+
+  // {{^showallentries}}<tr><td colspan="100%"> - to see everything, click on the <i class="fa fa-list"></i> icon in the toolbar.</td></tr>{{/showallentries}}
+
+  $("#project_tab").on("lg.loaded.bs.tab", function() {
+    let tmpl = `{{#fcs}}<tr data-id={{_id}}><td><span class="icn editfc d-none"><i class="fa fa-edit fa-lg"></i></span></td><td>{{name}}</td><td>{{state}}</td><td>{{x}}</td><td>{{y}}</td><td>{{z}}</td></tr>{{/fcs}}`; Mustache.parse(tmpl);
+    let filter = { showallentries : showallentries };
+    if(!_.isEmpty(srchparm.name)) { filter["name"] = srchparm.name; }
+    if(!_.isEmpty(srchparm.state)) { filter["state"] = srchparm.state; }
+    if(!_.isEmpty(srchparm.asoftimestamp)) { filter["asoftimestamp"] = moment(srchparm.asoftimestamp).toISOString(); }
+    $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/fcs/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags"))
+    .done(function(d0, d1, d2){
+      let prj = d0[0].value, tags=d2[0].value, fcs = _.map(d1[0].value, (v,k) => { return _.defaults({}, v, {"_id": k})  }), rndrd = Mustache.render(tmpl, {fcs: fcs, showallentries : showallentries});
+      $("#prjNav").find(".prjnm").empty().append(prj["name"]);
+      $("#project_tab").find(".fcstbl tbody").empty().append(rndrd);
+      let matchingtags = null;
+      if(!_.isEmpty(srchparm.asoftimestamp)) {
+        matchingtags = _.map(_.filter(tags, function(x){ return moment(x["time"]).isSame(moment(srchparm.asoftimestamp)) }), "name");
+      }
+      displayFilters(matchingtags);
+
+      if(_.get(prj, "status", "") == "development") {
+        $("#project_tab").find(".fcstbl tbody .editfc").removeClass("d-none").on("click", function(){
+          let fcid = $(this).closest("tr").attr("data-id");
+          editfc(fcid, prj, fcs);
+        })
+      }
+    })
+  })
+  $("#toolbar_for_tab").empty().append(`<span class="tabtblbar">
+    <span class="icn addnewfc"><i class="fa fa-plus fa-lg" title="Add new FC"></i></span>
+    <span class="icn clearfilter"><i class="fa-solid fa-broom fa-lg" title="Clear all filter to show all FCs"></i></span>
+    <span class="icn postcrt"><i class="fa-solid fa-tree fa-lg" title="Show only FC's with changes after the project was created"></i></span>
+    <span class="icn srch"><i class="fa-solid fa-magnifying-glass fa-lg" title="Filter FC's by name, state etc"></i></span>
+    <span class="icn tag d-none"><i class="fa-solid fa-tag fa-lg" title="Create a tag"></i></span>
+    <span class="icn tags"><i class="fa-solid fa-tags fa-lg" title="Show tags"></i></span>
+    <span class="icn hist"><i class="fa-solid fa-clock-rotate-left fa-lg" title="Show the history of changes"></i></span>
+  </span>`);
+  $("#toolbar_for_tab").find(".addnewfc").on("click", function(){
+    $.when($.ajax("../../static/html/tabs/pickfc.html"), $.getJSON("../../ws/fcs/"), $.getJSON("../../ws/projects/" + project_id + "/fcs/"), $.getJSON("../../ws/projects/" + project_id + "/"))
+    .done(function(d0, d1, d2, d3){
+      let pfctmpl=d0[0], allfcs=d1[0].value, fcs = _.map(d2[0].value, (v,k) => { return _.defaults({}, v, {"_id": k})  }), prj = d3[0].value; Mustache.parse(pfctmpl);
+      let missingFCs = _.differenceWith(allfcs, fcs, (av, ov) => { return av["_id"] == ov["_id"] });
+      $("#project_mdl_holder").empty().append(Mustache.render(pfctmpl, {prj: prj, fcs: missingFCs}));
+      $("#project_mdl_holder").find(".modal").modal("show");
+      $("#project_mdl_holder").find(".sbm").on("click", function(){
+        let selFcId = $("#project_mdl_holder").find(".fcsel").val();
+        if(_.isEmpty(selFcId)) { $("#project_mdl_holder").find(".errormsg").text("Please select a functional component").removeClass("d-none"); return; }
+        $("#project_mdl_holder").find(".modal").modal("hide");
+        $("#project_mdl_holder").empty();
+        editfc(selFcId, prj, _.unionBy(fcs, [_.find(missingFCs, ["_id", selFcId])], ["_id"]));
+      })
+    })
+  })
+
+  $("#toolbar_for_tab").find(".clearfilter").on("click", function() {
+    showallentries = true; srchparm = { name: null, state: null, asoftimestamp: null }
+    $("#project_tab").trigger("lg.loaded.bs.tab");
+  });
+  $("#toolbar_for_tab").find(".srch").on("click", function() {
+    $.when($.ajax("../../static/html/tabs/srchfc.html"), $.getJSON("../../ws/enums/FCState"))
+    .done(function(d0, d1) {
+      let tmpl=d0[0], fcstates=_.sortBy(_.map(d1[0].value, (v,k) => { return _.defaults({}, v, {"value": k}) }), "sortorder"); Mustache.parse(tmpl);
+      let selfc = _.find(fcstates, ["value", _.get(srchparm, "state", "")]); if(!_.isEmpty(selfc)) { selfc["selected"] = true }
+      $("#project_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, fcstates: fcstates, srchparm: srchparm }));
+      $("#project_mdl_holder").find(".modal").modal("show");
+      $("#project_mdl_holder").find(".sbm").on("click", function(){
+        srchparm = _.fromPairs(_.map(["name", "state"], function(k){ return [k, $("#project_mdl_holder").find("[name="+k+"]").val()]}));
+        $("#project_mdl_holder").find(".modal").modal("hide");
+        $("#project_mdl_holder").empty();
+        $("#project_tab").trigger("lg.loaded.bs.tab");
+      });
+    })
+  });
+  $("#toolbar_for_tab").find(".hist").on("click", function() {
+    $.when($.ajax("../../static/html/tabs/prjhist.html"), $.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/changes/"))
+    .done(function(d0, d1, d2) {
+      let tmpl=d0[0], prj=d1[0], changes = d2[0].value;
+      Mustache.parse(tmpl); prj.FormatDateTime = licco_formatdatetime;
+      for(let i=0; i < changes.length-1; i++) { if(changes[i].time != changes[i+1].time) { changes[i+1].checkout_possible = true; } }
+      $("#project_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, changes: changes}));
+      $("#project_mdl_holder").find(".checkout").on("click", function(){
+        let changeid = $(this).closest("tr").attr("data-id");
+        srchparm.asoftimestamp = _.find(changes, ["_id", changeid])["time"];
+        $("#project_mdl_holder").find(".modal").modal("hide");
+        $("#project_tab").trigger("lg.loaded.bs.tab");
+      })
+      $("#project_mdl_holder").find(".modal").modal("show");
+    })
+  });
+
+  $("#toolbar_for_tab").find(".postcrt").on("click", function() {
+    showallentries = false;
+    $("#project_tab").trigger("lg.loaded.bs.tab");
+  });
+
+  $("#toolbar_for_tab").find(".tags").on("click", function() {
+    $.when($.ajax("../../static/html/tabs/choosetag.html"), $.getJSON("../../ws/projects/" + project_id + "/tags"))
+    .done(function(d0, d1) {
+      let tmpl=d0[0], tags=d1[0].value; Mustache.parse(tmpl);
+      $("#project_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, tags: tags }));
+      $("#project_mdl_holder").find(".modal").modal("show");
+      $("#project_mdl_holder").find(".tagname input").on("change", function(){
+        let tag_name = $(this).val();
+        console.log(tag_name);
+        let change = _.find(tags, ["name", tag_name]);
+        srchparm.asoftimestamp = change["time"];
+        $("#project_mdl_holder").find(".modal").modal("hide");
+        $("#project_mdl_holder").empty();
+        $("#project_tab").trigger("lg.loaded.bs.tab");
+      });
+    })
+  });
+
+  $("#toolbar_for_tab").find(".tag").on("click", function() {
+    $.ajax("../../static/html/tabs/tagnm.html")
+    .done(function(d0) {
+      let tmpl=d0; Mustache.parse(tmpl);
+      $("#project_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj }));
+      $("#project_mdl_holder").find(".modal").modal("show");
+      $("#project_mdl_holder").find(".sbm").on("click", function(){
+        let tag_name = $("#project_mdl_holder").find("[name="+"name"+"]").val();
+        $.getJSON("../../ws/projects/" + project_id + "/add_tag", {tag_name: tag_name})
+        .done(function(st){
+          if(!_.get(st, "success", false)) {
+            $("#project_mdl_holder").find(".errormsg").text("Server side exception " + _.get(st, "errormsg", "N/A; please check the logs"));
+            return;
+          }
+          $("#project_mdl_holder").find(".modal").modal("hide");
+          $("#project_mdl_holder").empty();
+        })
+        $("#project_tab").trigger("lg.loaded.bs.tab");
+      });
+    })
+  });
+
+</script>

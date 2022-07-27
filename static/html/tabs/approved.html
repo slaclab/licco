@@ -1,0 +1,24 @@
+<div class="tabcontainer" id="apprv_tab">
+    <h6 class="text-center prjnm"></h6>
+    <div class="maincontent">
+        <div class="table-responsive">
+          <table class="table table-condensed table-striped table-bordered fcstbl">
+            <thead><tr><th></th><th>Name</th><th>State</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+  $("#apprv_tab").on("lg.loaded.bs.tab", function() {
+    let tmpl = `{{#.}}<tr data-id={{_id}}><td></td><td>{{name}}</td><td>{{state}}</td><td>{{x}}</td><td>{{y}}</td><td>{{z}}</td></tr>{{/.}}`; Mustache.parse(tmpl);
+    $.getJSON("ws/approved")
+    .done(function(d0, d1){
+      let prj = d0.value, fcs = _.sortBy(_.map(_.get(prj, "fcs", {}), (v,k) => { return _.defaults({}, v, {"value": k}) }), "sortorder"), rndrd = Mustache.render(tmpl, fcs);
+      $("#apprv_tab").find(".prjnm").empty().append(prj["name"]);
+      $("#apprv_tab").find(".fcstbl tbody").empty().append(rndrd);
+      $("#toolbar_for_tab").find(".home").on("click", function(){ window.location.assign("../../"); })
+    })
+  })
+</script>

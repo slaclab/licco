@@ -1,0 +1,51 @@
+<div class="tabcontainer" id="fcs_tab">
+    <div id="fcs_mdl_holder"></div>
+    <div class="maincontent"></div>
+</div>
+
+<script type="text/javascript">
+  let displayfcs = function() {
+    $.getJSON("ws/fcs/")
+    .done((data) => {
+      let fcs = data.value, fcstmpl = `<div class="table-responsive">
+        <table class="table table-condensed table-striped table-bordered" id="fcstbl">
+          <thead><tr><th></th><th>Name</th><th>Description</th></tr></thead>
+          <tbody>{{#fcs}}<tr data-id="{{_id}}"><td></td><td><span class="prjnm">{{name}}</span></td><td>{{description}}</td></tr>{{/fcs}}</tbody>
+        </table>
+      </div>`; Mustache.parse(fcstmpl);
+      let rendered = $(Mustache.render(fcstmpl, { fcs : fcs }));
+      $("#fcs_tab").find(".maincontent").empty().append(rendered);
+    })
+  }
+
+  $("#fcs_tab").on("lg.loaded.bs.tab", function() {
+    displayfcs();
+    $("#toolbar_for_tab").append(`<span class="icn addnewfc"><i class="fa fa-plus fa-lg"></i></span>`);
+    $("#toolbar_for_tab").find(".addnewfc").on("click", function(){
+      $.ajax("static/html/tabs/nmdsmdl.html")
+      .done(function(d0) {
+        Mustache.parse(d0);
+        $("#fcs_mdl_holder").empty().append(Mustache.render(d0, {"title": "Functional component"}));
+        $("#fcs_mdl_holder").find(".modal").modal("show");
+        $("#fcs_mdl_holder").find(".sbm").on("click", function(){
+          $("#fcs_mdl_holder").find(".errormsg").empty().addClass("d-none");
+          let newfc = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#fcs_mdl_holder").find("[name="+k+"]").val()]}));
+          console.log(newfc);
+          $.post({url: "ws/fcs/", data: JSON.stringify(newfc), contentType: "application/json; charset=utf-8", dataType: "json"})
+          .done(function(data, textStatus, jqXHR) {
+            if(!_.get(data, "success", false)) {
+              $("#fcs_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+              return
+            }
+            $("#fcs_mdl_holder").find(".modal").modal("hide");
+            $("#fcs_mdl_holder").empty();
+            window.location.reload();
+          }).fail(function(data, textStatus, jqXHR) {
+            $("#fcs_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+            return
+          })
+        })
+      });
+    })
+  });
+</script>

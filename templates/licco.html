@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>PCDS Line configuration</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="static/licco.css">
+  <link rel="stylesheet" type="text/css" href="js/tempusdominus-bootstrap-4/build/css/tempusdominus-bootstrap-4.min.css">
+  <link rel="stylesheet" type="text/css" href="js/@fortawesome/fontawesome-free/css/all.min.css">
+  <link rel="stylesheet" type="text/css" href="js/noty/lib/noty.css">
+
+  <script type="text/javascript" src="js/jquery/jquery.min.js"></script>
+  <script type="text/javascript" src="js/mustache/mustache.min.js"></script>
+  <script type="text/javascript" src="js/lodash/lodash.min.js"></script>
+  <script type="text/javascript" src="js/moment/min/moment-with-locales.min.js"></script>
+  <script type="text/javascript" src="js/noty/lib/noty.min.js"></script>
+  <script type="text/javascript" src="js/bootstrap/js/bootstrap.min.js"></script>
+  <script type="text/javascript" src="js/tempusdominus-bootstrap-4/build/js/tempusdominus-bootstrap-4.min.js"></script>
+  <script type="text/javascript" src="js/@fortawesome/fontawesome-free/js/all.min.js"></script>
+
+  <script type="text/javascript" src="static/licco.js"></script>
+
+  <script type="text/javascript">
+    const logged_in_user  = "{{ logged_in_user }}";
+  </script>
+
+</head>
+<body id="neocaptar">
+
+<nav class="navbar navbar-expand-lg navbar-light" id="captarNav">
+    <a class="navbar-brand" href="#">PCDS Line config</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#myNavbar" aria-controls="myNavbar" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+    <div class="collapse navbar-collapse" id="captarNavbar">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/approved.html" href="#approved">Approved</a></li>
+        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/projects.html" href="#projects">Projects</a></li>
+        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/fcs.html" href="#fcs">FCs</a></li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <span id="toolbar_for_tab"></span>
+        <li class="session_items"><a href="../logout"><span class="logged_in_user_name">{{ logged_in_user }}</span><i class="fa fa-sign-out fa-lg"></i></a></li>
+      </ul>
+    </div>
+</nav>
+
+<div id="glbl_modals_go_here"></div>
+<div class="tab-content container-fluid" id="myTabContainer">
+  <div class="tab-pane fade" id="approved"></div>
+  <div class="tab-pane fade" id="projects"></div>
+  <div class="tab-pane fade" id="fcs"></div>
+</div>
+
+<script type="text/javascript">
+var showTab = function (e) {
+	var target = $(e.target).attr("href");
+    if(!_.isNil(e.relatedTarget)){ console.log(e.relatedTarget.attr("href")) };
+    console.log("Showing tab " + target);
+    history.pushState(null, null, e.target.hash)
+	if ($(target).is(':empty') || $(target).hasClass("always_reload")) {
+		console.log("Activated tab " + target + " is empty. Triggering load");
+		var template_url = $(e.target).attr("data-url");
+	    $.ajax({
+	      type: "GET",
+	      url: template_url,
+	      error: function(data){
+	        alert("Error fetching template " + template_url + ".");
+	      },
+	      success: function(data){
+	  		console.log("Getting tab data and binding selectors");
+	        $(target).empty().html(data);
+            $("#toolbar_for_tab").empty();
+	        $(target).find(".tabcontainer").trigger("lg.loaded.bs.tab", e);
+            $(target).find(".tabcontainer").trigger("lg.shown.bs.tab", e);
+	      }
+	    });
+	} else {
+        console.log("Activated non-empty tab " + target);
+        $("#toolbar_for_tab").empty();
+        $(target).find(".tabcontainer").trigger("lg.shown.bs.tab", e);
+    }
+};
+$(document).ready(function() {
+    $('a[data-toggle="tab"]').on('shown.bs.tab', showTab);
+    // Bootstrap 4 bug; revist after each release...
+    $('#captarNav a').on('click', function(e) {
+        e.preventDefault();
+        $(this).tab('show');
+        var theThis = $(this);
+        $('#captarNav a').removeClass('active');
+        theThis.addClass('active');
+    });
+
+    $("#glbl_modals_go_here").on("hidden.bs.modal", function(){
+        console.log("Modal hidden.bs.modal...");
+    });
+
+    $('.dropdown-menu a.dropdown-toggle').on('click', function(e) {
+      if (!$(this).next().hasClass('show')) {
+        $(this).parents('.dropdown-menu').first().find('.show').removeClass("show");
+      }
+      var $subMenu = $(this).next(".dropdown-menu");
+      $subMenu.toggleClass('show');
+
+
+      $(this).parents('li.nav-item.dropdown.show').on('hidden.bs.dropdown', function(e) {
+        $('.dropdown-submenu .show').removeClass("show");
+      });
+
+
+      return false;
+    });
+
+    // Code for honoring the hash; for example URL#eLog gets you to the eLog
+    var hash = window.location.hash;
+    if (hash) {
+      $('#captarNavbar ul.navbar-nav a[href="' + hash + '"]').tab('show');
+    } else {
+        $('#captarNavbar ul.navbar-nav a:first').tab('show');
+    }
+});
+
+</script>
+</body>
+</html>
