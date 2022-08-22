@@ -1,0 +1,8 @@
+// Run this after loading cxi_sample_data.
+
+db.getSiblingDB("lineconfigdb").fcs.find({}).forEach(function(fc) { 
+    db.getSiblingDB("lineconfigdb").fcs.insertOne({"name": fc["name"]+"_copy0", "description": fc["description"]});
+    db.getSiblingDB("lineconfigdb").fcs.insertOne({"name": fc["name"]+"_copy1", "description": fc["description"]});
+    db.getSiblingDB("lineconfigdb").fcs.insertOne({"name": fc["name"]+"_copy2", "description": fc["description"]});
+    db.getSiblingDB("lineconfigdb").fcs.insertOne({"name": fc["name"]+"_copy3", "description": fc["description"]});
+})

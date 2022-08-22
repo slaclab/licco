@@ -1,0 +1,87 @@
+<div class="tabcontainer" id="projectdiff_tab">
+  <div class="table-responsive maincontent">
+    <table class="table table-condensed table-striped table-bordered fcstbl">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script type="text/javascript">
+  $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
+    $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
+    $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
+  .done(function(d0, d1, d2, d3, d4, d5){
+    let prj = d0[0].value, prjfcs = d1[0].value, oprj = d2[0].value, oprjfcs = d3[0].value, prjdiffs = d4[0].value, fcattrs = d5[0].value;
+    console.log(prjdiffs);
+    let titletmpl = `<span class="prjdifftitle">Difference between <span class="prj">{{prj.name}}</span> and <span class="oprj">{{oprj.name}}</span></span>`; Mustache.parse(titletmpl);
+    $("#prjNav").find(".prjtitle").append(Mustache.render(titletmpl, {prj: prj, oprj: oprj}));
+    let fcswithdiff = _.sortBy(_.uniq(_.map(_.map(_.reject(prjdiffs, ["diff", false]), "key"), (x) => { return x.split(".")[0]})));
+    console.log(fcswithdiff);
+    let cathdr = `<tr class="cathdr"><th></th><th></th>` + _.join(_.map(fcattrs, (x) => { if(_.has(x, "category")) {  if(_.has(x, "category.span")) {  return "<th colspan='" + _.get(x, "category.span") + "'>" + _.get(x, "category.label") + "</th>" } else {  return ""  }  } else {  return "<th></th>"  } }), " ") + `<\tr>`;
+    let lblhdr = `<tr><th data-sort-attr="fc">FC</i></th><th data-sort-attr="fg">Fungible</i></th>` + _.join(_.map(fcattrs, (v, k) => { return "<th data-sort-attr=" + k + ">" + v["label"] + "</th>"; }), " ") + `</tr>`;
+    $("#projectdiff_tab").find(".fcstbl thead").empty().append(cathdr + lblhdr);
+    let diffs = _.map(fcswithdiff, (x) => {
+      let fft = _.get(prjfcs, x, _.get(oprjfcs, x)), fc = _.get(fft, "fft.fc", "N/A"), fg = _.get(fft, "fft.fg", "N/A");
+      return { "fft": x, "fc": fc, "fg": fg, "prj": _.get(prjfcs, x, {}), "oprj": _.get(oprjfcs, x, {}) } 
+    })
+    let tmpl = `{{#fcs}}<tr class="prj" data-fft="{{fft}}"><td>{{fc}}</td><td>{{fg}}</td>`
+      + _.join(_.map(fcattrs, (v,k) => { return "<td data-attr='" + k + "'>"
+      + (_.has(v, "rendermacro") ? "{{#" + v["rendermacro"] + "}}": "")
+      + "{{prj." + k + "}}"
+      + (_.has(v, "rendermacro") ? "{{/" + v["rendermacro"] + "}}": "")
+      + "</td>"}), "") + "</tr>"
+      + `<tr class="oprj"  data-fft="{{fft}}"><td>{{fc}}</td><td>{{fg}}</td>`
+      + _.join(_.map(fcattrs, (v,k) => { return "<td data-attr='" + k + "'>"
+      + (_.has(v, "rendermacro") ? "{{#" + v["rendermacro"] + "}}": "")
+      + "{{oprj." + k + "}}"
+      + (_.has(v, "rendermacro") ? "{{/" + v["rendermacro"] + "}}": "")
+      + "</td>"}), "") + "</tr>{{/fcs}}";
+    Mustache.parse(tmpl);
+    $("#projectdiff_tab").find(".fcstbl tbody").empty().append(licco_musrdr(tmpl, {fcs: diffs}));
+    _.each(_.map(_.map(_.reject(prjdiffs, ["diff", false]), "key"), (x) => { return x.split(".")}), (([fft, attr]) => { $("#projectdiff_tab").find(".fcstbl tbody").find("[data-fft="+ fft + "]").find("[data-attr="+attr+"]").addClass("actualdiff") }));
+    if((_.get(prj, "status", "") == "submitted") && (_.get(oprj, "status", "") == "approved")) {
+      let titletmpl = `<span class="prjdifftitle">Difference between the project seeking approval <span class="prj">{{prj.name}}</span> and the currently approved project <span class="oprj">{{oprj.name}}</span></span>`; Mustache.parse(titletmpl);
+      $("#prjNav").find(".prjtitle").empty().append(Mustache.render(titletmpl, {prj: prj, oprj: oprj}));
+      $("#toolbar_for_tab").empty().append(`<span class="tabtblbar">
+        <span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>
+        <span class="icn reject" title="Do not approve this project; send it back with some notes"><i class="fas fa-xmark fa-lg"></i></span>
+      </span>`);
+      licco_helptlbr($("#toolbar_for_tab").find(".tabtblbar"));
+      $("#toolbar_for_tab").find(".approve").on("click", function(){
+        $.getJSON("../../ws/projects/" + project_id + "/approve_project")
+        .done(function(data){ 
+          if(!_.get(data, "success", false)) {
+            $.ajax("../../static/html/tabs/generic_msg.html")
+            .done(function(d0) {
+              let tmpl = d0; Mustache.parse(tmpl);
+              $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {title: "Server side error", message: _.get(data, "errormsg", "Server side error")}));
+              $("#global_mdl_holder").find(".modal").modal("show");
+              return
+            })
+          } else {
+            window.location.assign("../../#projects");
+          }
+        })
+      })
+      $("#toolbar_for_tab").find(".reject").on("click", function(){
+        $.ajax("../../static/html/tabs/prjrej.html")
+        .done(function(d0) {
+          $("#global_mdl_holder").empty().append(d0);
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".modal").find(".sbm").on("click", function(){
+            if(!licco_validate_form()) { return false; }
+            $.getJSON("../../ws/projects/" + project_id + "/reject_project", {"reason": $("#global_mdl_holder").find("textarea").val()}).done(function(){ 
+              $("#global_mdl_holder").find(".modal").modal("hide");
+              $("#global_mdl_holder").empty();
+              window.location.assign("../../#projects");
+            })
+          })
+        })
+      })
+    } else {
+      $("#toolbar_for_tab").empty();
+      licco_helptlbr($("#toolbar_for_tab"));
+    }
+  })
+</script>

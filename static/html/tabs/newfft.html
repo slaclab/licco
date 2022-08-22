@@ -1,0 +1,96 @@
+<div class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add a new FFT</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-4">
+                <div class="mb-1">Please choose/enter a functional component name and fungible token.</div>
+                <div class="mb-1">The UI should offer suggestions as you type. You can choose one of the existing entities or you can type in a brand new functional component name or fungible token.</div>
+                <div class="mb-1">If either entity does not exist in the system, description boxes are displayed.
+                  Please enter a valid description; and these will be automatically created in the system for you as part of creating the new FFT.
+                </div>
+              </div>
+              <form>
+                <div class="text-danger errormsg"></div>
+                <datalist id="fcs">
+                  {{#fcs}}
+                  <option value={{name}}>
+                  {{/fcs}}
+                </datalist>
+                <datalist id="fgs">
+                  {{#fgs}}
+                  <option value={{name}}>
+                  {{/fgs}}
+                </datalist>
+                <div class="mb-3">
+                   <label type="text" class="form-label">Functional Component</label>
+                   <input name="fc" class="form-select mx-2" data-validation="notempty" list="fcs">
+                   <div class="invalid-feedback">Please choose a functional component.</div>
+                </div>
+               <div class="mb-3">
+                   <label class="form-label">Fungible Token</label>
+                   <input type="text" name="fg" class="form-select mx-2" list="fgs" value="">
+                   <div class="invalid-feedback">Please choose a fungible token.</div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary sbm">Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+  var newfft = function(prefix, allfcs, allfgs, allffts, callWhenDone) {
+    const fcdesc = `<div class="mb-3"><label type="text" class="form-label">Functional Component Description</label><input name="fcdesc" class="form-select mx-2" data-validation="notempty"><div class="invalid-feedback">Please enter a description for this functional component.</div></div>`;
+    const fgdesc = `<div class="mb-3"><label type="text" class="form-label">Fungible Token Description</label><input name="fgdesc" class="form-select mx-2" data-validation="notempty"><div class="invalid-feedback">Please enter a description for this fungible token.</div></div>`;
+    $("#global_mdl_holder").find(".sbm").on("click", function(){
+      if(!licco_validate_form()) { console.log("Failing validation"); return }; 
+      $("#global_mdl_holder").find(".errormsg").text("").addClass("d-none");
+      let fc = $("#global_mdl_holder").find("[name=fc]").val(), fg = $("#global_mdl_holder").find("[name=fg]").val(), fg_blank = (_.isNil(fg) || fg.length == 0 );
+      let postparams = {fc: fc, fg: fg};
+      if(!_.isEmpty(_.find(allffts, (fft) => { return fft.fc.name == fc && fft.fg.name == fg }))) {
+        $("#global_mdl_holder").find(".errormsg").text("The FFT with " + fc + " and " + fg + " is already registered").removeClass("d-none");
+        return;
+      }
+      if(_.isEmpty(_.find(allfcs, (f) => { return f.name == fc }))) {
+        if($("#global_mdl_holder").find("[name=fcdesc]").length <= 0) {
+          $("#global_mdl_holder").find("[name=fc]").closest("div").after(fcdesc);
+          return;
+        }
+        postparams["fc_description"] = $("#global_mdl_holder").find("[name=fcdesc]").val();
+      }
+      if(!fg_blank && _.isEmpty(_.find(allfgs, (f) => { return f.name == fg }))) {
+        if($("#global_mdl_holder").find("[name=fgdesc]").length <= 0) {
+          $("#global_mdl_holder").find("[name=fg]").closest("div").after(fgdesc);
+          return;
+        }
+        postparams["fg_description"] = $("#global_mdl_holder").find("[name=fgdesc]").val();
+      }
+
+      console.log("Creating new FFT with " + fc + " and " + fg);
+      $.post({url: prefix+"ws/ffts/", data: JSON.stringify(postparams), contentType: "application/json; charset=utf-8", dataType: "json"})
+      .done(function(data, textStatus, jqXHR) {
+        if(!_.get(data, "success", false)) {
+          $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+          return
+        }
+        if(_.isFunction(callWhenDone)) { 
+          callWhenDone(data.value) 
+        } else {
+          $("#global_mdl_holder").find(".modal").modal("hide");
+          $("#global_mdl_holder").empty();
+        }
+      }).fail(function(data, textStatus, jqXHR) {
+        $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+        return
+      })
+    })
+    $("#global_mdl_holder").find(".modal").modal("show");
+  }
+</script>

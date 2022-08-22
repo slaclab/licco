@@ -2,7 +2,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{title}}</h5>
+                <h5 class="modal-title">Add a new functional component</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -27,3 +27,30 @@
         </div>
     </div>
 </div>
+
+<script type="text/javascript">
+  var newfc = function(prefix="", callWhenDone) {
+    $("#global_mdl_holder").find(".modal").modal("show");
+    $("#global_mdl_holder").find(".sbm").on("click", function(){
+      licco_validate_form();
+      let newfc = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
+      console.log(newfc);
+      $.post({url: prefix+"ws/fcs/", data: JSON.stringify(newfc), contentType: "application/json; charset=utf-8", dataType: "json"})
+      .done(function(data, textStatus, jqXHR) {
+        if(!_.get(data, "success", false)) {
+          $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+          return
+        }
+        if(_.isFunction(callWhenDone)) { 
+          callWhenDone(data.value) 
+        } else {
+          $("#global_mdl_holder").find(".modal").modal("hide");
+          $("#global_mdl_holder").empty();
+        }
+      }).fail(function(data, textStatus, jqXHR) {
+        $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+        return
+      })
+    })
+  }
+</script>

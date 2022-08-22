@@ -8,6 +8,8 @@ import logging
 import fnmatch
 from datetime import datetime
 import pytz
+import copy
+from functools import wraps
 
 import requests
 import context
@@ -15,10 +17,12 @@ import context
 from flask import Blueprint, jsonify, request, url_for, Response
 
 from dal.utils import JSONEncoder
-from dal.licco import get_projects_for_user, get_project, get_project_fcs, get_fcs, \
-    create_new_functional_component, update_functional_component_in_project, submit_project_for_approval, approve_project, \
+from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
+    create_new_functional_component, update_fft_in_project, submit_project_for_approval, approve_project, \
     get_currently_approved_project, diff_project, FCState, clone_project, get_project_changes, \
-    get_tags_for_project, add_project_tag
+    get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
+    create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
+    get_projects_approval_history, delete_fft, delete_fc, delete_fg
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -30,6 +34,25 @@ logger = logging.getLogger(__name__)
 def logAndAbort(error_msg, ret_status=500):
     logger.error(error_msg)
     return Response(error_msg, status=ret_status)
+
+
+def project_writable(wrapped_function):
+    """
+    Decorator to make sure the project is in a development state and can be written to.
+    Assumes that the id of the project is called prjid.
+    """
+    @wraps(wrapped_function)
+    def function_interceptor(*args, **kwargs):
+        prjid = kwargs.get('prjid', None)
+        if not prjid:
+            raise Exception("Need to specify project id")
+        prj = get_project(prjid)
+        if not prj:
+            raise Exception(f"Project with id {prjid} does not exist")
+        if prj.get("status", "N/A") == "development":
+            return wrapped_function(*args, **kwargs)
+        raise Exception(f"Project with id {prjid} is not in development status")
+    return function_interceptor
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
 @context.security.authentication_required
@@ -43,6 +66,25 @@ def svc_get_enum_descriptions(enumName):
     descs = emumMappings[enumName].descriptions()
     return JSONEncoder().encode({"success": True, "value": { k.value : v for k,v in descs.items() }})
 
+@licco_ws_blueprint.route("/fcattrs", methods=["GET"])
+@context.security.authentication_required
+def svc_get_fcattrs():
+    """
+    Get the metadata for the attributes for the functional components
+    """
+    return JSONEncoder().encode({"success": True, "value": get_fcattrs()})
+
+@licco_ws_blueprint.route("/users/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_users():
+    """
+    Get the users in the system.
+    For now, this is simply the owners of projects.
+    """
+    logged_in_user = context.security.get_current_user_id()
+    users = get_all_users()
+    return JSONEncoder().encode({"success": True, "value": users})
+
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
 @context.security.authentication_required
@@ -51,7 +93,8 @@ def svc_get_projects_for_user():
     Get the projects for a user
     """
     logged_in_user = context.security.get_current_user_id()
-    projects = get_projects_for_user(logged_in_user)
+    sort_criteria = json.loads(request.args.get("sort", '[["start_time", -1]]'))
+    projects = get_all_projects(sort_criteria)
     return JSONEncoder().encode({"success": True, "value": projects})
 
 @licco_ws_blueprint.route("/approved", methods=["GET"])
@@ -60,25 +103,59 @@ def svc_get_currently_approved_project():
     """ Get the currently approved project """
     logged_in_user = context.security.get_current_user_id()
     prj = get_currently_approved_project()
-    prj_fcs = get_project_fcs(prj["_id"])
-    prj["fcs"] = prj_fcs
+    if not prj:
+        return JSONEncoder().encode({"success": False, "value": None})
+    prj_ffts = get_project_ffts(prj["_id"])
+    prj["ffts"] = prj_ffts
     return JSONEncoder().encode({"success": True, "value": prj})
 
-@licco_ws_blueprint.route("/projects/<id>/", methods=["GET"])
+@licco_ws_blueprint.route("/projects/<prjid>/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_project(id):
+def svc_get_project(prjid):
     """
     Get the project details given a project id.
     """
     logged_in_user = context.security.get_current_user_id()
-    project_details = get_project(id)
+    project_details = get_project(prjid)
     return JSONEncoder().encode({"success": True, "value": project_details})
 
-@licco_ws_blueprint.route("/projects/<id>/fcs/", methods=["GET"])
+@licco_ws_blueprint.route("/projects/", methods=["POST"])
 @context.security.authentication_required
-def svc_get_project_fcs(id):
+def svc_create_project():
     """
-    Get the project functional components given a project id.
+    Create an empty project; do we really have a use case for this?
+    """
+    logged_in_user = context.security.get_current_user_id()
+    prjdetails = request.json
+    if not prjdetails.get("name", None):
+        return JSONEncoder().encode({"success": False, "errormsg": "Name cannot be empty"})
+    if not prjdetails.get("description", None):
+        return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
+
+    prj = create_empty_project(prjdetails["name"], prjdetails["description"], logged_in_user)
+    return JSONEncoder().encode({"success": True, "value": prj})
+
+@licco_ws_blueprint.route("/projects/<prjid>/", methods=["POST"])
+@context.security.authentication_required
+def svc_update_project(prjid):
+    """
+    Get the project details given a project id.
+    """
+    logged_in_user = context.security.get_current_user_id()
+    prjdetails = request.json
+    if not prjdetails.get("name", None):
+        return JSONEncoder().encode({"success": False, "errormsg": "Name cannot be empty"})
+    if not prjdetails.get("description", None):
+        return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
+
+    update_project_details(prjid, prjdetails)
+    return JSONEncoder().encode({"success": True, "value": get_project(prjid)})
+
+@licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_project_ffts(prjid):
+    """
+    Get the project's FFT's given a project id.
     """
     logged_in_user = context.security.get_current_user_id()
     showallentries = json.loads(request.args.get("showallentries", "true"))
@@ -88,7 +165,7 @@ def svc_get_project_fcs(id):
         print(asoftimestamp)
     else:
         asoftimestamp=None
-    project_fcs = get_project_fcs(id, showallentries=showallentries, asoftimestamp=asoftimestamp)
+    project_fcs = get_project_ffts(prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
     def __filter__(f, d):
         """ Apply f onto d as a filter """
         r = {}
@@ -96,20 +173,26 @@ def svc_get_project_fcs(id):
             if f(k, v):
                 r[k] = v
         return r
+    filt2fn = {
+        "fc": lambda _,v: fnmatch.fnmatch(v.get("fft", {}).get("fc", ""), request.args["fc"]),
+        "fg": lambda _,v: fnmatch.fnmatch(v.get("fft", {}).get("fg", ""), request.args["fg"]),
+        "location": lambda _,v: fnmatch.fnmatch(v.get("location", ""), request.args["location"]),
+        "state": lambda _,v: v["state"] == request.args["state"]
+    }    
+    for attrname, lmda in filt2fn.items():
+        if request.args.get(attrname, None):
+            logger.info("Applying filter for " + attrname + " " + request.args.get(attrname, ""))
+            project_fcs = __filter__(lmda, project_fcs)
 
-    if request.args.get("name", ""):
-        project_fcs = __filter__(lambda k,v: fnmatch.fnmatch(v["name"], request.args["name"]), project_fcs)
-    if request.args.get("state", ""):
-        project_fcs = __filter__(lambda k,v: v["state"] == request.args["state"], project_fcs)
     return JSONEncoder().encode({"success": True, "value": project_fcs})
 
-@licco_ws_blueprint.route("/projects/<id>/changes/", methods=["GET"])
+@licco_ws_blueprint.route("/projects/<prjid>/changes/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_project_changes(id):
+def svc_get_project_changes(prjid):
     """
     Get the functional component objects
     """
-    changes = get_project_changes(id)
+    changes = get_project_changes(prjid)
     return JSONEncoder().encode({"success": True, "value": changes})
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])
@@ -121,6 +204,24 @@ def svc_get_fcs():
     fcs = get_fcs()
     return JSONEncoder().encode({"success": True, "value": fcs})
 
+@licco_ws_blueprint.route("/fgs/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_fgs():
+    """
+    Get the fungible tokens
+    """
+    fgs = get_fgs()
+    return JSONEncoder().encode({"success": True, "value": fgs})
+
+@licco_ws_blueprint.route("/ffts/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_ffts():
+    """
+    Get a list of functional fungible tokens
+    """
+    ffts = get_ffts()
+    return JSONEncoder().encode({"success": True, "value": ffts})
+
 @licco_ws_blueprint.route("/fcs/", methods=["POST"])
 @context.security.authentication_required
 def svc_create_fc():
@@ -131,16 +232,108 @@ def svc_create_fc():
     status, errormsg, fc = create_new_functional_component(name=newfc.get("name", ""), description=newfc.get("description", ""))
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
-@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fcid>", methods=["POST"])
+@licco_ws_blueprint.route("/fgs/", methods=["POST"])
 @context.security.authentication_required
-def svc_update_fc_in_project(prjid, fcid):
+def svc_create_fg():
+    """
+    Create a fungible token
+    """
+    newfg = request.json
+    status, errormsg, fc = create_new_fungible_token(name=newfg.get("name", ""), description=newfg.get("description", ""))
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+
+@licco_ws_blueprint.route("/ffts/", methods=["POST"])
+@context.security.authentication_required
+def svc_create_fft():
+    """
+    Create a new functional fungible token.
+    For now, we expect the ID's of the functional component and the fungible token ( and not the names )
+    """
+    newfft = request.json
+    status, errormsg, fft = create_new_fft(fc=newfft["fc"], fg=newfft["fg"], fcdesc=newfft.get("fc_description", None), fgdesc=newfft.get("fg_description", None))
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
+
+
+@licco_ws_blueprint.route("/ffts/<fftid>", methods=["DELETE"])
+@context.security.authentication_required
+def svc_delete_fft(fftid):
+    """
+    Delete a FFT if it is not being used in any project
+    """
+    status, errormsg, _ = delete_fft(fftid)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+
+@licco_ws_blueprint.route("/fcs/<fcid>", methods=["DELETE"])
+@context.security.authentication_required
+def svc_delete_fc(fcid):
+    """
+    Delete a FC if it is not being used by an FFT
+    """
+    status, errormsg, _ = delete_fc(fcid)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+
+@licco_ws_blueprint.route("/fgs/<fgid>", methods=["DELETE"])
+@context.security.authentication_required
+def svc_delete_fg(fgid):
+    """
+    Delete a FG if it is not being used by an FFT
+    """
+    status, errormsg, _ = delete_fg(fgid)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
+@context.security.authentication_required
+@project_writable
+def svc_update_fc_in_project(prjid, fftid):
     """
     Update the values of a functional component in a project
     """
     fcupdate = request.json
     userid = context.security.get_current_user_id()
-    status, errormsg, fc = update_functional_component_in_project(prjid, fcid, fcupdate, userid)
+    status, errormsg, fc = update_fft_in_project(prjid, fftid, fcupdate, userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+
+@licco_ws_blueprint.route("/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
+@context.security.authentication_required
+@project_writable
+def svc_sync_fc_from_approved_in_project(prjid, fftid):
+    """
+    Update the values of an FFT in this project from the specified project.
+    Most of the time this is the currently approved project.
+    Pass in a JSON with 
+    :param: other_id - Project id of the other project
+    "param: attrnames - List of attribute names to copy over. If this is a string "ALL", then all the attributes that are set are copied over.
+    """
+    userid = context.security.get_current_user_id()
+    reqparams = request.json
+    logger.info(reqparams)
+    status, errormsg, fc = copy_ffts_from_project(destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[ x["name"] for x in get_fcattrs()] if reqparams["attrnames"]=="ALL" else reqparams["attrnames"], userid=userid)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+
+@licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["POST"])
+@project_writable
+@context.security.authentication_required
+def svc_update_ffts_in_project(prjid):
+    """
+    Insert multiple FFTs into a project
+    """
+    ffts = request.json
+    prj = get_currently_approved_project()
+    prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
+    userid = context.security.get_current_user_id()
+    for fft in ffts:
+        fftid = fft["_id"]
+        fcupdate = copy.copy(prj_ffts.get(fftid, {}))
+        fcupdate.update(fft)
+        for attr in [ "_id", "name" ]:
+            if attr in fcupdate:
+                del fcupdate[attr]
+        fcupdate["state"] = "Conceptual"
+        status, errormsg, fft = update_fft_in_project(prjid, fftid, fcupdate, userid)
+        if not status:
+            return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
+    return JSONEncoder().encode({"success": True, "errormsg": "", "value": get_project_ffts(prjid, showallentries=True, asoftimestamp=None)})
+
 
 @licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval", methods=["GET", "POST"])
 @context.security.authentication_required
@@ -148,8 +341,9 @@ def svc_submit_for_approval(prjid):
     """
     Submit a project for approval
     """
+    approver = request.args.get("approver", None)
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = submit_project_for_approval(prjid, userid)
+    status, errormsg, prj = submit_project_for_approval(prjid, userid, approver)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
@@ -162,6 +356,18 @@ def svc_approve_project(prjid):
     status, errormsg, prj = approve_project(prjid, userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
+@licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
+@context.security.authentication_required
+def svc_reject_project(prjid):
+    """
+    Do not approve a project
+    """
+    userid = context.security.get_current_user_id()
+    reason = request.args.get("reason", None)
+    if not reason:
+        return logAndAbort("Please provide a reason for why this project is not being approved")
+    status, errormsg, prj = reject_project(prjid, userid, reason)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 @licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET"])
 @context.security.authentication_required
@@ -185,6 +391,11 @@ def svc_clone_project(prjid):
     """
     userid = context.security.get_current_user_id()
     newprjdetails = request.json
+    if not newprjdetails["name"] or not newprjdetails["description"]:
+        return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
+    if get_project_by_name(newprjdetails["name"]):
+        return JSONEncoder().encode({"success": False, "errormsg": "Project with the name " + newprjdetails["name"] + " already exists"})
+    
     status, erorrmsg, newprj = clone_project(prjid, newprjdetails["name"], newprjdetails["description"], userid)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
@@ -206,15 +417,23 @@ def svc_add_project_tag(prjid):
     The changeid is optional; if not, specified, we add a tag to the latest change.
     """
     tagname = request.args.get("tag_name", None)
-    changeid = request.args.get("change_id", None)
+    asoftimestamp = request.args.get("asoftimestamp", None)
     if not tagname:
         return JSONEncoder().encode({"success": False, "errormsg": "Please specify the tag_name", "value": None})
-    if not changeid:
+    if not asoftimestamp:
         changes = get_project_changes(prjid)
         if not changes:
             return JSONEncoder().encode({"success": False, "errormsg": "Cannot tag a project without a change", "value": None})
         logger.info("Latest change is at " + str(changes[0]["time"]))
-        changeid = changes[0]["_id"]
-
-    status, errormsg, tags = add_project_tag(prjid, tagname, changeid)
+        asoftimestamp = changes[0]["time"]
+    logger.debug(f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
+    status, errormsg, tags = add_project_tag(prjid, tagname, asoftimestamp)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
+
+@licco_ws_blueprint.route("/history/project_approvals", methods=["GET"])
+@context.security.authentication_required
+def svc_get_projects_approval_history():
+    """
+    Get the approval history of projects in the system
+    """
+    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history()})

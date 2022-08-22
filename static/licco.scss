@@ -7,6 +7,9 @@ $stanfordblack: rgb(46,45,41);
 $coolgrey: rgb(83,86,90);
 $trueblack: rgb(0,0,0);
 $black10: rgb(234,234,234);
+$black20: rgb(213,213,212);
+$black30: rgb(192,192,191);
+$black40: rgb(171,171,169);
 
 $lagunita: rgb(0,124,146);
 $paloverde: rgb(39,153,137);
@@ -30,8 +33,12 @@ $secondary: $illuminating;
 
 $theme-colors: (
   "primary": $primary,
-  "secondary": $secondary
+  "secondary": $secondary,
+  "danger": $digitalred,
+  "success": $paloverde
 );
+
+$bodyfontsize: 14px;
 
 $nav-pills-link-active-bg: $spirited;
 
@@ -61,16 +68,20 @@ $selected: $lagunita;
 @import 'bootstrap/scss/bootstrap';
 
 body {
-  font: 14px Lato, Merriweather, sans-serif;
+  font: $bodyfontsize Lato, Merriweather, sans-serif;
 }
 
-#captarNav {
+#liccoNav {
   background-color: $digitalred;
+  position: sticky;
+  top: 0;
   .navbar-brand {
     color: $white;
+    padding-left: 0.5rem;
   }
   .nav-link {
     color: $white;
+    border-color: $poppy;
   }
   .nav-link.active {
     background-color: $poppy;
@@ -78,10 +89,22 @@ body {
   }
 }
 
+#toolbar_for_tab {
+  padding-right: 1.0rem;
+  color: $white;
+  .icn {
+    margin-left: 0.5rem;
+  }
+}
+
 #prjNav {
   background-color: $digitalred;
+  position: sticky;
+  top: 0;
+  z-index: 2;
   .navbar-brand {
     color: $white;
+    padding-left: 0.5rem;
   }
   .nav-link {
     color: $white;
@@ -91,9 +114,158 @@ body {
     color: $white;
     font-size: 1.25rem;
   }
+  .prjstatus {
+    color: $white;
+    .filt {
+      display: block;
+      .tagnm:first-of-type {
+        padding-left: 1.0rem;
+      }
+      .tagnm:not(:last-of-type)::after {
+        content: ", "
+      }
+    }
+  }
   .tabtblbar {
     background-color: $digitalred;
     color: $white;
+  }
+  .prjdifftitle {
+    .prj {
+      color: black;
+      font-size: medium;
+    }  
+    .oprj {
+      color: $poppy;
+      font-size: medium;
+    }
+  }
+  height: 5vh;
+}
+
+@mixin prjsticky($left, $width) {
+  position: sticky;
+  left: $left;
+  z-index: 1;
+  width: $width;
+  background-color: white;
+}
+
+@mixin stickyfctable {
+  .maincontent {
+    height: 95vh;
+    width: 100vw;
+    overflow: scroll;
+
+    .fcstbl > thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background-color: white;
+
+      tr.cathdr {
+        text-align: center;
+      }
+    }
+    .fcstbl {
+      width: 100vw;
+    }
+
+    .fcstbl > tbody > tr.editing > td {
+      background-color: $poppy;
+      color: white;
+      input { 
+        font-size: $bodyfontsize;
+      }
+      select { 
+        font-size: $bodyfontsize;
+      }
+      textarea {
+        font-size: $bodyfontsize;
+      }
+    }
+  }
+}
+
+@mixin stickyfctablewithaction {
+  .maincontent {
+    height: 95vh;
+    width: 100vw;
+    overflow: scroll;
+
+    .fcstbl > thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background-color: white;
+    }
+    .fcstbl {
+      width: 200rem;
+    }
+
+    .fcstbl > tbody > tr > td:first-child {
+      @include prjsticky($left: 0, $width: 5.0rem);
+    }
+    .fcstbl > tbody > tr > td:nth-child(2) {
+      @include prjsticky($left: 5.0rem, $width: 10.0rem);
+    }
+    .fcstbl > tbody > tr > td:nth-child(3) {
+      @include prjsticky($left: 15.0rem, $width: 5.0rem);
+    }
+    .fcstbl > thead > tr > th:first-child {
+      @include prjsticky($left: 0, $width: 5.0rem);
+    }
+    .fcstbl > thead > tr > th:nth-child(2) {
+      @include prjsticky($left: 5.0rem, $width: 10.0rem);
+    }
+    .fcstbl > thead > tr > th:nth-child(3) {
+      @include prjsticky($left: 15.0rem, $width: 5.0rem);
+    }
+
+    .fcstbl > tbody > tr.editing > td {
+      background-color: $poppy;
+      color: white;
+      input { 
+        font-size: $bodyfontsize;
+      }
+      select { 
+        font-size: $bodyfontsize;
+      }
+      textarea {
+        font-size: $bodyfontsize;
+      }
+    }
+  }
+}
+
+@mixin stickyfctablewithoutaction {
+  .maincontent {
+    height: 95vh;
+    width: 100vw;
+    overflow: scroll;
+
+    .fcstbl > thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background-color: white;
+    }
+    .fcstbl {
+      width: 200rem;
+    }
+
+    .fcstbl > tbody > tr > td:first-child {
+      @include prjsticky($left: 0, $width: 10.0rem);
+    }
+    .fcstbl > tbody > tr > td:nth-child(2) {
+      @include prjsticky($left: 10.0rem, $width: 5.0rem);
+    }
+    .fcstbl > thead > tr > th:first-child {
+      @include prjsticky($left: 0, $width: 10.0rem);
+    }
+    .fcstbl > thead > tr > th:nth-child(2) {
+      @include prjsticky($left: 10.0rem, $width: 5.0rem);
+    }
   }
 }
 
@@ -137,6 +309,53 @@ body {
       content: "\21AA";
     }
   }
+
+  @include stickyfctable;
+}
+
+#apprv_tab {
+  .apptlbr {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    background-color: #ebebeb;
+  }
+  .prjnm {
+    font-size: 1.0rem;
+    color: $digitalred;
+  }
+  .prjapp {
+    color: $stanfordblack;
+  }
+
+  @include stickyfctable;
+}
+
+#projectdiff_tab {
+  .oprj {
+    color: $poppy;
+  }
+
+  tbody {
+    tr {
+      td:not(.actualdiff) {
+        color: $black40;
+      }
+     }
+     tr.prj {
+      td.actualdiff {
+        border-bottom: thick solid $digitalred;
+      }
+     }
+  }
+
+  .actualdiff {
+    .diffarr {
+      margin-right: 0.5rem;
+      color: $digitalred;
+    }
+  }
+
+  @include stickyfctable;
 }
 
 .modal-header {
@@ -145,4 +364,13 @@ body {
 }
 .modal-body .row {
   padding-left: 0.25rem;
+}
+
+.modal {
+  .mdltbl {
+    thead {
+      background-color: $poppy;
+      color: white;
+    }
+  }
 }

@@ -6,16 +6,26 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-              <form>
-                <div class="text-danger errormsg"></div>
+              <form novalidate>
+                <p class="text-danger errormsg"></p>
+                <div class="mb-3">
+                   <label class="form-label">Source</label>
+                   <select name="source" class="form-select srcprjsel" data-validation="notempty">
+                     <option value="">Please select an source project</option>
+                       {{#projects}}
+                       <option value={{_id}} title="{{description}}" {{#selected}}selected{{/selected}}>{{name}}</option>
+                       {{/projects}}
+                   </select>
+                   <div class="invalid-feedback">Please choose a project to clone</div>
+                </div>
                 <div class="mb-3">
                    <label class="form-label">Name</label>
-                   <input type="text" class="form-control name" name="name" data-validation="notempty">
-                   <div class="invalid-feedback">Please enter a valid name.</div>
+                   <input type="text" class="form-control" name="name"  data-validation="notempty">
+                   <div class="invalid-feedback">Please choose a valid project name.</div>
                 </div>
                 <div class="mb-3">
                    <label class="form-label">Description</label>
-                   <input type="text" class="form-control desc" name="description" data-validation="notempty">
+                   <input type="text" class="form-control" name="description"  data-validation="notempty">
                    <div class="invalid-feedback">Please enter a brief description.</div>
                 </div>
               </form>

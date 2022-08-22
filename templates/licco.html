@@ -1,22 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>PCDS Line configuration</title>
+  <title>Validated Configuration Database</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" type="text/css" href="static/licco.css">
-  <link rel="stylesheet" type="text/css" href="js/tempusdominus-bootstrap-4/build/css/tempusdominus-bootstrap-4.min.css">
-  <link rel="stylesheet" type="text/css" href="js/@fortawesome/fontawesome-free/css/all.min.css">
-  <link rel="stylesheet" type="text/css" href="js/noty/lib/noty.css">
 
   <script type="text/javascript" src="js/jquery/jquery.min.js"></script>
   <script type="text/javascript" src="js/mustache/mustache.min.js"></script>
   <script type="text/javascript" src="js/lodash/lodash.min.js"></script>
-  <script type="text/javascript" src="js/moment/min/moment-with-locales.min.js"></script>
-  <script type="text/javascript" src="js/noty/lib/noty.min.js"></script>
+  <script type="text/javascript" src="js/dayjs/dayjs.min.js"></script>
   <script type="text/javascript" src="js/bootstrap/js/bootstrap.min.js"></script>
-  <script type="text/javascript" src="js/tempusdominus-bootstrap-4/build/js/tempusdominus-bootstrap-4.min.js"></script>
-  <script type="text/javascript" src="js/@fortawesome/fontawesome-free/js/all.min.js"></script>
+  <script defer type="text/javascript" src="js/@fortawesome/fontawesome-free/js/licco.js"></script>
+  <script defer type="text/javascript" src="js/@fortawesome/fontawesome-free/js/fontawesome.min.js"></script>
 
   <script type="text/javascript" src="static/licco.js"></script>
 
@@ -27,98 +23,60 @@
 </head>
 <body id="neocaptar">
 
-<nav class="navbar navbar-expand-lg navbar-light" id="captarNav">
-    <a class="navbar-brand" href="#">PCDS Line config</a>
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#myNavbar" aria-controls="myNavbar" aria-expanded="false" aria-label="Toggle navigation">
+<nav class="navbar navbar-expand-lg navbar-light" id="liccoNav">
+    <a class="navbar-brand" href="#">Validated Configuration Database</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#myNavbar" aria-controls="myNavbar" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
 
-    <div class="collapse navbar-collapse" id="captarNavbar">
-      <ul class="navbar-nav mr-auto">
-        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/approved.html" href="#approved">Approved</a></li>
-        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/projects.html" href="#projects">Projects</a></li>
-        <li class="nav-item"><a class="nav-link" data-toggle="tab" data-url="static/html/tabs/fcs.html" href="#fcs">FCs</a></li>
-      </ul>
-      <ul class="nav navbar-nav navbar-right">
-        <span id="toolbar_for_tab"></span>
-        <li class="session_items"><a href="../logout"><span class="logged_in_user_name">{{ logged_in_user }}</span><i class="fa fa-sign-out fa-lg"></i></a></li>
-      </ul>
+    <div class="nav nav-tabs" id="liccoNavbar" role="tablist">
+      <button class="nav-link" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#approved" data-url="static/html/tabs/approved.html">Current Approved Configuration</button>
+      <button class="nav-link" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#projects" data-url="static/html/tabs/projects.html">Projects</button>
+      <button class="nav-link" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#ffts" data-url="static/html/tabs/ffts.html">FFTs</button>
+      <button class="nav-link" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#fcs" data-url="static/html/tabs/fcs.html">FCs</button>
+      <button class="nav-link" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#fgs" data-url="static/html/tabs/fgs.html">Fungibles</button>
     </div>
+    
+    <div class="nav ms-auto"><span id="toolbar_for_tab"></span></div>
 </nav>
 
-<div id="glbl_modals_go_here"></div>
+<div id="global_mdl_holder"></div>
+<div id="global_toast_holder"></div>
 <div class="tab-content container-fluid" id="myTabContainer">
-  <div class="tab-pane fade" id="approved"></div>
-  <div class="tab-pane fade" id="projects"></div>
-  <div class="tab-pane fade" id="fcs"></div>
+  <div class="tab-pane fade" id="approved" role="tabpanel"></div>
+  <div class="tab-pane fade" id="projects" role="tabpanel"></div>
+  <div class="tab-pane fade" id="ffts" role="tabpanel"></div>
+  <div class="tab-pane fade" id="fcs" role="tabpanel"></div>
+  <div class="tab-pane fade" id="fgs" role="tabpanel"></div>
 </div>
 
 <script type="text/javascript">
-var showTab = function (e) {
-	var target = $(e.target).attr("href");
-    if(!_.isNil(e.relatedTarget)){ console.log(e.relatedTarget.attr("href")) };
-    console.log("Showing tab " + target);
-    history.pushState(null, null, e.target.hash)
-	if ($(target).is(':empty') || $(target).hasClass("always_reload")) {
-		console.log("Activated tab " + target + " is empty. Triggering load");
-		var template_url = $(e.target).attr("data-url");
-	    $.ajax({
-	      type: "GET",
-	      url: template_url,
-	      error: function(data){
-	        alert("Error fetching template " + template_url + ".");
-	      },
-	      success: function(data){
-	  		console.log("Getting tab data and binding selectors");
-	        $(target).empty().html(data);
-            $("#toolbar_for_tab").empty();
-	        $(target).find(".tabcontainer").trigger("lg.loaded.bs.tab", e);
-            $(target).find(".tabcontainer").trigger("lg.shown.bs.tab", e);
-	      }
-	    });
-	} else {
-        console.log("Activated non-empty tab " + target);
-        $("#toolbar_for_tab").empty();
-        $(target).find(".tabcontainer").trigger("lg.shown.bs.tab", e);
-    }
-};
 $(document).ready(function() {
-    $('a[data-toggle="tab"]').on('shown.bs.tab', showTab);
-    // Bootstrap 4 bug; revist after each release...
-    $('#captarNav a').on('click', function(e) {
-        e.preventDefault();
-        $(this).tab('show');
-        var theThis = $(this);
-        $('#captarNav a').removeClass('active');
-        theThis.addClass('active');
-    });
+  var showTab = function (e) {
+	  var target = $(e.target).attr("data-bs-target");
+    console.log("Showing tab " + target);
+    history.pushState(null, null, target)
+		var template_url = $(e.target).attr("data-url");
+    $.ajax({ type: "GET", url: template_url})
+    .done(function(data){
+      $(target).empty().html(data);
+      $("#toolbar_for_tab").empty();
+      $(target).find(".tabcontainer").trigger("lg.loaded.bs.tab", e);
+      $(target).find(".tabcontainer").trigger("lg.shown.bs.tab", e);
+      licco_helptlbr($("#toolbar_for_tab"));
+    }).fail(function(){
+      alert("Error fetching template " + template_url + ".");
+    })
+  };
 
-    $("#glbl_modals_go_here").on("hidden.bs.modal", function(){
-        console.log("Modal hidden.bs.modal...");
-    });
-
-    $('.dropdown-menu a.dropdown-toggle').on('click', function(e) {
-      if (!$(this).next().hasClass('show')) {
-        $(this).parents('.dropdown-menu').first().find('.show').removeClass("show");
-      }
-      var $subMenu = $(this).next(".dropdown-menu");
-      $subMenu.toggleClass('show');
-
-
-      $(this).parents('li.nav-item.dropdown.show').on('hidden.bs.dropdown', function(e) {
-        $('.dropdown-submenu .show').removeClass("show");
-      });
-
-
-      return false;
-    });
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', showTab);
 
     // Code for honoring the hash; for example URL#eLog gets you to the eLog
     var hash = window.location.hash;
     if (hash) {
-      $('#captarNavbar ul.navbar-nav a[href="' + hash + '"]').tab('show');
+      $('#liccoNavbar button[data-bs-target="' + hash + '"]').tab('show');
     } else {
-        $('#captarNavbar ul.navbar-nav a:first').tab('show');
+      $('#liccoNavbar button:first').tab('show');
     }
 });
 

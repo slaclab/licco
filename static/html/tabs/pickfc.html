@@ -3,23 +3,24 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Please select a functional component</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form role="form" novalidate>
-                  <div class="text-error errormsg"></div>
-                  <div class="row form-group">
-                    <select class="custom-select mx-2 fcsel">
+                  <div class="text-danger errormsg"></div>
+                  <div class="mb-3">
+                    <select class="form-select mx-2 fcsel" data-validation="notempty">
                       <option value="">Please select an FC</option>
                         {{#fcs}}
                         <option value={{_id}}>{{name}}</option>
                         {{/fcs}}
                     </select>
+                    <div class="invalid-feedback">Please select an FC</div>
                   </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="submit" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary sbm">Submit</button>
             </div>
         </div>

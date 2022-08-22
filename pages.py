@@ -5,7 +5,9 @@ import pkg_resources
 
 import context
 
-from flask import Blueprint, render_template, send_file, abort
+from flask import Blueprint, render_template, send_file, abort, request
+
+from dal.licco import get_project
 
 pages_blueprint = Blueprint('pages_api', __name__)
 
@@ -13,15 +15,22 @@ logger = logging.getLogger(__name__)
 
 @pages_blueprint.route("/")
 @context.security.authentication_required
-@context.security.authorization_required("read")
 def index():
-    return render_template("licco.html")
+    return render_template("licco.html", logged_in_user=context.security.get_current_user_id())
 
-@pages_blueprint.route("/projects/<id>/index.html")
+@pages_blueprint.route("/projects/<prjid>/index.html")
 @context.security.authentication_required
-@context.security.authorization_required("read")
-def project(id):
-    return render_template("project.html", logged_in_user=context.security.get_current_user_id(), project_id=id)
+def project(prjid):
+    prjobj = get_project(prjid)
+    return render_template("project.html", logged_in_user=context.security.get_current_user_id(), project_id=prjid, prjstatus=prjobj["status"], template_name="project.html")
+
+@pages_blueprint.route("/projects/<prjid>/diff.html")
+@context.security.authentication_required
+def project_diff(prjid):
+    prjobj = get_project(prjid)
+    otherprjid = request.args["otherprjid"]
+    return render_template("project.html", logged_in_user=context.security.get_current_user_id(), project_id=prjid, prjstatus=prjobj["status"], template_name="projectdiff.html", otherprjid=otherprjid)
+
 
 @pages_blueprint.route('/js/<path:path>')
 def send_js(path):
@@ -33,10 +42,9 @@ def send_js(path):
             return send_file(filepath)
 
 
-    # $CONDA_PREFIX/lib/node_modules/jquery/dist/
-    filepath = os.path.join(os.getenv("CONDA_PREFIX"), "lib", "node_modules", path)
+    filepath = os.path.join("node_modules", path)
     if not os.path.exists(filepath):
-        filepath = os.path.join(os.getenv("CONDA_PREFIX"), "lib", "node_modules", pathparts[0], "dist", *pathparts[1:])
+        filepath = os.path.join("node_modules", pathparts[0], "dist", *pathparts[1:])
     if os.path.exists(filepath):
         return send_file(filepath)
     else:

@@ -1,0 +1,37 @@
+<div class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">History of project approvals</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table table-condensed table-striped table-bordered mdltbl">
+                <thead>
+                  <tr>
+                    <td>Project name</td>
+                    <td>Switched at</td>
+                    <td>Switched by</td>
+                    <td>Project description</td>
+                    <td>Project owner</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{#hist}}
+                  <tr data-id={{_id}}>
+                    <td>{{prj}}</td>
+                    <td>{{#FormatDateTime}}{{switch_time}}{{/FormatDateTime}}</td>
+                    <td>{{requestor_uid}}</td>
+                    <td>{{description}}</td>
+                    <td>{{owner}}</td>
+                  </tr>
+                  {{/hist}}
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,30 +1,31 @@
-<div class="tabcontainer" id="fcs_tab">
+<div class="tabcontainer" id="fgs_tab">
     <div class="maincontent"></div>
 </div>
 
 <script type="text/javascript">
-$("#fcs_tab").on("lg.loaded.bs.tab", function() {
-  let displayfcs = function() {
-    $.getJSON("ws/fcs/")
+$("#fgs_tab").on("lg.loaded.bs.tab", function() {
+  let displayfgs = function() {
+    $.getJSON("ws/fgs/")
     .done((data) => {
-      let fcs = data.value, fcstmpl = `<div class="table-responsive">
+      let fgs = data.value, fgstmpl = `<div class="table-responsive">
         <table class="table table-condensed table-striped table-bordered" id="fcstbl">
           <thead><tr><th></th><th>Name</th><th>Description</th></tr></thead>
-          <tbody>{{#fcs}}<tr data-id="{{_id}}">
+          <tbody>{{#fgs}}<tr data-id="{{_id}}">
             <td>{{^is_being_used}}<span class="icn delete"><i class="fa-solid fa-trash fa-lg" title="Delete this FFT from the system"></i></span>{{/is_being_used}}</td>
             <td><span class="prjnm">{{name}}</span></td>
-            <td>{{description}}</td></tr>{{/fcs}}</tbody>
+            <td>{{description}}</td>
+          </tr>{{/fgs}}</tbody>
         </table>
-      </div>`; Mustache.parse(fcstmpl);
-      let rendered = $(Mustache.render(fcstmpl, { fcs : fcs }));
+      </div>`; Mustache.parse(fgstmpl);
+      let rendered = $(Mustache.render(fgstmpl, { fgs : fgs }));
       rendered.find(".delete").on("click", function(){
-        let fcid = $(this).closest("tr").attr("data-id"), fc = _.find(fcs, ["_id", fcid]);
+        let fgid = $(this).closest("tr").attr("data-id"), fg = _.find(fgs, ["_id", fgid]);
         $.ajax("static/html/tabs/generic_yes_no.html")
         .done(function(d0){
           let tmpl = d0; Mustache.parse(tmpl);
-          $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {title: "Do you want to delete FC?", message: "Do you want to delete the FC <b>" + fc.name + "</b>?"}));
+          $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {title: "Do you want to delete FG?", message: "Do you want to delete the FG <b>" + fg.name + "</b>?"}));
           $("#global_mdl_holder").find(".sbm").on("click", function(){
-            $.ajax({url: "ws/fcs/"+fcid, type: "DELETE", dataType: "json"})
+            $.ajax({url: "ws/fgs/"+fgid, type: "DELETE", dataType: "json"})
             .done(function(data, textStatus, jqXHR) {
               if(!_.get(data, "success", false)) {
                 $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
@@ -32,7 +33,7 @@ $("#fcs_tab").on("lg.loaded.bs.tab", function() {
               }
               $("#global_mdl_holder").find(".modal").modal("hide");
               $("#global_mdl_holder").empty();
-              displayfcs();
+              displayfgs();
             }).fail(function(data, textStatus, jqXHR) {
               $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
               return
@@ -41,18 +42,18 @@ $("#fcs_tab").on("lg.loaded.bs.tab", function() {
           $("#global_mdl_holder").find(".modal").modal("show");
         })
       })
-      $("#fcs_tab").find(".maincontent").empty().append(rendered);
+      $("#fgs_tab").find(".maincontent").empty().append(rendered);
     })
   }
 
-  displayfcs();
-  $("#toolbar_for_tab").append(`<span class="icn addnewfc"><i class="fa fa-plus fa-lg"></i></span>`);
-  $("#toolbar_for_tab").find(".addnewfc").on("click", function(){
-    $.ajax("static/html/tabs/newfc.html")
+  displayfgs();
+  $("#toolbar_for_tab").append(`<span class="icn addnewfg"><i class="fa fa-plus fa-lg"></i></span>`);
+  $("#toolbar_for_tab").find(".addnewfg").on("click", function(){
+    $.ajax("static/html/tabs/newfg.html")
     .done(function(d0) {
       $("#global_mdl_holder").empty().append(d0);
       $("#global_mdl_holder").find(".modal").on("hide.bs.modal", function(){ window.location.reload(); });
-      newfc();
+      newfg();
     });
   })
 });

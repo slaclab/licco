@@ -1,56 +1,70 @@
 <div class="tabcontainer" id="projects_tab">
-    <div id="projects_mdl_holder"></div>
     <div class="maincontent">
+      <div class="table-responsive">
+        <table class="table table-condensed table-striped table-bordered" id="projectstbl">
+          <thead><tr><th></th><th data-sort-attr="name">Name</th><th data-sort-attr="status">Status</th><th data-sort-attr="owner">Owner</th><th data-sort-attr="creation_time">Created</th><th>Status changed</th><th>Description</th><th>Notes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
 </div>
 
 <script type="text/javascript">
+$("#projects_tab").on("lg.loaded.bs.tab", function() {
+  $("#projects_tab").data("cur_sort_attr", "name");
+  $("#projects_tab").data("cur_sort_desc", false);
   let displayProjects = function() {
-    $.getJSON("ws/projects/")
+    $.getJSON({ url: "ws/projects/", data: {sort: JSON.stringify([[$("#projects_tab").data("cur_sort_attr"), $("#projects_tab").data("cur_sort_desc") ? -1 : 1 ]])} })
     .done((data) => {
-      let projects = data.value, projstmpl = `<div class="table-responsive">
-        <table class="table table-condensed table-striped table-bordered" id="projectstbl">
-          <thead><tr><th></th><th>Name</th><th>Status</th><th>Owner</th><th>Editors</th></tr></thead>
-          <tbody>{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
+      let stat2time = { "development": "N/A", "submitted": "submitted_time", "approved": "approved_time" }
+      let projects = data.value, projstmpl = `{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
             <td>
               <span class="icn diff" title="Compare ( diff) with another project"><i class="fas fa-code-compare fa-lg"></i></span>
               <span class="icn clone" title="Clone this project"><i class="fas fa-clone fa-lg"></i></span>
-              {{^_submitted}}{{^_approved}}<span class="icn seek" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
+              <span class="icn edit" title="Edit this project"><i class="fa fa-pen-to-square fa-lg"></i></span>
+              {{^_submitted}}{{^_approved}}<span class="icn sbmfrap" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
               {{#_submitted}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_submitted}}
             </td>
-            <td><span class="prjnm">{{name}}</span></td><td>{{status}}</td><td>{{owner}}</td><td>{{editors}}</td></tr>{{/projects}}</tbody>
-        </table>
-      </div>`; Mustache.parse(projstmpl);
-      _.each(projects, (p) => { p["_submitted"] = _.get(p, "status", "development") == "submitted"; p["_approved"] = _.get(p, "status", "development") == "approved"; })
+            <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
+            Mustache.parse(projstmpl);
+      _.each(projects, (p) => { p["_submitted"] = _.get(p, "status", "development") == "submitted"; p["_approved"] = _.get(p, "status", "development") == "approved"; p["datefmt"] = licco_formatdatetime; p["status_changed_time"] = _.get(p, stat2time[p["status"]], "");  })
       let rendered = $(Mustache.render(projstmpl, { projects : projects }));
       rendered.find(".prjnm").on("click", function() { let prjid = $(this).closest("tr").attr("data-id"); console.log(prjid); displayProject(prjid); } )
-      rendered.find(".seek").on("click", function() {
+      rendered.find(".sbmfrap").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
-        $.getJSON("ws/projects/" + prjid + "/submit_for_approval").done(function(){ window.location.reload(); })
+        $.when($.ajax("static/html/tabs/prjsubmit.html"), $.getJSON("ws/users/"))
+        .done(function(d0, d1) {
+          $("#global_mdl_holder").empty().append(d0[0]);
+          let approvers = _.without(_.union(d1[0].value, ["awallace", "klafortu", "mlng"]), logged_in_user);
+          prj_submit_for_approval(prjid, "ws/projects/" + prjid + "/submit_for_approval", approvers, () => { window.location.reload() });
+        })
       })
       rendered.find(".approve").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
-        $.getJSON("ws/projects/" + prjid + "/approve_project").done(function(){ window.location.reload(); })
+        $.getJSON("ws/approved")
+        .done(function(data){
+          if(data.success) {
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"]));
+          } else {
+            console.log("No project is currently approved");
+            $.getJSON("ws/projects/" + prjid + "/approve_project").done(function(){ window.location.reload(); })
+          }
+        })
       })
       rendered.find(".diff").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
         $.when($.ajax("static/html/tabs/pickprj.html"), $.getJSON("ws/projects/"))
         .done(function(d0, d1){
-          let ppjtmpl=d0[0], allprjs=d1[0].value; Mustache.parse(ppjtmpl);
+          let ppjtmpl=d0[0], allprjs=d1[0].value; Mustache.parse(ppjtmpl), prjid2nm = _.keyBy(allprjs, "_id");
           let otherPrjs = _.reject(allprjs, (p) => { return p["_id"] == prjid });
-          $("#projects_mdl_holder").empty().append(Mustache.render(ppjtmpl, {projects: otherPrjs}));
-          $("#projects_mdl_holder").find(".modal").modal("show");
-          $("#projects_mdl_holder").find(".sbm").on("click", function(){
-            let selPrjId = $("#projects_mdl_holder").find(".prjsel").val();
-            if(_.isEmpty(selPrjId)) { $("#projects_mdl_holder").find(".errormsg").text("Please select a project").removeClass("d-none"); return; }
-            $("#projects_mdl_holder").find(".modal").modal("hide");
-            $("#projects_mdl_holder").empty();
-            $.when($.ajax("static/html/tabs/prjdiff.html"), $.getJSON("ws/projects/" + prjid + "/diff_with", {other_id: selPrjId}))
-            .done(function(e0, e1) {
-              let difftmpl = e0[0], diffdata = e1[0].value; Mustache.parse(difftmpl);
-              $("#projects_mdl_holder").empty().append(Mustache.render(difftmpl, {myprj: prjid, otprj: selPrjId, diffs: diffdata}));
-              $("#projects_mdl_holder").find(".modal").modal("show");
-            })
+          $("#global_mdl_holder").empty().append(Mustache.render(ppjtmpl, {projects: otherPrjs}));
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".sbm").on("click", function(){
+            if(!licco_validate_form()) { return false; }
+            let selPrjId = $("#global_mdl_holder").find(".prjsel").val();
+            $("#global_mdl_holder").find(".modal").modal("hide");
+            $("#global_mdl_holder").empty();
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(selPrjId));
           })
         })
       })
@@ -59,40 +73,122 @@
         $.ajax("static/html/tabs/nmdsmdl.html")
         .done(function(d0) {
           Mustache.parse(d0);
-          $("#projects_mdl_holder").empty().append(Mustache.render(d0, {"title": "Cloned Project details"}));
-          $("#projects_mdl_holder").find(".modal").modal("show");
-          $("#projects_mdl_holder").find(".sbm").on("click", function(){
-            $("#projects_mdl_holder").find(".errormsg").empty().addClass("d-none");
-            let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#projects_mdl_holder").find("[name="+k+"]").val()]}));
+          $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Cloned Project details"}));
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".sbm").on("click", function(){
+            if(!licco_validate_form()) { return false; }
+            let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
             console.log(newprj);
             $.post({url: "ws/projects/" + prjid + "/clone", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
             .done(function(data, textStatus, jqXHR) {
               if(!_.get(data, "success", false)) {
-                $("#projects_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+                $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
                 return
               }
-              $("#projects_mdl_holder").find(".modal").modal("hide");
-              $("#projects_mdl_holder").empty();
+              $("#global_mdl_holder").find(".modal").modal("hide");
+              $("#global_mdl_holder").empty();
               window.location.reload();
             }).fail(function(data, textStatus, jqXHR) {
-              $("#projects_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+              $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
               return
             })
           })
         })
       })
+      rendered.find(".edit").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.when($.ajax("static/html/tabs/nmdsmdl.html"), $.getJSON("ws/projects/"+prjid+"/"))
+        .done(function(d0, d1) {
+          let tmpl = d0[0], prjdetails = d1[0].value; Mustache.parse(tmpl);
+          $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Edit Project details"}));
+          $("#global_mdl_holder").find(".modal .name").val(prjdetails["name"]);
+          $("#global_mdl_holder").find(".modal .desc").val(prjdetails["description"]);
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".sbm").on("click", function(){
+            if(!licco_validate_form()) { return false; }
+            let prjdetails = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
+            console.log(prjdetails);
+            $.post({url: "ws/projects/" + prjid + "/", data: JSON.stringify(prjdetails), contentType: "application/json; charset=utf-8", dataType: "json"})
+            .done(function(data, textStatus, jqXHR) {
+              if(!_.get(data, "success", false)) {
+                $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+                return
+              }
+              $("#global_mdl_holder").find(".modal").modal("hide");
+              $("#global_mdl_holder").empty();
+              window.location.reload();
+            }).fail(function(data, textStatus, jqXHR) {
+              $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+              return
+            })
+          });
+        });
+      });
 
-
-      $("#projects_tab").find(".maincontent").empty().append(rendered);
+      $("#projects_tab").find(".maincontent tbody").empty().append(rendered);
     })
   }
+
+  $("#projects_tab").find(".maincontent").find("th[data-sort-attr]").on("click", function() {
+      var curr_attr = $("#projects_tab").data("cur_sort_attr");
+      var sel_attr = $(this).attr("data-sort-attr");
+      if(curr_attr == sel_attr) {
+        $("#projects_tab").data("cur_sort_desc", !$("#projects_tab").data("cur_sort_desc"));
+        $(this).closest("th").find(".sric").remove();
+      } else {
+        $("#projects_tab").data("cur_sort_attr", sel_attr)
+        $("#projects_tab").data("cur_sort_desc", true);
+        $(this).closest("thead").find(".sric").remove();
+      }
+      $(this).closest("th").append($("#projects_tab").data("cur_sort_desc") ? $('<i class="fas fa-sort-down sric"></i>') : $('<i class="fas fa-sort-up sric"></i>'))
+      displayProjects();
+  });
+
 
   let displayProject = function(id) {
     window.location.assign("projects/"+id+"/index.html");
   }
 
 
-  $("#projects_tab").on("lg.loaded.bs.tab", function() {
     displayProjects();
-  });
+    $("#toolbar_for_tab").append(`<span class="icn addnewprj"><i class="fa fa-plus fa-lg"></i></span><span class="icn hist"><i class="fa-solid fa-clock-rotate-left fa-lg" title="Show the history of project approvals"></i></span>`);
+    $("#toolbar_for_tab").find(".addnewprj").on("click", function(){
+      $.when($.ajax("static/html/tabs/srcnmdsmdl.html"), $.getJSON("ws/projects/"))
+      .done(function(d0, d1) {
+        let tmpl = d0[0], projects = d1[0].value; Mustache.parse(tmpl);
+        _.each(projects, function(prj){ if(_.get(prj, "status", "") == "approved") { prj.selected = true;  } });
+        $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Create new project", projects: projects }));
+        $("#global_mdl_holder").find(".modal").modal("show");
+        $("#global_mdl_holder").find(".sbm").on("click", function(){
+          if(!licco_validate_form()) { return false; }
+          let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
+          let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
+          console.log(newprj);
+          $.post({url: "ws/projects/" + prjid + "/clone", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
+          .done(function(data, textStatus, jqXHR) {
+            if(!_.get(data, "success", false)) {
+              $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
+              return
+            }
+            $("#global_mdl_holder").find(".modal").modal("hide");
+            $("#global_mdl_holder").empty();
+            window.location.reload();
+          }).fail(function(data, textStatus, jqXHR) {
+            $("#global_mdl_holder").find(".errormsg").text("Server side error " + jqXHR.responseText).removeClass("d-none");
+            return
+          })
+        })
+      })
+    });
+    $("#toolbar_for_tab").find(".hist").on("click", function(){
+      $.when($.ajax("static/html/tabs/switchhist.html"), $.getJSON("ws//history/project_approvals"))
+      .done(function(d0, d1){
+        let tmpl = d0[0], hist = { hist: d1[0].value }; Mustache.parse(tmpl);
+        console.log(hist);
+        hist.FormatDateTime = licco_formatdatetime;
+        $("#global_mdl_holder").empty().append(Mustache.render(tmpl, hist));
+        $("#global_mdl_holder").find(".modal").modal("show");
+      })
+    });
+});
 </script>

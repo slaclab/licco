@@ -3,11 +3,15 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Choose a tag</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
               <form novalidate>
-                <div class="text-error errormsg"></div>
+                <div class="text-danger errormsg"></div>
+                <div class="form-check tagname">
+                  <input class="form-check-input" type="radio" name="tagname" value="HEAD">
+                  <label class="form-check-label">HEAD</label>
+                </div>
                 {{#tags}}
                 <div class="form-check tagname">
                   <input class="form-check-input" type="radio" name="tagname" value="{{name}}">
@@ -17,7 +21,7 @@
               </form>
             </div>
             <div class="modal-footer">
-                <button type="submit" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary sbm">Submit</button>
             </div>
         </div>

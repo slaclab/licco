@@ -1,22 +1,30 @@
 <div class="tabcontainer" id="apprv_tab">
-    <h6 class="text-center prjnm"></h6>
-    <div class="maincontent">
-        <div class="table-responsive">
-          <table class="table table-condensed table-striped table-bordered fcstbl">
-            <thead><tr><th></th><th>Name</th><th>State</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+    <div class="row apptlbr">
+      <span class="col text-left">Latest changes from project: <span class="prjnm"></span></span>
+      <span class="col-4 text-end">
+        <div><span class="prjapp"></span></div>
+      </span>
+    </div>
+    <div class="table-responsive maincontent">
+      <table class="table table-condensed table-striped table-bordered fcstbl">
+        <thead><tr><th>FC</th><th>Fungible</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
 </div>
 
 <script type="text/javascript">
   $("#apprv_tab").on("lg.loaded.bs.tab", function() {
-    let tmpl = `{{#.}}<tr data-id={{_id}}><td></td><td>{{name}}</td><td>{{state}}</td><td>{{x}}</td><td>{{y}}</td><td>{{z}}</td></tr>{{/.}}`; Mustache.parse(tmpl);
-    $.getJSON("ws/approved")
+    $.when($.getJSON("ws/fcattrs"), $.getJSON("ws/approved"))
     .done(function(d0, d1){
-      let prj = d0.value, fcs = _.sortBy(_.map(_.get(prj, "fcs", {}), (v,k) => { return _.defaults({}, v, {"value": k}) }), "sortorder"), rndrd = Mustache.render(tmpl, fcs);
+      let fcattrs = d0[0].value, prj = d1[0].value, fcs = _.sortBy(_.map(_.get(prj, "ffts", {}), (v,k) => { return _.defaults({}, v, {"value": k}) }), "nom_loc_z");
+      _.each(fcattrs, (v, k) => { $("#apprv_tab").find(".fcstbl thead tr").append("<th>" + v["label"] + "</th>"); })
+      let tmpl = `{{#.}}<tr data-id={{_id}}><td>{{fft.fc}}</td><td>{{fft.fg}}</td>` + _.join(_.map(fcattrs, (v,k) => { return "<td>{{" + k + "}}</td>"}), "") + `</tr>{{/.}}`;
+      console.log(fcs);
+      Mustache.parse(tmpl); let rndrd = Mustache.render(tmpl, fcs);
+      prj.fmtdate = licco_formatdatetime;
       $("#apprv_tab").find(".prjnm").empty().append(prj["name"]);
+      $("#apprv_tab").find(".prjapp").empty().append(Mustache.render(`<div>Approved by <b>{{approver}}</b> on {{#fmtdate}}{{approved_time}}{{/fmtdate}}</div><div>Submitted by <b>{{submitter}}</b> on {{#fmtdate}}{{submitted_time}}{{/fmtdate}}</div>`, prj))
       $("#apprv_tab").find(".fcstbl tbody").empty().append(rndrd);
       $("#toolbar_for_tab").find(".home").on("click", function(){ window.location.assign("../../"); })
     })
