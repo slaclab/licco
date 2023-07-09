@@ -8,6 +8,7 @@ import pytz
 import collections
 from enum import Enum
 import copy
+import json
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -283,6 +284,8 @@ def create_new_fft(fc, fg, fcdesc=None, fgdesc=None):
     except Exception as e:
         return False, str(e), None
 
+def str2bool(val):
+    return json.loads(val.lower())
 
 # We could perhaps use dataclasses here but we're not really storing the document as it is.
 # So, let's try explicit metadata for the fc attrs
@@ -311,7 +314,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Z",
-        "category": { "label": "Nominal Location", "span": 3},
+        "category": { "label": "Nominal Location (meters in LCLS coordinates)", "span": 3},
         "desc": "Nominal Location Z",
         "required": False,
         "is_required_dimension": True
@@ -322,7 +325,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "X",
-        "category": { "label": "Nominal Location"},
+        "category": { "label": "Nominal Location (meters in LCLS coordinates)"},
         "desc": "Nominal Location X",
         "required": False,
         "is_required_dimension": True
@@ -333,7 +336,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Y",
-        "category": { "label": "Nominal Location"},
+        "category": { "label": "Nominal Location (meters in LCLS coordinates)"},
         "desc": "Nominal Location Y",
         "required": False,
         "is_required_dimension": True
@@ -344,7 +347,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Z",
-        "category": { "label": "Nominal Dimension", "span": 3},
+        "category": { "label": "Nominal Dimension (meters)", "span": 3},
         "desc": "Nominal Dimension Z",
         "required": False,
         "is_required_dimension": True
@@ -355,7 +358,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "X",
-        "category": { "label": "Nominal Dimension"},
+        "category": { "label": "Nominal Dimension (meters)"},
         "desc": "Nominal Dimension X",
         "required": False,
         "is_required_dimension": True
@@ -366,7 +369,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Y",
-        "category": { "label": "Nominal Dimension"},
+        "category": { "label": "Nominal Dimension (meters)"},
         "desc": "Nominal Dimension Y",
         "required": False,
         "is_required_dimension": True
@@ -377,7 +380,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Z",
-        "category": { "label": "Nominal Angle", "span": 3},
+        "category": { "label": "Nominal Angle (radians)", "span": 3},
         "desc": "Nominal Angle Z",
         "required": False,
         "is_required_dimension": True
@@ -388,7 +391,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "X",
-        "category": { "label": "Nominal Angle"},
+        "category": { "label": "Nominal Angle (radians)"},
         "desc": "Nominal Angle X",
         "required": False,
         "is_required_dimension": True
@@ -399,7 +402,7 @@ fcattrs = {
         "fromstr": float,
         "rendermacro": "prec7float",
         "label": "Y",
-        "category": { "label": "Nominal Angle"},
+        "category": { "label": "Nominal Angle (radians)"},
         "desc": "Nominal Angle Y",
         "required": False,
         "is_required_dimension": True
@@ -407,7 +410,7 @@ fcattrs = {
     "ray_trace": {
         "name": "ray_trace",
         "type": "bool",
-        "fromstr": bool,
+        "fromstr": str2bool,
         "label": "Must Ray Trace",
         "desc": "Must Ray Trace",
         "required": False

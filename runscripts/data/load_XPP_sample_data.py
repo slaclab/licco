@@ -7,6 +7,7 @@ import sys
 import logging
 import argparse
 import csv
+import json
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -15,9 +16,17 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 keymap = {
-    "Z": "nom_loc_z",
-    "X": "nom_loc_x",
-    "Y": "nom_loc_y"
+    "NL_Z": "nom_loc_z",
+    "NL_X": "nom_loc_x",
+    "NL_Y": "nom_loc_y",
+    "ND_Z": "nom_dim_z",
+    "ND_X": "nom_dim_x",
+    "ND_Y": "nom_dim_z",
+    "R_z": "nom_ang_z",
+    "R_x": "nom_ang_x",
+    "R_y": "nom_ang_y",
+    "Must Ray Trace": "ray_trace",
+    "Comments": "comments"
 }
 
 if __name__ == '__main__':
@@ -45,19 +54,16 @@ if __name__ == '__main__':
         host = urlparse(args.url).hostname
         session.headers.update(KerberosTicket('HTTP@' + host).getAuthHeaders())
 
+
     with open(args.lineconfigfile, newline='') as csvfile:
-        reader = csv.DictReader(csvfile, delimiter="\t")
-        fcs = { x["Name"]: x for x in reader }
+        lines = csvfile.readlines()
+        reader = csv.DictReader(lines[1:], delimiter="\t")
+        fcs = { x["FC"] + "_" + x.get("Fungible", ""): x for x in reader }
 
     # Per Alex, the First two taxons, delineated by : are the functional and fungible resp.
     for k,v in fcs.items():
-        prts = k.split(":")
-        if len(prts) >= 2:
-            v["Functional"] = prts[0]
-            v["Fungible"] = prts[1]
-        else:
-            v["Functional"] = prts[0]
-            v["Fungible"] = ""
+        v["Functional"] = v["FC"]
+        v["Fungible"] = v.get("Fungible", "")
 
     projects = session.get(args.url + "ws/projects/").json()["value"]
     prjs = list(filter(lambda x: x["name"] == args.projectname, projects))
