@@ -473,7 +473,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "user" : userid,
                 "time" : modification_time
             })
-    licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
+    if all_inserts:
+        logger.debug("Inserting %s documents into the history", len(all_inserts))
+        licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
+    else:
+        logger.warn("In update_fft_in_project, all_inserts is an empty list")
 
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid))
 
