@@ -87,7 +87,7 @@
         let fcid = $(this).closest("tr").attr("data-id"), thefc = _.find(fcs, ["_id", fcid]), thetr = $(this).closest("tr");
         $(this).closest("tr").find(".syncfc").addClass("d-none");
         thetr.on("lg.refresh", function(){
-          let trrdrd = $(Mustache.render(tmpl, {fcs: [ _.find(fcs, ["_id", fcid]) ]}));
+          let trrdrd = $(licco_musrdr(tmpl, {fcs: [ _.find(fcs, ["_id", fcid]) ]}));
           thetr.replaceWith(trrdrd);
           trrdrd.find(".editfc").removeClass("d-none").on("click", editfn);
           trrdrd.find(".syncfc").removeClass("d-none").on("click", syncfn);
