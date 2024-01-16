@@ -277,19 +277,40 @@ def create_new_fft(fc, fg, fcdesc=None, fgdesc=None):
     try:
         fftid = licco_db[line_config_db_name]["ffts"].insert_one({ "fc": fcobj["_id"], "fg": fgobj["_id"] }).inserted_id
         fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": fftid})
-        print(fft)
         fft["fc"] = licco_db[line_config_db_name]["fcs"].find_one({"_id": fft["fc"]})
         fft["fg"] = licco_db[line_config_db_name]["fgs"].find_one({"_id": fft["fg"]})
         return True, "", fft
     except Exception as e:
         return False, str(e), None
 
+def default_wrapper(func, default):
+    def wrapped_func(val):
+        if val == '':
+            return default
+        else:
+            return func(val)
+    return wrapped_func
+
 def str2bool(val):
     return json.loads(val.lower())
+
+def str2float(val):
+    return float(val)
+
+def str2int(val):
+    return int(val)
 
 # We could perhaps use dataclasses here but we're not really storing the document as it is.
 # So, let's try explicit metadata for the fc attrs
 fcattrs = {
+    "tc_part_no": {
+        "name": "tc_part_no",
+        "type": "text",
+        "fromstr": default_wrapper(str2int, default=None),
+        "label": "TC_part_no",
+        "desc": "TC_part_no",
+        "required": False
+    },
     "state": {
         "name": "state",
         "type": "enum",
@@ -311,7 +332,7 @@ fcattrs = {
     "nom_loc_z": {
         "name": "nom_loc_z",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": { "label": "Nominal Location (meters in LCLS coordinates)", "span": 3},
@@ -322,7 +343,7 @@ fcattrs = {
     "nom_loc_x": {
         "name": "nom_loc_x",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "X",
         "category": { "label": "Nominal Location (meters in LCLS coordinates)"},
@@ -333,7 +354,7 @@ fcattrs = {
     "nom_loc_y": {
         "name": "nom_loc_y",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": { "label": "Nominal Location (meters in LCLS coordinates)"},
@@ -344,7 +365,7 @@ fcattrs = {
     "nom_dim_z": {
         "name": "nom_dim_z",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": { "label": "Nominal Dimension (meters)", "span": 3},
@@ -355,7 +376,7 @@ fcattrs = {
     "nom_dim_x": {
         "name": "nom_dim_x",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "X",
         "category": { "label": "Nominal Dimension (meters)"},
@@ -366,7 +387,7 @@ fcattrs = {
     "nom_dim_y": {
         "name": "nom_dim_y",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": { "label": "Nominal Dimension (meters)"},
@@ -377,7 +398,7 @@ fcattrs = {
     "nom_ang_z": {
         "name": "nom_ang_z",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": { "label": "Nominal Angle (radians)", "span": 3},
@@ -388,7 +409,7 @@ fcattrs = {
     "nom_ang_x": {
         "name": "nom_ang_x",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "X",
         "category": { "label": "Nominal Angle (radians)"},
@@ -399,7 +420,7 @@ fcattrs = {
     "nom_ang_y": {
         "name": "nom_ang_y",
         "type": "float",
-        "fromstr": float,
+        "fromstr": default_wrapper(str2float, 0.0),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": { "label": "Nominal Angle (radians)"},
@@ -410,7 +431,7 @@ fcattrs = {
     "ray_trace": {
         "name": "ray_trace",
         "type": "bool",
-        "fromstr": str2bool,
+        "fromstr": default_wrapper(str2bool, None),
         "label": "Must Ray Trace",
         "desc": "Must Ray Trace",
         "required": False
@@ -463,7 +484,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             return False, f"Parameter {attrname} is a required attribute", None
         newval = attrmeta["fromstr"](attrval)
         prevval = current_attrs.get(attrname, None)
-        if not prevval or  prevval != newval:
+        if prevval != newval:
             logger.debug(f"Inserting attr change for {attrname} to {newval} from {prevval}")
             all_inserts.append({
                 "prj": ObjectId(prjid),

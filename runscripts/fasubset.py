@@ -41,8 +41,8 @@ with open("../node_modules/@fortawesome/fontawesome-free/js/solid.js", "r") as f
 
 outlines = []
 
-startre = re.compile("^\s*var\s+icons\s+=\s+{\s*$")
-endre = re.compile("^\s*};\s*$")
+startre = re.compile(r"^\s*var\s+icons\s+=\s+{\s*$")
+endre = re.compile(r"^\s*};\s*$")
 printline = True
 for line in lines:
     line = line.splitlines()[0]
@@ -54,7 +54,7 @@ for line in lines:
     if printline:
         outlines.append(line)
     for icon in all_the_icons_we_use_in_project:
-        if re.match("^\s*\""+icon+"\":\s*", line):
+        if re.match(r"^\s*\""+icon+r"\":\s*", line):
             outlines.append(line)
             break
 

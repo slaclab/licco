@@ -29,8 +29,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", action='store_true', help="Turn on verbose logging")
     parser.add_argument("--url", help="The licco endpoint", default="https://pswww.slac.stanford.edu/ws-kerb/mtest")
-    parser.add_argument("--user", help="The userid for basic authentication")
-    parser.add_argument("--password", help="The password for basic authentication")
+    # parser.add_argument("--user", help="The userid for basic authentication")
+    # parser.add_argument("--password", help="The password for basic authentication")
     parser.add_argument("projectname", help="The name of a project; we check to see if the project already exists")
     parser.add_argument("lineconfigfile", help="A .tsv export of the Google sheet")
 
@@ -41,19 +41,20 @@ if __name__ == '__main__':
 
     session = requests.Session()
 
-    if args.user and args.password:
-        logger.debug("Using HTTP basic auth ...")
-        session.auth = (args.user, args.password)
-    else:
-        from krtc import KerberosTicket
-        logger.debug("Using Kerberos ...")
-        host = urlparse(args.url).hostname
-        session.headers.update(KerberosTicket('HTTP@' + host).getAuthHeaders())
+    # if args.user and args.password:
+    #     logger.debug("Using HTTP basic auth ...")
+    #     session.auth = (args.user, args.password)
+    # else:
+    #     from krtc import KerberosTicket
+    #     logger.debug("Using Kerberos ...")
+    #     host = urlparse(args.url).hostname
+    #     session.headers.update(KerberosTicket('HTTP@' + host).getAuthHeaders())
 
     with open(args.lineconfigfile, newline='') as csvfile:
         reader = csv.DictReader(csvfile, delimiter="\t")
         fcs = { x["Name"]: x for x in reader }
 
+    print(fcs)
     # Per Alex, the First two taxons, delineated by : are the functional and fungible resp.
     for k,v in fcs.items():
         prts = k.split(":")
@@ -70,14 +71,21 @@ if __name__ == '__main__':
         prj = session.post(args.url + "ws/projects/", json={"name": args.projectname, "description": args.projectname}).json()["value"]
     else:
         prj = prjs[0]
-
-    fc2id = {x["name"] : x["_id"] for x in session.get(args.url + "ws/fcs/").json()["value"]}
+    exit()
+    fc2id = {
+        x["name"] : x["_id"]
+        for x in session.get(args.url + "ws/fcs/").json()["value"]
+    }
     for nm, fc in fcs.items():
         if fc["Functional"] not in fc2id:
             newfc = session.post(args.url + "ws/fcs/", json={"name": fc["Functional"], "description": "Generated from " + nm}).json()["value"]
             fc2id[fc["Functional"]] = newfc["_id"]
 
-    fg2id = {x["name"] : x["_id"] for x in session.get(args.url + "ws/fgs/").json()["value"]}
+    fg2id = {
+        x["name"] : x["_id"] 
+        for x in session.get(args.url + "ws/fgs/").json()["value"]
+    }
+    
     for nm, fc in fcs.items():
         if fc["Fungible"] and fc["Fungible"] not in fg2id:
             newfg = session.post(args.url + "ws/fgs/", json={"name": fc["Fungible"], "description": "Generated from " + nm}).json()["value"]

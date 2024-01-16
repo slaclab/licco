@@ -23,6 +23,8 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               <span class="icn clone" title="Clone this project"><i class="fas fa-clone fa-lg"></i></span>
               <span class="icn edit" title="Edit this project"><i class="fa fa-pen-to-square fa-lg"></i></span>
               {{^_submitted}}{{^_approved}}<span class="icn sbmfrap" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
+              <span class="icn export" title="Download this project"><i class="fa fa-arrow-down fa-lg"></i></span>
+              <span class="icn import" title="Upload data to this project"><i class="fa fa-arrow-up fa-lg"></i></span>
               {{#_submitted}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_submitted}}
             </td>
             <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
@@ -95,6 +97,29 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           })
         })
       })
+      rendered.find(".export").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.ajax("static/html/tabs/prjexport.html")
+        .done(function(d0) {
+          Mustache.parse(d0);
+          $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Download Project"}));
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".sbm").on("click", () => {
+            if(!licco_validate_form()) { return false; }
+            window.open("ws/projects/" + prjid + "/export", "_blank");
+          });
+        });
+      });
+      rendered.find(".import").on("click", function() {
+        let prjid = $(this).closest("tr").attr("data-id");
+        $.ajax("static/html/tabs/prjimport.html")
+        .done(function(d0) {
+          Mustache.parse(d0);
+          $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Upload CSV to Project"}));
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".fileuploader")[0].action = "ws/projects/" + prjid + "/import";
+        });
+      });
       rendered.find(".edit").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
         $.when($.ajax("static/html/tabs/nmdsmdl.html"), $.getJSON("ws/projects/"+prjid+"/"))
