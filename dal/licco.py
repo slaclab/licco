@@ -339,7 +339,7 @@ def default_wrapper(func, default):
 
 
 def str2bool(val):
-    return json.loads(val.lower())
+    return json.loads(str(val).lower())
 
 
 def str2float(val):
