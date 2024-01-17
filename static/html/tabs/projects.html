@@ -23,8 +23,8 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               <span class="icn clone" title="Clone this project"><i class="fas fa-clone fa-lg"></i></span>
               <span class="icn edit" title="Edit this project"><i class="fa fa-pen-to-square fa-lg"></i></span>
               {{^_submitted}}{{^_approved}}<span class="icn sbmfrap" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
-              <span class="icn export" title="Download this project"><i class="fa fa-arrow-down fa-lg"></i></span>
-              <span class="icn import" title="Upload data to this project"><i class="fa fa-arrow-up fa-lg"></i></span>
+              <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
+              <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>
               {{#_submitted}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_submitted}}
             </td>
             <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 

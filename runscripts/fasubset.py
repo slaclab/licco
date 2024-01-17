@@ -4,7 +4,7 @@ import re
 
 # One would think that there are simple tools that can extract a subset of font awesome icons and stage them for use.
 # Well; there are but there are all paid options.
-# This here is a really cheap hack to do the same; it is guaranteed to break in the near future. 
+# This here is a really cheap hack to do the same; it is guaranteed to break in the near future.
 # But it is a decent option and will reduce the client assets by about 1MB.
 # So here goes
 # To generate a list of icons, run this in the static folder
@@ -18,6 +18,7 @@ all_the_icons_we_use_in_project = [
     "clone",
     "code-branch",
     "code-compare",
+    "download",
     "edit",
     "grip-lines-vertical",
     "list",
@@ -25,13 +26,14 @@ all_the_icons_we_use_in_project = [
     "magnifying-glass-plus",
     "pen-to-square",
     "plus",
-    "question", 
+    "question",
     "sort-down",
     "sort-up",
     "tag",
     "tags",
     "tree",
     "trash",
+    "upload",
     "user-tie",
     "xmark"
 ]
