@@ -4,7 +4,7 @@ import re
 
 # One would think that there are simple tools that can extract a subset of font awesome icons and stage them for use.
 # Well; there are but there are all paid options.
-# This here is a really cheap hack to do the same; it is guaranteed to break in the near future. 
+# This here is a really cheap hack to do the same; it is guaranteed to break in the near future.
 # But it is a decent option and will reduce the client assets by about 1MB.
 # So here goes
 # To generate a list of icons, run this in the static folder
@@ -18,6 +18,7 @@ all_the_icons_we_use_in_project = [
     "clone",
     "code-branch",
     "code-compare",
+    "download",
     "edit",
     "grip-lines-vertical",
     "list",
@@ -25,13 +26,14 @@ all_the_icons_we_use_in_project = [
     "magnifying-glass-plus",
     "pen-to-square",
     "plus",
-    "question", 
+    "question",
     "sort-down",
     "sort-up",
     "tag",
     "tags",
     "tree",
     "trash",
+    "upload",
     "user-tie",
     "xmark"
 ]
@@ -41,8 +43,8 @@ with open("../node_modules/@fortawesome/fontawesome-free/js/solid.js", "r") as f
 
 outlines = []
 
-startre = re.compile("^\s*var\s+icons\s+=\s+{\s*$")
-endre = re.compile("^\s*};\s*$")
+startre = re.compile(r"^\s*var\s+icons\s+=\s+{\s*$")
+endre = re.compile(r"^\s*};\s*$")
 printline = True
 for line in lines:
     line = line.splitlines()[0]
@@ -54,7 +56,7 @@ for line in lines:
     if printline:
         outlines.append(line)
     for icon in all_the_icons_we_use_in_project:
-        if re.match("^\s*\""+icon+"\":\s*", line):
+        if re.match(r"^\s*\""+icon+r"\":\s*", line):
             outlines.append(line)
             break
 

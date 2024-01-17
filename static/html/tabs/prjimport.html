@@ -1,0 +1,30 @@
+<div class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload CSV to this Project?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form role="form" novalidate>
+                  <div class="text-danger errormsg"></div>
+                  <div class="mb-3">
+                    <div class="text">This will upload a csv to update the selected project.</div>
+                  </div>
+                </form>
+                <form class="fileuploader" method="post" enctype="multipart/form-data">
+                    <div>
+                      <label for="file">Choose file to upload</label>
+                      <input type="file" id="file" name="file" accept="text/csv" multiple />
+                    </div>
+                    <div>
+                      <button>Submit</button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>

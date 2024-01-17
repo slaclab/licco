@@ -3,7 +3,7 @@ import logging
 import os
 
 from pymongo import MongoClient
-from flask_authnz import FlaskAuthnz, MongoDBRoles, UserGroups
+from modules.flask_authnz.flask_authnz import FlaskAuthnz, MongoDBRoles, UserGroups
 
 logger = logging.getLogger(__name__)
 
