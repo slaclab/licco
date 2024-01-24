@@ -408,6 +408,15 @@ def svc_import_project(prjid):
         filestring = stream.getvalue().decode()
 
     with StringIO(filestring) as fp:
+        fp.seek(0)
+        # Find the header row
+        loc = 0
+        for line in fp:
+            if 'FC' in line and 'Fungible' in line:
+                break
+            loc = fp.tell()
+        # Set reader at beginning of header row
+        fp.seek(loc)
         reader = csv.DictReader(fp)
         fcs = {}
         for line in reader:
@@ -422,8 +431,6 @@ def svc_import_project(prjid):
     }
     for nm, fc_list in fcs.items():
         for fc in fc_list:
-            print("fc2id)")
-            print(nm, fc_list, fc)
             if fc["FC"] not in fc2id:
                 status, errormsg, newfc = create_new_functional_component(
                     name=fc["FC"], description="Generated from " + nm)
