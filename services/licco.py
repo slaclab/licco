@@ -410,47 +410,58 @@ def svc_import_project(prjid):
 
     with StringIO(filestring) as fp:
         reader = csv.DictReader(fp)
-        fcs = {x["FC"]: x for x in reader}
+        fcs = {}
+        for line in reader:
+            if line["FC"] in fcs.keys():
+                fcs[line["FC"]].append(line)
+            else:
+                fcs[line["FC"]] = [line]
 
     fc2id = {
         value["name"]: value["_id"]
         for value in json.loads(svc_get_fcs())["value"]
     }
-    for nm, fc in fcs.items():
-        if fc["FC"] not in fc2id:
-            status, errormsg, newfc = create_new_functional_component(
-                name=fc["FC"], description="Generated from " + nm)
-            fc2id[fc["FC"]] = newfc["_id"]
+    for nm, fc_list in fcs.items():
+        for fc in fc_list:
+            print("fc2id)")
+            print(nm, fc_list, fc)
+            if fc["FC"] not in fc2id:
+                status, errormsg, newfc = create_new_functional_component(
+                    name=fc["FC"], description="Generated from " + nm)
+                fc2id[fc["FC"]] = newfc["_id"]
 
     fg2id = {
         fgs["name"]: fgs["_id"]
         for fgs in json.loads(svc_get_fgs())["value"]
     }
 
-    for nm, fc in fcs.items():
-        if fc["Fungible"] and fc["Fungible"] not in fg2id:
-            status, errormsg, newfg = create_new_fungible_token(
-                name=fc["Fungible"], description="Generated from " + nm)
-            fg2id[fc["Fungible"]] = newfg["_id"]
+    for nm, fc_list in fcs.items():
+        for fc in fc_list:
+            if fc["Fungible"] and fc["Fungible"] not in fg2id:
+                status, errormsg, newfg = create_new_fungible_token(
+                    name=fc["Fungible"], description="Generated from " + nm)
+                fg2id[fc["Fungible"]] = newfg["_id"]
 
     ffts = {(fft["fc"]["name"], fft["fg"]["name"]): fft["_id"]
             for fft in get_ffts()}
-    for fc in fcs.values():
-        if (fc["FC"], fc["Fungible"]) not in ffts:
-            status, errormsg, newfft = create_new_fft(
-                fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
-            ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
-                  if "fg" in newfft else None)] = newfft["_id"]
+    for fc_list in fcs.values():
+        for fc in fc_list:
+            if (fc["FC"], fc["Fungible"]) not in ffts:
+                status, errormsg, newfft = create_new_fft(
+                    fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
+                ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
+                      if "fg" in newfft else None)] = newfft["_id"]
 
     fcuploads = []
-    for nm, fc in fcs.items():
-        fcupload = {}
-        fcupload["_id"] = ffts[(fc["FC"], fc["Fungible"])]
-        for k, v in KEYMAP.items():
-            if k not in fc:
-                continue
-            fcupload[v] = fc[k]
-        fcuploads.append(fcupload)
+    for nm, fc_list in fcs.items():
+        for fc in fc_list:
+            fcupload = {}
+            fcupload["_id"] = ffts[(fc["FC"], fc["Fungible"])]
+            for k, v in KEYMAP.items():
+                if k not in fc:
+                    continue
+                fcupload[v] = fc[k]
+            fcuploads.append(fcupload)
     update_ffts_in_project(prjid, fcuploads)
 
     return redirect(f'/projects/{prjid}/index.html')
