@@ -1,7 +1,6 @@
 '''
 Web service endpoints for licco
 '''
-
 import csv
 import json
 import logging
@@ -478,6 +477,7 @@ def svc_export_project(prjid):
         writer = csv.DictWriter(stream, fieldnames=KEYMAP.keys())
         writer.writeheader()
         prj_ffts = get_project_ffts(prjid)
+        prj_name = get_project(prjid)["name"]
 
         for fft in prj_ffts:
             row_dict = {}
@@ -495,7 +495,7 @@ def svc_export_project(prjid):
 
         csv_string = stream.getvalue()
 
-    return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={prjid}.csv"})
+    return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={prj_name}.csv"})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval", methods=["GET", "POST"])
