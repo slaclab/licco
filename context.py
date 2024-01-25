@@ -13,12 +13,12 @@ __author__ = 'mshankar@slac.stanford.edu'
 app = None
 
 # Set up the Mongo connection.
-MONGODB_URL=os.environ.get("MONGODB_URL", None)
+MONGODB_URL = os.environ.get("MONGODB_URL", None)
 if not MONGODB_URL:
-    print("Please use the enivironment variable MONGODB_URL to configure the database connection.")
+    print("Please use the environment variable MONGODB_URL to configure the database connection.")
 licco_db = MongoClient(host=MONGODB_URL, tz_aware=True)
 
-ROLEDB_URL=os.environ.get("ROLEDB_URL", None)
+ROLEDB_URL = os.environ.get("ROLEDB_URL", None)
 roledbclient = licco_db
 if ROLEDB_URL:
     print("Using a different database for the roles")

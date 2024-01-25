@@ -356,7 +356,7 @@ fcattrs = {
     "tc_part_no": {
         "name": "tc_part_no",
         "type": "text",
-        "fromstr": default_wrapper(str2int, default=None),
+        "fromstr": str,
         "label": "TC Part No.",
         "desc": "TC_part_no",
         "required": False
