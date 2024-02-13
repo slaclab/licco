@@ -9,9 +9,9 @@
               <form novalidate>
                 <p class="text-danger errormsg"></p>
                 <div class="mb-3">
-                   <label class="form-label">Source</label>
+                   <label class="form-label">Template</label>
                    <select name="source" class="form-select srcprjsel" data-validation="notempty">
-                     <option value="">Please select a source project</option>
+                     <option value="">Please select a project to use as a template</option>
                        {{#projects}}
                        <option value={{_id}} title="{{description}}" {{#selected}}selected{{/selected}}>{{name}}</option>
                        {{/projects}}

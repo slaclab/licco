@@ -182,7 +182,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
       .done(function(d0, d1) {
         let tmpl = d0[0], projects = d1[0].value; Mustache.parse(tmpl);
         _.each(projects, function(prj){ if(_.get(prj, "status", "") == "approved") { prj.selected = true;  } });
-        $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Create new project", projects: projects }));
+        $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Create a New Project", projects: projects }));
         $("#global_mdl_holder").find(".modal").modal("show");
         $("#global_mdl_holder").find(".sbm").on("click", function(){
           if(!licco_validate_form()) { return false; }
