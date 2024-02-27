@@ -32,8 +32,8 @@ var licco_validate_form = function() {
 
 let licco_helptlbr = function(elem) {
     if(elem.find(".help").length < 1) {
-        elem.append(`<span class="icn help"><i class="fa-solid fa-question fa-lg" title="Validated Configuration Database help ( on confluence)"></i></span>`);
-        elem.find(".help").on("click", function() { window.open("https://confluence.slac.stanford.edu/display/PCDS/Validated+Configuration+Database+Guide", "_blank").focus(); })
+        elem.append(`<span class="icn help"><i class="fa-solid fa-question fa-lg" title="Machine Configuration Database help ( on confluence)"></i></span>`);
+        elem.find(".help").on("click", function() { window.open("https://confluence.slac.stanford.edu/display/PCDS/Machine+Configuration+Database+Guide", "_blank").focus(); })
       }
 }
 
