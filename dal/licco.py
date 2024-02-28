@@ -9,6 +9,7 @@ import collections
 from enum import Enum
 import copy
 import json
+import math
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -480,8 +481,8 @@ fcattrs = {
     },
     "ray_trace": {
         "name": "ray_trace",
-        "type": "bool",
-        "fromstr": default_wrapper(str2bool, None),
+        "type": "text",
+        "fromstr": default_wrapper(str2int, None),
         "label": "Must Ray Trace",
         "desc": "Must Ray Trace",
         "required": False
@@ -538,6 +539,9 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", None
         newval = attrmeta["fromstr"](attrval)
+        # Check that values are within bounds
+        if not validate_insert(attrname, newval):
+            return False, f"Value {newval} is invalid for Parameter {attrname}", None
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
             logger.debug(
@@ -559,6 +563,21 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         logger.warn("In update_fft_in_project, all_inserts is an empty list")
 
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid))
+
+
+def validate_insert(attr, val):
+    """
+    Helper function to validate data prior to being saved in DB
+    """
+    if attr == "ray_trace":
+        return True if val == None or val >= 0 else False
+    elif attr == "nom_loc_z":
+        if val < 0 or val > 2000:
+            return False
+    elif "nom_ang_" in attr:
+        if val > math.pi or val < -(math.pi):
+            return False
+    return True
 
 
 def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):

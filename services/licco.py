@@ -1,6 +1,7 @@
 '''
 Web service endpoints for licco
 '''
+from pprint import pprint
 import csv
 import json
 import logging
@@ -424,6 +425,10 @@ def svc_import_project(prjid):
                 fcs[line["FC"]].append(line)
             else:
                 fcs[line["FC"]] = [line]
+        print("*****FCs")
+        pprint(fcs)
+        print("keys")
+        pprint(fcs.keys())
 
     fc2id = {
         value["name"]: value["_id"]
