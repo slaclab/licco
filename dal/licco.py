@@ -532,7 +532,8 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
 
     all_inserts = []
-    insert_count = {"total": len(fcupdate.items()), "success": 0, "fail": 0}
+    insert_count = {"total": len(fcupdate.items()),
+                    "unchanged": 0, "success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -569,6 +570,9 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "user": userid,
                 "time": modification_time
             })
+        else:
+            insert_count["total"] -= 1
+            insert_count["unchanged"] += 1
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
@@ -578,7 +582,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     else:
         logger.warn("In update_fft_in_project, all_inserts is an empty list")
 
-    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid))
+    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
 def validate_insert(attr, val):

@@ -84,6 +84,8 @@ def update_ffts_in_project(prjid, ffts):
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
+    update_status = {"total": 0, "success": 0, "fail": 0, "unchanged": 0}
+
     for fft in ffts:
         fftid = fft["_id"]
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -92,11 +94,21 @@ def update_ffts_in_project(prjid, ffts):
             if attr in fcupdate:
                 del fcupdate[attr]
         fcupdate["state"] = "Conceptual"
-        status, errormsg, fft = update_fft_in_project(
+        status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         if not status:
             return status, errormsg, fft
-    return True, "", get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+        update_status = {k: update_status[k]+results[k]
+                         for k in update_status.keys()}
+
+    status_str = 'Unchanged values: ' + \
+        str(update_status["unchanged"]) + ". Update Attempts: " + \
+        str(update_status["total"]) + ".\n" + \
+        "Successes: " + \
+        str(update_status["success"]) + \
+        ". Failures: " + str(update_status["fail"])
+    print(status_str)
+    return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
 
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
@@ -361,7 +373,7 @@ def svc_update_fc_in_project(prjid, fftid):
     """
     fcupdate = request.json
     userid = context.security.get_current_user_id()
-    status, errormsg, fc = update_fft_in_project(
+    status, errormsg, fc, results = update_fft_in_project(
         prjid, fftid, fcupdate, userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
