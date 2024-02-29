@@ -469,8 +469,6 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-    print("FINAL DATA")
-    pprint(fcuploads)
     update_ffts_in_project(prjid, fcuploads)
 
     return redirect(f'/projects/{prjid}/index.html')
