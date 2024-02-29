@@ -1,4 +1,4 @@
-Validated Configuration Database,,,,,,,,,,,,,,
+Machine Configuration Database,,,,,,,,,,,,,,
 projectname2,,,,,,,,,,,,,,
 ,,,,,Nominal Location (meters in LCLS coordinates),,,Nominal Dimension (meters),,,Nominal Angle (radians),,,
 TC_part_no,FC,Fungible,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
