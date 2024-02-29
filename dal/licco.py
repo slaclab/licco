@@ -532,7 +532,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
 
     all_inserts = []
-    insert_count = {"success": 0, "fail": 0}
+    insert_count = {"total": len(fcupdate.items()), "success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -543,15 +543,19 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
+            insert_count["fail"] += 1
+            if insert_count["total"] == 1:
+                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
-            insert_count["fail"] += 1
             continue
         # Check that values are within bounds
         if not validate_insert(attrname, newval):
+            insert_count["fail"] += 1
+            if insert_count["total"] == 1:
+                return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Out of range")
-            insert_count["fail"] += 1
             continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
