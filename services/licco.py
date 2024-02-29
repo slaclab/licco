@@ -425,10 +425,6 @@ def svc_import_project(prjid):
                 fcs[line["FC"]].append(line)
             else:
                 fcs[line["FC"]] = [line]
-        print("*****FCs")
-        pprint(fcs)
-        print("keys")
-        pprint(fcs.keys())
 
     fc2id = {
         value["name"]: value["_id"]
@@ -473,6 +469,8 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
+    print("FINAL DATA")
+    pprint(fcuploads)
     update_ffts_in_project(prjid, fcuploads)
 
     return redirect(f'/projects/{prjid}/index.html')

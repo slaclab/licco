@@ -532,16 +532,27 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
 
     all_inserts = []
+    insert_count = {"success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", None
-        newval = attrmeta["fromstr"](attrval)
+        try:
+            newval = attrmeta["fromstr"](attrval)
+        except ValueError:
+            # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
+            logger.debug(
+                f"{attrname}, {attrval} invalid input rejected: Wrong type")
+            insert_count["fail"] += 1
+            continue
         # Check that values are within bounds
         if not validate_insert(attrname, newval):
-            return False, f"Value {newval} is invalid for Parameter {attrname}", None
+            logger.debug(
+                f"{attrname}, {attrval} invalid input rejected: Out of range")
+            insert_count["fail"] += 1
+            continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
             logger.debug(
@@ -557,6 +568,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
+        all_inserts["success"] = len(all_inserts)
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
