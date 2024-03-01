@@ -4969,6 +4969,7 @@ textarea.form-control-lg {
 .toast-body {
   padding: var(--bs-toast-padding-x);
   word-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .modal {

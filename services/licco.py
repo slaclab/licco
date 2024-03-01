@@ -86,8 +86,6 @@ def update_ffts_in_project(prjid, ffts):
     userid = context.security.get_current_user_id()
     update_status = {"total": 0, "success": 0, "fail": 0, "unchanged": 0}
 
-    print("fft headers")
-    pprint(ffts)
     for fft in ffts:
         fftid = fft["_id"]
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -98,6 +96,7 @@ def update_ffts_in_project(prjid, ffts):
         fcupdate["state"] = "Conceptual"
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
+        # Have smarter error handling here
         if not status:
             return status, errormsg, fft
         # Add the individual FFT update results into overall count
@@ -425,6 +424,8 @@ def svc_import_project(prjid):
     """
     Import project data from csv file
     """
+    status_str = ''
+
     with BytesIO() as stream:
         request.files['file'].save(stream)
         filestring = stream.getvalue().decode()
@@ -435,6 +436,7 @@ def svc_import_project(prjid):
         loc = 0
         for line in fp:
             if 'FC' in line and 'Fungible' in line:
+                status_str += f'Headers Used: {len(line.split(","))}.\n{"_"*40}\n'
                 break
             loc = fp.tell()
         # Set reader at beginning of header row
@@ -492,7 +494,8 @@ def svc_import_project(prjid):
             fcuploads.append(fcupload)
     status, errormsg, fft = update_ffts_in_project(prjid, fcuploads)
 
-    return errormsg
+    status_str += errormsg
+    return status_str
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])

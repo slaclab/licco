@@ -545,8 +545,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
-            if insert_count["total"] == 1:
-                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
             continue
