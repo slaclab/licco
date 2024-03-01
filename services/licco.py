@@ -424,7 +424,7 @@ def svc_import_project(prjid):
     """
     Import project data from csv file
     """
-    status_str = ''
+    status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
