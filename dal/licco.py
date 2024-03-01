@@ -539,14 +539,14 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             continue
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
-            return False, f"Parameter {attrname} is a required attribute", None
+            return False, f"Parameter {attrname} is a required attribute", None, insert_count
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
-                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None
+                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
             continue
@@ -554,7 +554,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         if not validate_insert(attrname, newval):
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
-                return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None
+                return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Out of range")
             continue

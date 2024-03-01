@@ -14,7 +14,7 @@ from functools import wraps
 
 import context
 
-from flask import Blueprint, request, Response, redirect
+from flask import Blueprint, request, Response, redirect, flash
 
 from dal.utils import JSONEncoder
 from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
@@ -86,6 +86,8 @@ def update_ffts_in_project(prjid, ffts):
     userid = context.security.get_current_user_id()
     update_status = {"total": 0, "success": 0, "fail": 0, "unchanged": 0}
 
+    print("fft headers")
+    pprint(ffts)
     for fft in ffts:
         fftid = fft["_id"]
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -98,17 +100,24 @@ def update_ffts_in_project(prjid, ffts):
             prjid, fftid, fcupdate, userid)
         if not status:
             return status, errormsg, fft
+        # Add the individual FFT update results into overall count
         update_status = {k: update_status[k]+results[k]
                          for k in update_status.keys()}
+    return True, create_status(update_status), get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
 
-    status_str = 'Unchanged values: ' + \
-        str(update_status["unchanged"]) + ". Update Attempts: " + \
-        str(update_status["total"]) + ".\n" + \
-        "Successes: " + \
-        str(update_status["success"]) + \
-        ". Failures: " + str(update_status["fail"])
+
+def create_status(status):
+    """
+    Helper function to make the status message for import based on the dictionary results
+    """
+    status_str = '\n'.join([
+        f'Unchanged values: {status["unchanged"]}.',
+        f'Update Attempts: {status["total"]}.',
+        f'Successes: {status["success"]}.',
+        f'Failures: {status["fail"]}.',
+    ])
     print(status_str)
-    return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+    return status_str
 
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
@@ -481,9 +490,9 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-    update_ffts_in_project(prjid, fcuploads)
+    status, errormsg, fft = update_ffts_in_project(prjid, fcuploads)
 
-    return redirect(f'/projects/{prjid}/index.html')
+    return errormsg
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
