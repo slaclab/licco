@@ -14,7 +14,7 @@ from functools import wraps
 
 import context
 
-from flask import Blueprint, request, Response, redirect
+from flask import Blueprint, request, Response
 
 from dal.utils import JSONEncoder
 from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
@@ -84,6 +84,8 @@ def update_ffts_in_project(prjid, ffts):
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
+    update_status = {"total": 0, "success": 0, "fail": 0, "unchanged": 0}
+
     for fft in ffts:
         fftid = fft["_id"]
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -92,11 +94,29 @@ def update_ffts_in_project(prjid, ffts):
             if attr in fcupdate:
                 del fcupdate[attr]
         fcupdate["state"] = "Conceptual"
-        status, errormsg, fft = update_fft_in_project(
+        status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
+        # Have smarter error handling here
         if not status:
             return status, errormsg, fft
-    return True, "", get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+        # Add the individual FFT update results into overall count
+        update_status = {k: update_status[k]+results[k]
+                         for k in update_status.keys()}
+    return True, create_status(update_status), get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+
+
+def create_status(status):
+    """
+    Helper function to make the status message for import based on the dictionary results
+    """
+    status_str = '\n'.join([
+        f'Unchanged values: {status["unchanged"]}.',
+        f'Update Attempts: {status["total"]}.',
+        f'Successes: {status["success"]}.',
+        f'Failures: {status["fail"]}.',
+    ])
+    print(status_str)
+    return status_str
 
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
@@ -361,7 +381,7 @@ def svc_update_fc_in_project(prjid, fftid):
     """
     fcupdate = request.json
     userid = context.security.get_current_user_id()
-    status, errormsg, fc = update_fft_in_project(
+    status, errormsg, fc, results = update_fft_in_project(
         prjid, fftid, fcupdate, userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
@@ -404,6 +424,8 @@ def svc_import_project(prjid):
     """
     Import project data from csv file
     """
+    status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
+
     with BytesIO() as stream:
         request.files['file'].save(stream)
         filestring = stream.getvalue().decode()
@@ -414,6 +436,7 @@ def svc_import_project(prjid):
         loc = 0
         for line in fp:
             if 'FC' in line and 'Fungible' in line:
+                status_str += f'Headers Used: {len(line.split(","))}.\n{"_"*40}\n'
                 break
             loc = fp.tell()
         # Set reader at beginning of header row
@@ -469,9 +492,10 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-    update_ffts_in_project(prjid, fcuploads)
+    status, errormsg, fft = update_ffts_in_project(prjid, fcuploads)
 
-    return redirect(f'/projects/{prjid}/index.html')
+    status_str += errormsg
+    return status_str
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])

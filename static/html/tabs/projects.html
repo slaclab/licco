@@ -117,9 +117,25 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           Mustache.parse(d0);
           $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Upload CSV to Project"}));
           $("#global_mdl_holder").find(".modal").modal("show");
-          $("#global_mdl_holder").find(".fileuploader")[0].action = "ws/projects/" + prjid + "/import";
+          $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
+            var url = "ws/projects/" + prjid + "/import";
+            var request = new XMLHttpRequest();
+            request.open('POST', url, true);
+            request.onload = function() {
+              // request successful
+              $("#global_mdl_holder").find(".modal").modal("hide");
+              showToast("../../static/html/tabs/toasts/prjimportstatus.html", {status: request.responseText});
+            };
+            request.onerror = function() {
+              // request failed
+            };
+            request.send(new FormData(event.target));
+            event.preventDefault();
+          });
+
         });
       });
+
       rendered.find(".edit").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
         $.when($.ajax("static/html/tabs/nmdsmdl.html"), $.getJSON("ws/projects/"+prjid+"/"))

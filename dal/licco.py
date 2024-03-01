@@ -532,26 +532,31 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
 
     all_inserts = []
-    insert_count = {"success": 0, "fail": 0}
+    insert_count = {"total": len(fcupdate.items()),
+                    "unchanged": 0, "success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
-            return False, f"Parameter {attrname} is a required attribute", None
+            return False, f"Parameter {attrname} is a required attribute", None, insert_count
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
+            insert_count["fail"] += 1
+            if insert_count["total"] == 1:
+                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
-            insert_count["fail"] += 1
             continue
         # Check that values are within bounds
         if not validate_insert(attrname, newval):
+            insert_count["fail"] += 1
+            if insert_count["total"] == 1:
+                return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Out of range")
-            insert_count["fail"] += 1
             continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
@@ -565,6 +570,9 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "user": userid,
                 "time": modification_time
             })
+        else:
+            insert_count["total"] -= 1
+            insert_count["unchanged"] += 1
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
@@ -574,7 +582,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     else:
         logger.warn("In update_fft_in_project, all_inserts is an empty list")
 
-    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid))
+    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
 def validate_insert(attr, val):
