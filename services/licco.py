@@ -14,7 +14,7 @@ from functools import wraps
 
 import context
 
-from flask import Blueprint, request, Response, redirect, flash
+from flask import Blueprint, request, Response
 
 from dal.utils import JSONEncoder
 from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
