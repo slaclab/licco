@@ -84,7 +84,7 @@ def update_ffts_in_project(prjid, ffts):
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
-    update_status = {"total": 0, "success": 0, "fail": 0, "unchanged": 0}
+    update_status = {"total": 0, "success": 0, "fail": 0, "fftedit": 0}
 
     for fft in ffts:
         fftid = fft["_id"]
@@ -102,18 +102,31 @@ def update_ffts_in_project(prjid, ffts):
         # Add the individual FFT update results into overall count
         update_status = {k: update_status[k]+results[k]
                          for k in update_status.keys()}
-    return True, create_status(update_status), get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+    return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
 
 
-def create_status(status):
+def create_status_changes(status):
     """
     Helper function to make the status message for import based on the dictionary results
     """
     status_str = '\n'.join([
-        f'Unchanged values: {status["unchanged"]}.',
-        f'Update Attempts: {status["total"]}.',
-        f'Successes: {status["success"]}.',
-        f'Failures: {status["fail"]}.',
+        f'Identified changes: {status["total"]}.',
+        f'Successful changes: {status["success"]}.',
+        f'Failed changes: {status["fail"]}.',
+    ])
+    print(status_str)
+    return status_str
+
+
+def create_status_header(status):
+    """
+    Helper function to make the header for the import status message 
+    """
+    status_str = '\n'.join([
+        f'Valid headers recognized: {status["headers"]}.',
+        f'Added FFT: {status["fftnew"]}.',
+        f'Modified FFT: {status["fftedit"]}.',
+        f'{"_"*40}\n',
     ])
     print(status_str)
     return status_str
@@ -413,7 +426,7 @@ def svc_update_ffts_in_project(prjid):
     Insert multiple FFTs into a project
     """
     ffts = request.json
-    status, errormsg, fft = update_ffts_in_project(prjid, ffts)
+    status, errormsg, fft, update_status = update_ffts_in_project(prjid, ffts)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 
 
@@ -425,6 +438,7 @@ def svc_import_project(prjid):
     Import project data from csv file
     """
     status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
+    status_val = {"headers": 0, "fftnew": 0}
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -436,7 +450,6 @@ def svc_import_project(prjid):
         loc = 0
         for line in fp:
             if 'FC' in line and 'Fungible' in line:
-                status_str += f'Headers Used: {len(line.split(","))}.\n{"_"*40}\n'
                 break
             loc = fp.tell()
         # Set reader at beginning of header row
@@ -479,6 +492,7 @@ def svc_import_project(prjid):
             if (fc["FC"], fc["Fungible"]) not in ffts:
                 status, errormsg, newfft = create_new_fft(
                     fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
+                status_val["fftnew"] += 1
                 ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
                       if "fg" in newfft else None)] = newfft["_id"]
 
@@ -492,9 +506,17 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-    status, errormsg, fft = update_ffts_in_project(prjid, fcuploads)
 
-    status_str += errormsg
+    # number of recognized headers minus the id used for DB reference
+    status_val["headers"] = len(fcuploads[0].keys())-1
+
+    print("this is uploads")
+    pprint(fcuploads)
+    status, errormsg, fft, update_status = update_ffts_in_project(
+        prjid, fcuploads)
+    status_val["fftedit"] = update_status["fftedit"]
+    status_str = (create_status_header(status_val) +
+                  create_status_changes(update_status))
     return status_str
 
 

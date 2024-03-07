@@ -532,8 +532,9 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
 
     all_inserts = []
+    fft_edits = set()
     insert_count = {"total": len(fcupdate.items()),
-                    "unchanged": 0, "success": 0, "fail": 0}
+                    "success": 0, "fail": 0, "fftedit": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -546,6 +547,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
+                insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
@@ -554,6 +556,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         if not validate_insert(attrname, newval):
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
+                insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
                 f"{attrname}, {attrval} invalid input rejected: Out of range")
@@ -570,13 +573,16 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "user": userid,
                 "time": modification_time
             })
+            fft_edits.add(ObjectId(fftid))
+            print(fft_edits)
         else:
             insert_count["total"] -= 1
-            insert_count["unchanged"] += 1
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
         insert_count["success"] = len(all_inserts)
+        print(fft_edits)
+        insert_count["fftedit"] = len(fft_edits)
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
