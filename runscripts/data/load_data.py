@@ -52,14 +52,14 @@ if __name__ == '__main__':
     project_name = args.projectname
     session = requests.Session()
 
-    if args.user and args.password:
-        logger.debug("Using HTTP basic auth ...")
-        session.auth = (args.user, args.password)
-    else:
-        from krtc import KerberosTicket
-        logger.debug("Using Kerberos ...")
-        host = urlparse(args.url).hostname
-        session.headers.update(KerberosTicket('HTTP@' + host).getAuthHeaders())
+    # if args.user and args.password:
+    #     logger.debug("Using HTTP basic auth ...")
+    #     session.auth = (args.user, args.password)
+    # else:
+    #     from krtc import KerberosTicket
+    #     logger.debug("Using Kerberos ...")
+    #     host = urlparse(args.url).hostname
+    #     session.headers.update(KerberosTicket('HTTP@' + host).getAuthHeaders())
 
     filename = args.lineconfigfile
 

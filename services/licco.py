@@ -22,7 +22,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_currently_approved_project, diff_project, FCState, clone_project, get_project_changes, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
-    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes
+    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert, get_fft_values_by_project
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -90,19 +90,65 @@ def update_ffts_in_project(prjid, ffts):
         fftid = fft["_id"]
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
         fcupdate.update(fft)
+        # If invalid, don't try to add to DB
+        if not validate_import_headers(fft, prjid):
+            errormsg = "invalid import"
+            continue
         for attr in ["_id", "name", "fc", "fg"]:
             if attr in fcupdate:
                 del fcupdate[attr]
         fcupdate["state"] = "Conceptual"
+        # return False, "Missing Required Headers", fft
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
-        # Have smarter error handling here
+        # Have smarter error handling here, when does this trigger?
         if not status:
             return status, errormsg, fft
         # Add the individual FFT update results into overall count
         update_status = {k: update_status[k]+results[k]
                          for k in update_status.keys()}
     return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
+
+
+def validate_import_headers(fft, prjid):
+    """
+    Helper function to pre-validate that all required data is present
+    """
+    state_default = "Conceptual"
+    attrs = get_fcattrs(fromstr=True)
+    db_values = get_fft_values_by_project(fft["_id"], prjid)
+    if ("state" not in fft):
+        if ("state" not in db_values):
+            fft["state"] = state_default
+        else:
+            fft["state"] = db_values["state"]
+    for header in attrs:
+        # If header is required for all, or if the FFT is non-conceptual and header is required
+        if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
+            print(header, "required")
+            if not header in fft:
+                print("missing in ", fft)
+                # Check if in DB already, continue to validate next if so
+                if header not in db_values:
+                    print(fft, " not in DB ", db_values)
+                    return False
+                print("found in db", db_values[header])
+                continue
+            # Missing or invalid data
+            try:
+                val = attrs[header]["fromstr"](fft[header])
+            except (ValueError, KeyError) as e:
+                return False
+            if (not fft[header]) or (not validate_insert(header, val)):
+                print(fft[header], "invalid for", header)
+                # Check if in DB already, continue to validate next if so
+                if header not in db_values:
+                    print(fft, "missing", header)
+                    return False
+                print("found in db", db_values[header])
+                continue
+            print(fft)
+    return True
 
 
 def create_status_changes(status):
@@ -120,7 +166,7 @@ def create_status_changes(status):
 
 def create_status_header(status):
     """
-    Helper function to make the header for the import status message 
+    Helper function to make the header for the import status message
     """
     status_str = '\n'.join([
         f'Valid headers recognized: {status["headers"]}.',
@@ -387,7 +433,7 @@ def svc_delete_fg(fgid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
-@project_writable
+@ project_writable
 def svc_update_fc_in_project(prjid, fftid):
     """
     Update the values of a functional component in a project
@@ -399,14 +445,15 @@ def svc_update_fc_in_project(prjid, fftid):
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
+@licco_ws_blueprint.route(
+    "/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
 @context.security.authentication_required
-@project_writable
+@ project_writable
 def svc_sync_fc_from_approved_in_project(prjid, fftid):
     """
     Update the values of an FFT in this project from the specified project.
     Most of the time this is the currently approved project.
-    Pass in a JSON with 
+    Pass in a JSON with
     :param: other_id - Project id of the other project
     "param: attrnames - List of attribute names to copy over. If this is a string "ALL", then all the attributes that are set are copied over.
     """
@@ -414,12 +461,12 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     reqparams = request.json
     logger.info(reqparams)
     status, errormsg, fc = copy_ffts_from_project(destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-                                                  x["name"] for x in get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"], userid=userid)
+        x["name"] for x in get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"], userid=userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["POST"])
-@project_writable
+@ project_writable
 @context.security.authentication_required
 def svc_update_ffts_in_project(prjid):
     """
@@ -431,7 +478,7 @@ def svc_update_ffts_in_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/import/", methods=["POST"])
-@project_writable
+@ project_writable
 @context.security.authentication_required
 def svc_import_project(prjid):
     """
@@ -521,7 +568,7 @@ def svc_import_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
-@project_writable
+@ project_writable
 @context.security.authentication_required
 def svc_export_project(prjid):
     """
@@ -552,7 +599,8 @@ def svc_export_project(prjid):
     return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={prj_name}.csv"})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval", methods=["GET", "POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval",
+                          methods=["GET", "POST"])
 @context.security.authentication_required
 def svc_submit_for_approval(prjid):
     """
