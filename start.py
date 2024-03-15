@@ -16,7 +16,7 @@ __author__ = 'mshankar@slac.stanford.edu'
 # Initialize application.
 app = Flask("licco")
 # Set the expiration for static files
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300;
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300
 
 app.secret_key = "A secret key for licco"
 app.debug = json.loads(os.environ.get("DEBUG", "false").lower())
@@ -26,7 +26,8 @@ root = logging.getLogger()
 root.setLevel(logging.getLevelName(os.environ.get("LOG_LEVEL", "INFO")))
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 root.addHandler(ch)
 

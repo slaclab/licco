@@ -28,10 +28,12 @@ logger = logging.getLogger(__name__)
 class FCState(Enum):
     Conceptual = "Conceptual"
     Planned = "Planned"
+    Commissioned = "Commissioned"
     ReadyForInstallation = "ReadyForInstallation"
     Installed = "Installed"
     Operational = "Operational"
     NonOperational = "NonOperational"
+    DeCommissioned = "DeCommissioned"
     Removed = "Removed"
 
     def describe(self):
@@ -44,9 +46,11 @@ class FCState(Enum):
             FCState.Planned: {"sortorder": 1, "label": "Planned", "description": "A planned configuration, installation planning is underway. Configuration changes are less frequent."},
             FCState.ReadyForInstallation: {"sortorder": 2, "label": "Ready for installation", "description": "Configuration is designated as ready for installation. Installation is imminent. Installation effort is planned and components may be fully assembled and bench-tested."},
             FCState.Installed: {"sortorder": 3, "label": "Installed", "description": "Component is physically installed but not fully operational"},
-            FCState.Operational: {"sortorder": 4, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
-            FCState.NonOperational: {"sortorder": 5, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
-            FCState.Removed: {"sortorder": 6, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
+            FCState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
+            FCState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
+            FCState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
+            FCState.DeCommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
+            FCState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
         }
 
 
@@ -104,6 +108,21 @@ def get_all_users():
     return list(ret)
 
 
+def get_fft_values_by_project(fftid, prjid):
+    """
+    Return all data connected with the provided Project and FFT 
+    :param fftid - the id of the FFT
+    :param prjid - the id of the project
+    :return: Dict of FFT Values
+    """
+    fft_pairings = {}
+    results = list(licco_db[line_config_db_name]["projects_history"].find(
+        {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}))
+    for res in results:
+        fft_pairings[res["key"]] = res["val"]
+    return fft_pairings
+
+
 def get_all_projects(sort_criteria):
     """
     Return all the projects in the system.
@@ -146,7 +165,7 @@ def get_project_by_name(name):
 
 def get_project_ffts(id, showallentries=True, asoftimestamp=None):
     """
-    Get the FFTsfor a project given its id.
+    Get the FFTs for a project given its id.
     """
     oid = ObjectId(id)
     logger.info("Looking for project details for %s", oid)
@@ -422,7 +441,7 @@ fcattrs = {
         "category": {"label": "Nominal Dimension (meters)", "span": 3},
         "desc": "Nominal Dimension Z",
         "required": False,
-        "is_required_dimension": True
+        "is_required_dimension": False
     },
     "nom_dim_x": {
         "name": "nom_dim_x",
@@ -433,7 +452,7 @@ fcattrs = {
         "category": {"label": "Nominal Dimension (meters)"},
         "desc": "Nominal Dimension X",
         "required": False,
-        "is_required_dimension": True
+        "is_required_dimension": False
     },
     "nom_dim_y": {
         "name": "nom_dim_y",
@@ -444,7 +463,7 @@ fcattrs = {
         "category": {"label": "Nominal Dimension (meters)"},
         "desc": "Nominal Dimension Y",
         "required": False,
-        "is_required_dimension": True
+        "is_required_dimension": False
     },
     "nom_ang_z": {
         "name": "nom_ang_z",
@@ -490,14 +509,15 @@ fcattrs = {
 }
 
 
-def get_fcattrs():
+def get_fcattrs(fromstr=False):
     """
     Return the FC attribute metadata.
-    Since functions cannot be serliazed into JSON, we make a copy and delete the fromstr and other function parts
+    Since functions cannot be serialized into JSON, we make a copy and delete the fromstr and other function parts
     """
     fcattrscopy = copy.deepcopy(fcattrs)
-    for k, v in fcattrscopy.items():
-        del v["fromstr"]
+    if not fromstr:
+        for k, v in fcattrscopy.items():
+            del v["fromstr"]
     return fcattrscopy
 
 
@@ -508,11 +528,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", None
+        return False, f"Cannot find project for {prjid}", None, None
     fft = licco_db[line_config_db_name]["ffts"].find_one(
         {"_id": ObjectId(fftid)})
     if not fft:
-        return False, f"Cannot find functional+fungible token for {fftid}", None
+        return False, f"Cannot find functional+fungible token for {fftid}", None, None
 
     current_attrs = get_project_attributes(
         licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
@@ -524,16 +544,17 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None
+            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
 
-    if current_attrs.get("state", "Conceptual") == "Conceptual" and "state" in fcupdate and fcupdate["state"] != "Conceptual":
+    if current_attrs.get("state") == "Conceptual" and "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
             if attrmeta.get("is_required_dimension", False) and current_attrs.get(attrname, None) is None:
-                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None
+                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
 
     all_inserts = []
+    fft_edits = set()
     insert_count = {"total": len(fcupdate.items()),
-                    "unchanged": 0, "success": 0, "fail": 0}
+                    "success": 0, "fail": 0, "fftedit": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -546,17 +567,19 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
+                insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
-                f"{attrname}, {attrval} invalid input rejected: Wrong type")
+                f"Invalid input rejected : Wrong type - {attrname}, {attrval}")
             continue
         # Check that values are within bounds
-        if not validate_insert(attrname, newval):
+        if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
+                insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
-                f"{attrname}, {attrval} invalid input rejected: Out of range")
+                f"Invalid input rejected : Out of range - {attrname}, {attrval}")
             continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
@@ -570,22 +593,23 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "user": userid,
                 "time": modification_time
             })
+            fft_edits.add(ObjectId(fftid))
         else:
             insert_count["total"] -= 1
-            insert_count["unchanged"] += 1
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
         insert_count["success"] = len(all_inserts)
+        insert_count["fftedit"] = len(fft_edits)
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
-        logger.warn("In update_fft_in_project, all_inserts is an empty list")
+        logger.debug("In update_fft_in_project, all_inserts is an empty list")
 
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
-def validate_insert(attr, val):
+def validate_insert_range(attr, val):
     """
     Helper function to validate data prior to being saved in DB
     """
