@@ -570,7 +570,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
-                f"{attrname}, {attrval} invalid input rejected: Wrong type")
+                f"Invalid input rejected : Wrong type - {attrname}, {attrval}")
             continue
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
@@ -579,7 +579,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 insert_count["fftedit"] = len(fft_edits)
                 return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
-                f"{attrname}, {attrval} invalid input rejected: Out of range")
+                f"Invalid input rejected : Out of range - {attrname}, {attrval}")
             continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
@@ -604,7 +604,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
-        logger.warn("In update_fft_in_project, all_inserts is an empty list")
+        logger.debug("In update_fft_in_project, all_inserts is an empty list")
 
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 

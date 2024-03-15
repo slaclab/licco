@@ -97,7 +97,7 @@ def update_ffts_in_project(prjid, ffts):
         for attr in ["_id", "name", "fc", "fg"]:
             if attr in fcupdate:
                 del fcupdate[attr]
-        if not fcupdate["state"]:
+        if ("state" not in fcupdate) or (not fcupdate["state"]):
             fcupdate["state"] = "Conceptual"
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
@@ -131,7 +131,7 @@ def validate_import_headers(fft, prjid):
                 # Check if in DB already, continue to validate next if so
                 if header not in db_values:
                     logger.debug(
-                        f"FFT Import Rejected{fft['fc']}-{fft['fg']}: Missing Required Header {header}")
+                        f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Missing Required Header {header}")
                     return False
                 continue
             # Check for missing or invalid data
@@ -139,13 +139,13 @@ def validate_import_headers(fft, prjid):
                 val = attrs[header]["fromstr"](fft[header])
             except (ValueError, KeyError) as e:
                 logger.debug(
-                    f"FFT Import Rejected{fft['fc']}-{fft['fg']}: Invalid Data For {header}")
+                    f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Invalid Data For {header}")
                 return False
             if (not fft[header]) or (not validate_insert_range(header, val)):
                 # Check if in DB already, continue to validate next if so
                 if header not in db_values:
                     logger.debug(
-                        f"FFT Import Rejected{fft['fc']}-{fft['fg']}: Missing Required Header {header}")
+                        f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Missing Required Header {header}")
                     return False
                 continue
     return True
