@@ -116,12 +116,10 @@ def get_fft_values_by_project(fftid, prjid):
     :return: Dict of FFT Values
     """
     fft_pairings = {}
-    print("looking up db fft ", fftid, "\nproject ", prjid)
     results = list(licco_db[line_config_db_name]["projects_history"].find(
         {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}))
     for res in results:
         fft_pairings[res["key"]] = res["val"]
-    print("ffts\n", fft_pairings)
     return fft_pairings
 
 
@@ -548,7 +546,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
 
-    if current_attrs.get("state", "Conceptual") == "Conceptual" and "state" in fcupdate and fcupdate["state"] != "Conceptual":
+    if current_attrs.get("state") == "Conceptual" and "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
             if attrmeta.get("is_required_dimension", False) and current_attrs.get(attrname, None) is None:
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
@@ -575,7 +573,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 f"{attrname}, {attrval} invalid input rejected: Wrong type")
             continue
         # Check that values are within bounds
-        if not validate_insert(attrname, newval):
+        if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
                 insert_count["fftedit"] = len(fft_edits)
@@ -611,7 +609,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
-def validate_insert(attr, val):
+def validate_insert_range(attr, val):
     """
     Helper function to validate data prior to being saved in DB
     """
