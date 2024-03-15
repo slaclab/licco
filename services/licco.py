@@ -92,6 +92,8 @@ def update_ffts_in_project(prjid, ffts):
         fcupdate.update(fft)
         # If invalid, don't try to add to DB
         if not validate_import_headers(fft, prjid):
+            # 3 : One for DB ID, One for FC, one for FG
+            update_status["fail"] += (len(fft)-3)
             errormsg = "invalid import"
             continue
         for attr in ["_id", "name", "fc", "fg"]:
@@ -558,7 +560,8 @@ def svc_import_project(prjid):
     status, errormsg, fft, update_status = update_ffts_in_project(
         prjid, fcuploads)
     # Avoid double counting new ffts
-    status_val["fftedit"] = update_status["fftedit"] - status_val["fftnew"]
+    status_val["fftedit"] = max(
+        0, (update_status["fftedit"] - status_val["fftnew"]))
     status_str = (create_status_header(status_val) +
                   create_status_changes(update_status))
 
