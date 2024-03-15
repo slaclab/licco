@@ -1,4 +1,3 @@
-from dal.licco import initialize_collections
 from flask import Flask, current_app
 import logging
 import os
