@@ -107,7 +107,7 @@
           let tdrdrd = $(Mustache.render(tmpl, fcattr));
           tdrdrd.on("blur", function(){
             let thewidget = $(this), currval = fcattr["type"] == "bool" ? $(this).is(':checked') : $(this).val(), prevval = fcattr["val"], updt = _.fromPairs([[fcattrname, currval]]);
-            if(currval == prevval) return;
+            if(currval === prevval) return;
             $.post({url: "../../ws/projects/" + prj["_id"] + "/fcs/" + fcid, data: JSON.stringify(updt), contentType: "application/json; charset=utf-8", dataType: "json"})
             .done(function(data, textStatus, jqXHR) {
               if(!_.get(data, "success", false)) {

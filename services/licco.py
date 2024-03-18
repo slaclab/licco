@@ -101,6 +101,7 @@ def update_ffts_in_project(prjid, ffts):
                 del fcupdate[attr]
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             fcupdate["state"] = "Conceptual"
+        print(fft)
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
@@ -513,12 +514,27 @@ def svc_import_project(prjid):
         value["name"]: value["_id"]
         for value in json.loads(svc_get_fcs())["value"]
     }
+
     for nm, fc_list in fcs.items():
+        current_list = []
         for fc in fc_list:
             if fc["FC"] not in fc2id:
                 status, errormsg, newfc = create_new_functional_component(
                     name=fc["FC"], description="Generated from " + nm)
-                fc2id[fc["FC"]] = newfc["_id"]
+                # FFT creation successful, add to data to import list
+                if status:
+                    fc2id[fc["FC"]] = newfc["_id"]
+                    current_list.append(fc)
+                # Tried to create a new FFT and failed - remove from dataset
+                else:
+                    if "Fungible" in fc:
+                        error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
+                    else:
+                        error_str = f"Import for fft {fc['FC']} (no FG) failed: {errormsg}"
+                    logger.debug(error_str)
+            else:
+                current_list.append(fc)
+        fcs[nm] = current_list
 
     fg2id = {
         fgs["name"]: fgs["_id"]
@@ -553,7 +569,6 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-
     # number of recognized headers minus the id used for DB reference
     status_val["headers"] = len(fcuploads[0].keys())-1
 

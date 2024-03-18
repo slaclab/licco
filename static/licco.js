@@ -2,7 +2,16 @@
 
 var licco_formatdate = function() { return function(dateLiteral, render) { var dateStr = render(dateLiteral); return dateStr == "" ? "" : dayjs(dateStr).format("MMM/D/YYYY")}};
 var licco_formatdatetime = function() { return function(dateLiteral, render) { var dateStr = render(dateLiteral); return dateStr == "" ? "" : dayjs(dateStr).format("MMM/D/YYYY HH:mm:ss")}};
-var licco_prec7float = function() { return function(numLiteral, render) { let numStr = render(numLiteral); let num = _.toNumber(numStr); if(num != 0.0) return num.toFixed(7); return ""; }};
+var licco_prec7float = function() {
+    return function(numLiteral, render) {
+        let numStr = render(numLiteral);
+        if (numStr === "") {
+            return ""
+        }
+        let num = _.toNumber(numStr);
+        return num.toFixed(7);
+    }
+};
 
 
 var licco_musrdr = function(tmpl, data) {

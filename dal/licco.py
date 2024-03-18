@@ -401,8 +401,8 @@ fcattrs = {
     },
     "nom_loc_z": {
         "name": "nom_loc_z",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": {"label": "Nominal Location (meters in LCLS coordinates)", "span": 3},
@@ -412,8 +412,8 @@ fcattrs = {
     },
     "nom_loc_x": {
         "name": "nom_loc_x",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "X",
         "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
@@ -423,8 +423,8 @@ fcattrs = {
     },
     "nom_loc_y": {
         "name": "nom_loc_y",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
@@ -434,8 +434,8 @@ fcattrs = {
     },
     "nom_dim_z": {
         "name": "nom_dim_z",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": {"label": "Nominal Dimension (meters)", "span": 3},
@@ -445,8 +445,8 @@ fcattrs = {
     },
     "nom_dim_x": {
         "name": "nom_dim_x",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "X",
         "category": {"label": "Nominal Dimension (meters)"},
@@ -456,8 +456,8 @@ fcattrs = {
     },
     "nom_dim_y": {
         "name": "nom_dim_y",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": {"label": "Nominal Dimension (meters)"},
@@ -467,8 +467,8 @@ fcattrs = {
     },
     "nom_ang_z": {
         "name": "nom_ang_z",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Z",
         "category": {"label": "Nominal Angle (radians)", "span": 3},
@@ -478,8 +478,8 @@ fcattrs = {
     },
     "nom_ang_x": {
         "name": "nom_ang_x",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "X",
         "category": {"label": "Nominal Angle (radians)"},
@@ -489,8 +489,8 @@ fcattrs = {
     },
     "nom_ang_y": {
         "name": "nom_ang_y",
-        "type": "float",
-        "fromstr": default_wrapper(str2float, 0.0),
+        "type": "text",
+        "fromstr": default_wrapper(str2float, ""),
         "rendermacro": "prec7float",
         "label": "Y",
         "category": {"label": "Nominal Angle (radians)"},
@@ -615,12 +615,16 @@ def validate_insert_range(attr, val):
     """
     if attr == "ray_trace":
         return True if val == None or val >= 0 else False
-    elif attr == "nom_loc_z":
-        if val < 0 or val > 2000:
-            return False
-    elif "nom_ang_" in attr:
-        if val > math.pi or val < -(math.pi):
-            return False
+    # empty strings valid for angles, catch before other verifications
+    if ("nom" in attr):
+        if (val == ""):
+            return True
+        if attr == "nom_loc_z":
+            if val < 0 or val > 2000:
+                return False
+        if "nom_ang_" in attr:
+            if val > math.pi or val < -(math.pi):
+                return False
     return True
 
 
