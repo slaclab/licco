@@ -33,7 +33,7 @@ class FCState(Enum):
     Installed = "Installed"
     Operational = "Operational"
     NonOperational = "NonOperational"
-    DeCommissioned = "DeCommissioned"
+    Decommissioned = "Decommissioned"
     Removed = "Removed"
 
     def describe(self):
@@ -49,7 +49,7 @@ class FCState(Enum):
             FCState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
             FCState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
             FCState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
-            FCState.DeCommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
+            FCState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
             FCState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
         }
 

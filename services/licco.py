@@ -93,7 +93,9 @@ def update_ffts_in_project(prjid, ffts):
         # If invalid, don't try to add to DB
         if not validate_import_headers(fft, prjid):
             # 3 : One for DB ID, One for FC, one for FG
-            update_status["fail"] += (len(fft)-3)
+            num_fail = len(fft)-3
+            update_status["fail"] += (num_fail)
+            update_status["total"] += (num_fail)
             errormsg = "invalid import"
             continue
         for attr in ["_id", "name", "fc", "fg"]:
@@ -101,7 +103,6 @@ def update_ffts_in_project(prjid, ffts):
                 del fcupdate[attr]
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             fcupdate["state"] = "Conceptual"
-        print(fft)
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
@@ -487,6 +488,7 @@ def svc_import_project(prjid):
     """
     status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
     status_val = {"headers": 0, "fftnew": 0}
+    failed_imports = 0
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -496,10 +498,19 @@ def svc_import_project(prjid):
         fp.seek(0)
         # Find the header row
         loc = 0
+        req_headers = False
         for line in fp:
             if 'FC' in line and 'Fungible' in line:
+                req_headers = True
                 break
             loc = fp.tell()
+
+        # Ensure FC and FG (required headers) are present
+        if not req_headers:
+            error_msg = "Import Rejected: FC and Fungible headers required for import."
+            logger.debug(error_msg)
+            return error_msg
+
         # Set reader at beginning of header row
         fp.seek(loc)
         reader = csv.DictReader(fp)
@@ -525,13 +536,12 @@ def svc_import_project(prjid):
                 if status:
                     fc2id[fc["FC"]] = newfc["_id"]
                     current_list.append(fc)
-                # Tried to create a new FFT and failed - remove from dataset
+                # Tried to create a new FFT and failed - don't include in dataset
                 else:
-                    if "Fungible" in fc:
-                        error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
-                    else:
-                        error_str = f"Import for fft {fc['FC']} (no FG) failed: {errormsg}"
-                    logger.debug(error_str)
+                    # Count failed imports - excluding FC & FG
+                    failed_imports += (len(fc) - 2)
+                    logger.debug(
+                        f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}")
             else:
                 current_list.append(fc)
         fcs[nm] = current_list
@@ -577,6 +587,9 @@ def svc_import_project(prjid):
     # Avoid double counting new ffts
     status_val["fftedit"] = max(
         0, (update_status["fftedit"] - status_val["fftnew"]))
+    # Include imports failed from bad FC/FGs
+    update_status["fail"] += failed_imports
+    update_status["total"] += failed_imports
     status_str = (create_status_header(status_val) +
                   create_status_changes(update_status))
 
