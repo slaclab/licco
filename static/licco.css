@@ -10555,7 +10555,7 @@ body {
 }
 #project_tab .maincontent {
   height: 95vh;
-  width: 100vw;
+  width: 98vw;
   overflow: scroll;
 }
 #project_tab .maincontent .fcstbl > thead {
@@ -10598,7 +10598,7 @@ body {
 }
 #apprv_tab .maincontent {
   height: 95vh;
-  width: 100vw;
+  width: 98vw;
   overflow: scroll;
 }
 #apprv_tab .maincontent .fcstbl > thead {
@@ -10642,7 +10642,7 @@ body {
 }
 #projectdiff_tab .maincontent {
   height: 95vh;
-  width: 100vw;
+  width: 98vw;
   overflow: scroll;
 }
 #projectdiff_tab .maincontent .fcstbl > thead {

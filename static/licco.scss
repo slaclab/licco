@@ -154,7 +154,7 @@ body {
 @mixin stickyfctable {
   .maincontent {
     height: 95vh;
-    width: 100vw;
+    width: 98vw;
     overflow: scroll;
 
     .fcstbl > thead {
@@ -190,7 +190,7 @@ body {
 @mixin stickyfctablewithaction {
   .maincontent {
     height: 95vh;
-    width: 100vw;
+    width: 98vw;
     overflow: scroll;
 
     .fcstbl > thead {
@@ -241,7 +241,7 @@ body {
 @mixin stickyfctablewithoutaction {
   .maincontent {
     height: 95vh;
-    width: 100vw;
+    width: 98vw;
     overflow: scroll;
 
     .fcstbl > thead {

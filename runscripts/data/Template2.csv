@@ -1,0 +1,5 @@
+Units
+Integer,Any,Any,Preset,Any,Meters,Meters,Meters,Meters,Meters,Meters,Radians,Radians,Radians,true/false/left blank
+Data
+TC_part_no,FC,Fungible,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,Y_dim,X_dim,LCLS_X_pitch,LCLS_Y_yaw,LCLS_Z_roll,Must_Ray_Trace
+,2NEWLCLSORG,,Conceptual,,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,
