@@ -160,22 +160,26 @@ def create_status_changes(status):
     Helper function to make the status message for import based on the dictionary results
     """
     status_str = '\n'.join([
-        f'Identified changes: {status["total"]}.',
+        f'Change requests: {status["total"]}.',
         f'Successful changes: {status["success"]}.',
         f'Failed changes: {status["fail"]}.',
     ])
     return status_str
 
 
-def create_status_header(status):
+def create_status_header(prj_name, status):
     """
     Helper function to make the header for the import status message
     """
+    line_brk = "_"*40
     status_str = '\n'.join([
+        f'Project Name: {prj_name}.',
+        f'{line_brk}',
         f'Valid headers recognized: {status["headers"]}.',
         f'Added FFT: {status["fftnew"]}.',
         f'Modified FFT: {status["fftedit"]}.',
-        f'{"_"*40}\n',
+        f'{line_brk}',
+        f'Malformed rows: {status["fftfail"]}.\n'
     ])
     return status_str
 
@@ -487,8 +491,7 @@ def svc_import_project(prjid):
     Import project data from csv file
     """
     status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
-    status_val = {"headers": 0, "fftnew": 0}
-    failed_imports = 0
+    status_val = {"headers": 0, "fftnew": 0, "fftfail": 0}
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -539,7 +542,7 @@ def svc_import_project(prjid):
                 # Tried to create a new FFT and failed - don't include in dataset
                 else:
                     # Count failed imports - excluding FC & FG
-                    failed_imports += (len(fc) - 2)
+                    status_val["fftfail"] += 1
                     logger.debug(
                         f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}")
             else:
@@ -588,9 +591,8 @@ def svc_import_project(prjid):
     status_val["fftedit"] = max(
         0, (update_status["fftedit"] - status_val["fftnew"]))
     # Include imports failed from bad FC/FGs
-    update_status["fail"] += failed_imports
-    update_status["total"] += failed_imports
-    status_str = (create_status_header(status_val) +
+    prj_name = get_project(prjid)["name"]
+    status_str = (create_status_header(prj_name, status_val) +
                   create_status_changes(update_status))
 
     logger.debug(re.sub('\n|_', '', status_str))
