@@ -568,7 +568,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
                 insert_count["fftedit"] = len(fft_edits)
-                return False, f"{attrname}, {attrval} invalid input rejected: Wrong type", None, insert_count
             logger.debug(
                 f"Invalid input rejected : Wrong type - {attrname}, {attrval}")
             continue
@@ -577,7 +576,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
                 insert_count["fftedit"] = len(fft_edits)
-                return False, f"{attrname}, {attrval} invalid input rejected: Out of range", None, insert_count
             logger.debug(
                 f"Invalid input rejected : Out of range - {attrname}, {attrval}")
             continue
