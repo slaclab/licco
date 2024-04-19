@@ -10,6 +10,7 @@ from enum import Enum
 import copy
 import json
 import math
+from pprint import pprint
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -546,9 +547,14 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
 
-    if current_attrs.get("state") == "Conceptual" and "state" in fcupdate and fcupdate["state"] != "Conceptual":
+    if "state" in fcupdate and fcupdate["state"] != "Conceptual":
+        print("fcupdate")
+        pprint(fcupdate)
         for attrname, attrmeta in fcattrs.items():
-            if attrmeta.get("is_required_dimension", False) and current_attrs.get(attrname, None) is None:
+            if (attrmeta.get("is_required_dimension") == True) and current_attrs.get(attrname, None) is None:
+                db_values = get_fft_values_by_project(fft["_id"], prjid)
+                # if (attrname in db_values) and attrmeta !="":
+                print(attrname, attrmeta)
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
 
     all_inserts = []

@@ -11,6 +11,7 @@ from datetime import datetime
 import pytz
 import copy
 from functools import wraps
+from pprint import pprint
 
 import context
 
@@ -88,8 +89,17 @@ def update_ffts_in_project(prjid, ffts):
 
     for fft in ffts:
         fftid = fft["_id"]
+        db_values = get_fft_values_by_project(fft["_id"], prjid)
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
         fcupdate.update(fft)
+        print(fft, "db vals")
+        pprint(db_values)
+        if ("state" not in fcupdate) or (not fcupdate["state"]):
+            if "state" in db_values:
+                fcupdate["state"] = db_values["state"]
+            else:
+                fcupdate["state"] = "Conceptual"
+        print("using ", fcupdate['state'])
         # If invalid, don't try to add to DB
         if not validate_import_headers(fft, prjid):
             # 3 : One for DB ID, One for FC, one for FG
@@ -101,12 +111,12 @@ def update_ffts_in_project(prjid, ffts):
         for attr in ["_id", "name", "fc", "fg"]:
             if attr in fcupdate:
                 del fcupdate[attr]
-        if ("state" not in fcupdate) or (not fcupdate["state"]):
-            fcupdate["state"] = "Conceptual"
         status, errormsg, fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
         if not status:
+            print("FAILED", errormsg)
+            print(fft)
             return status, errormsg, fft, None
         # Add the individual FFT update results into overall count
         update_status = {k: update_status[k]+results[k]
@@ -118,15 +128,9 @@ def validate_import_headers(fft, prjid):
     """
     Helper function to pre-validate that all required data is present
     """
-    state_default = "Conceptual"
+    # state_default = "Conceptual"
     attrs = get_fcattrs(fromstr=True)
     db_values = get_fft_values_by_project(fft["_id"], prjid)
-    # If state is missing, set to default
-    if ("state" not in fft) or (not fft["state"]):
-        if ("state" not in db_values):
-            fft["state"] = state_default
-        else:
-            fft["state"] = db_values["state"]
     for header in attrs:
         # If header is required for all, or if the FFT is non-conceptual and header is required
         if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
@@ -318,7 +322,6 @@ def svc_get_project_ffts(prjid):
     filt2fn = {
         "fc": lambda _, v: fnmatch.fnmatch(v.get("fft", {}).get("fc", ""), request.args["fc"]),
         "fg": lambda _, v: fnmatch.fnmatch(v.get("fft", {}).get("fg", ""), request.args["fg"]),
-        "location": lambda _, v: fnmatch.fnmatch(v.get("location", ""), request.args["location"]),
         "state": lambda _, v: v["state"] == request.args["state"]
     }
     for attrname, lmda in filt2fn.items():
@@ -504,13 +507,15 @@ def svc_import_project(prjid):
         req_headers = False
         for line in fp:
             if 'FC' in line and 'Fungible' in line:
+                if not "," in line:
+                    continue
                 req_headers = True
                 break
             loc = fp.tell()
 
         # Ensure FC and FG (required headers) are present
         if not req_headers:
-            error_msg = "Import Rejected: FC and Fungible headers required for import."
+            error_msg = "Import Rejected: FC and Fungible headers are required for import."
             logger.debug(error_msg)
             return error_msg
 
@@ -518,11 +523,22 @@ def svc_import_project(prjid):
         fp.seek(loc)
         reader = csv.DictReader(fp)
         fcs = {}
+        # Add each valid line of data to import dictionary
         for line in reader:
+            # No FC present in the data line
+            if not line["FC"]:
+                continue
             if line["FC"] in fcs.keys():
                 fcs[line["FC"]].append(line)
             else:
-                fcs[line["FC"]] = [line]
+                # Sanitize/replace unicode quotes
+                clean_line = re.sub(
+                    u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
+                if not clean_line:
+                    continue
+                fcs[clean_line] = [line]
+        if not fcs:
+            return "Import Error: No data detected in import file."
 
     fc2id = {
         value["name"]: value["_id"]
@@ -588,8 +604,13 @@ def svc_import_project(prjid):
     status, errormsg, fft, update_status = update_ffts_in_project(
         prjid, fcuploads)
     # Avoid double counting new ffts
-    status_val["fftedit"] = max(
-        0, (update_status["fftedit"] - status_val["fftnew"]))
+    print("___________")
+    print(update_status)
+    if not update_status["fftedit"]:
+        status_val["fftedit"] = 0
+    else:
+        status_val["fftedit"] = max(
+            0, (update_status["fftedit"] - status_val["fftnew"]))
     # Include imports failed from bad FC/FGs
     prj_name = get_project(prjid)["name"]
     status_str = (create_status_header(prj_name, status_val) +
