@@ -111,16 +111,17 @@ def get_all_users():
 
 def get_fft_values_by_project(fftid, prjid):
     """
-    Return all data connected with the provided Project and FFT 
+    Return newest data connected with the provided Project and FFT
     :param fftid - the id of the FFT
     :param prjid - the id of the project
     :return: Dict of FFT Values
     """
     fft_pairings = {}
     results = list(licco_db[line_config_db_name]["projects_history"].find(
-        {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}))
+        {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}).sort("time", 1))
     for res in results:
         fft_pairings[res["key"]] = res["val"]
+    pprint(fft_pairings)
     return fft_pairings
 
 

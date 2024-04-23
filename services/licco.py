@@ -101,7 +101,8 @@ def update_ffts_in_project(prjid, ffts):
                 fcupdate["state"] = "Conceptual"
         print("using ", fcupdate['state'])
         # If invalid, don't try to add to DB
-        if not validate_import_headers(fft, prjid):
+        status, msg = validate_import_headers(fcupdate, prjid, fftid)
+        if not status:
             # 3 : One for DB ID, One for FC, one for FG
             num_fail = len(fft)-3
             update_status["fail"] += (num_fail)
@@ -124,39 +125,51 @@ def update_ffts_in_project(prjid, ffts):
     return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
 
 
-def validate_import_headers(fft, prjid):
+def validate_import_headers(fft, prjid, fftid=None):
     """
     Helper function to pre-validate that all required data is present
     """
-    # state_default = "Conceptual"
+    print('ffts')
+    pprint(fft)
     attrs = get_fcattrs(fromstr=True)
-    db_values = get_fft_values_by_project(fft["_id"], prjid)
+    if not fftid:
+        fftid = fft["_id"]
+    db_values = get_fft_values_by_project(fftid, prjid)
+    print("DB VALUES")
+    pprint(db_values)
+    if not "state" in fft:
+        fft["state"] = db_values["state"]
     for header in attrs:
         # If header is required for all, or if the FFT is non-conceptual and header is required
         if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
             # If required header not present in upload dataset
+            print("non conceptual param change ")
             if not header in fft:
+                print("update missing required header")
                 # Check if in DB already, continue to validate next if so
                 if header not in db_values:
-                    logger.debug(
-                        f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Missing Required Header {header}")
-                    return False
-                continue
+                    error_str = f"Upload rejected for FFT ID {fftid}: Missing Required Header {header}"
+                    logger.debug(error_str)
+                    return False, error_str
+                print("db has missing header)")
+                fft[header] = db_values[header]
+                print("looking at ", header, " : ", fft[header])
             # Check for missing or invalid data
-            try:
-                val = attrs[header]["fromstr"](fft[header])
-            except (ValueError, KeyError) as e:
-                logger.debug(
-                    f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Invalid Data For {header}")
-                return False
-            if (not fft[header]) or (not validate_insert_range(header, val)):
+            if (fft[header] == '') or (not validate_insert_range(header, fft[header])):
                 # Check if in DB already, continue to validate next if so
-                if header not in db_values:
-                    logger.debug(
-                        f"Import rejected for FFT {fft['fc']}-{fft['fg']}: Missing Required Header {header}")
-                    return False
-                continue
-    return True
+                error_str = f"Upload rejected for FFT ID {fftid}: {header} Required for a Non-Conceptual Device"
+                logger.debug(error_str)
+                return False, error_str
+        # Header not in data
+        if not header in fft:
+            continue
+        try:
+            val = attrs[header]["fromstr"](fft[header])
+        except (ValueError, KeyError) as e:
+            error_str = f"Upload rejected for FFT ID {fftid}: Invalid Data For {header}"
+            logger.debug(error_str)
+            return False, error_str
+    return True, "Success"
 
 
 def create_status_changes(status):
@@ -449,6 +462,9 @@ def svc_update_fc_in_project(prjid, fftid):
     """
     fcupdate = request.json
     userid = context.security.get_current_user_id()
+    status, msg = validate_import_headers(fcupdate, prjid, fftid)
+    if not status:
+        return JSONEncoder().encode({"success": False, "errormsg": msg})
     status, errormsg, fc, results = update_fft_in_project(
         prjid, fftid, fcupdate, userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
