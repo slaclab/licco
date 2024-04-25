@@ -84,7 +84,7 @@ def update_ffts_in_project(prjid, ffts):
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
-    update_status = {"total": 0, "success": 0, "fail": 0, "fftedit": 0}
+    update_status = {"success": 0, "fail": 0}
 
     for fft in ffts:
         fftid = fft["_id"]
@@ -100,9 +100,7 @@ def update_ffts_in_project(prjid, ffts):
         status, msg = validate_import_headers(fcupdate, prjid, fftid)
         if not status:
             # 3 : One for DB ID, One for FC, one for FG
-            num_fail = len(fft)-3
-            update_status["fail"] += (num_fail)
-            update_status["total"] += (num_fail)
+            update_status["fail"] += 1
             errormsg = "invalid import"
             continue
         for attr in ["_id", "name", "fc", "fg"]:
@@ -141,8 +139,8 @@ def validate_import_headers(fft, prjid, fftid=None):
                     logger.debug(error_str)
                     return False, error_str
                 fft[header] = db_values[header]
-            # Check for missing or invalid data
-            if (fft[header] == '') or (not validate_insert_range(header, fft[header])):
+            # Check for missing data
+            if (fft[header] == ''):
                 # Check if in DB already, continue to validate next if so
                 error_str = f"Upload rejected for FFT ID {fftid}: {header} Required for a Non-Conceptual Device"
                 logger.debug(error_str)
@@ -159,32 +157,18 @@ def validate_import_headers(fft, prjid, fftid=None):
             return False, error_str
     return True, "Success"
 
-
-def create_status_changes(status):
+def create_status_update(prj_name, status):
     """
-    Helper function to make the status message for import based on the dictionary results
-    """
-    status_str = '\n'.join([
-        f'Change requests: {status["total"]}.',
-        f'Successful changes: {status["success"]}.',
-        f'Failed changes: {status["fail"]}.',
-    ])
-    return status_str
-
-
-def create_status_header(prj_name, status):
-    """
-    Helper function to make the header for the import status message
+    Helper function to make the import status message based on the dictionary results
     """
     line_brk = "_"*40
     status_str = '\n'.join([
         f'Project Name: {prj_name}.',
         f'{line_brk}',
         f'Valid headers recognized: {status["headers"]}.',
-        f'Added FFT: {status["fftnew"]}.',
-        f'Modified FFT: {status["fftedit"]}.',
         f'{line_brk}',
-        f'Malformed rows: {status["fftfail"]}.\n'
+        f'Successful row imports: {status["success"]}.',
+        f'Failed row imports: {status["fail"]}.',
     ])
     return status_str
 
@@ -497,7 +481,7 @@ def svc_import_project(prjid):
     Import project data from csv file
     """
     status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
-    status_val = {"headers": 0, "fftnew": 0, "fftfail": 0}
+    status_val = {"headers": 0, "fail": 0, "success": 0}
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -530,7 +514,7 @@ def svc_import_project(prjid):
         for line in reader:
             # No FC present in the data line
             if not line["FC"]:
-                status_val["fftfail"] += 1
+                status_val["fail"] += 1
                 continue
             if line["FC"] in fcs.keys():
                 fcs[line["FC"]].append(line)
@@ -539,7 +523,7 @@ def svc_import_project(prjid):
                 clean_line = re.sub(
                     u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
                 if not clean_line:
-                    status_val["fftfail"] += 1
+                    status_val["fail"] += 1
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
@@ -563,7 +547,7 @@ def svc_import_project(prjid):
                 # Tried to create a new FFT and failed - don't include in dataset
                 else:
                     # Count failed imports - excluding FC & FG
-                    status_val["fftfail"] += 1
+                    status_val["fail"] += 1
                     logger.debug(
                         f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}")
             else:
@@ -589,7 +573,6 @@ def svc_import_project(prjid):
             if (fc["FC"], fc["Fungible"]) not in ffts:
                 status, errormsg, newfft = create_new_fft(
                     fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
-                status_val["fftnew"] += 1
                 ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
                       if "fg" in newfft else None)] = newfft["_id"]
 
@@ -603,22 +586,19 @@ def svc_import_project(prjid):
                     continue
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
-    # number of recognized headers minus the id used for DB reference
-    status_val["headers"] = len(fcuploads[0].keys())-1
 
     status, errormsg, fft, update_status = update_ffts_in_project(
         prjid, fcuploads)
-    # Avoid double counting new ffts
-    if not update_status["fftedit"]:
-        status_val["fftedit"] = 0
-    else:
-        status_val["fftedit"] = max(
-            0, (update_status["fftedit"] - status_val["fftnew"]))
+
     # Include imports failed from bad FC/FGs
     prj_name = get_project(prjid)["name"]
-    status_str = (create_status_header(prj_name, status_val) +
-                  create_status_changes(update_status))
-
+    if update_status:
+        status_val = {k: update_status[k]+status_val[k]
+                            for k in update_status.keys()}
+        
+    # number of recognized headers minus the id used for DB reference
+    status_val["headers"] = len(fcuploads[0].keys())-1
+    status_str = create_status_update(prj_name, status_val)
     logger.debug(re.sub('\n|_', '', status_str))
     return status_str
 
@@ -712,14 +692,18 @@ def svc_project_diff(prjid):
 @context.security.authentication_required
 def svc_clone_project(prjid):
     """
-    Clone the specified project into the new project; name and description of the new project specified as JSON
+    Clone the specified project into the new project; 
+    Name and description of the new project specified as JSON
     """
     userid = context.security.get_current_user_id()
     newprjdetails = request.json
     if not newprjdetails["name"] or not newprjdetails["description"]:
-        return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
+        return JSONEncoder().encode(
+            {"success": False, "errormsg": "Please specify a project name and description"})
     if get_project_by_name(newprjdetails["name"]):
-        return JSONEncoder().encode({"success": False, "errormsg": "Project with the name " + newprjdetails["name"] + " already exists"})
+        return JSONEncoder().encode(
+            {"success": False, 
+             "errormsg": "Project with the name " + newprjdetails["name"] + " already exists"})
 
     status, erorrmsg, newprj = clone_project(
         prjid, newprjdetails["name"], newprjdetails["description"], userid)

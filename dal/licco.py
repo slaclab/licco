@@ -4,12 +4,12 @@ Most of the code here gets a connection to the database, executes a query and fo
 '''
 import logging
 import datetime
-import pytz
 import collections
 from enum import Enum
 import copy
 import json
 import math
+import pytz
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -512,7 +512,8 @@ fcattrs = {
 def get_fcattrs(fromstr=False):
     """
     Return the FC attribute metadata.
-    Since functions cannot be serialized into JSON, we make a copy and delete the fromstr and other function parts
+    Since functions cannot be serialized into JSON, 
+    we make a copy and delete the fromstr and other function parts
     """
     fcattrscopy = copy.deepcopy(fcattrs)
     if not fromstr:
@@ -544,19 +545,19 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None, None
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
-            if (attrmeta.get("is_required_dimension") == True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
+            if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
 
     error_str = ""
     all_inserts = []
     fft_edits = set()
-    insert_count = {"total": len(fcupdate.items()),
-                    "success": 0, "fail": 0, "fftedit": 0}
+    insert_count = {"success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
+        print("in FC update item", attrname, attrval)
         if attrname == "fft":
             continue
         attrmeta = fcattrs[attrname]
@@ -567,23 +568,19 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
-            if insert_count["total"] == 1:
-                insert_count["fftedit"] = len(fft_edits)
             error_str = f"Invalid input rejected : Wrong type - {attrname}, {attrval}"
             logger.debug(error_str)
-            continue
+            break
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
-            if insert_count["total"] == 1:
-                insert_count["fftedit"] = len(fft_edits)
             error_str = f"Invalid input rejected : Out of range - {attrname}, {attrval}"
             logger.debug(error_str)
-            continue
+            break
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
-            logger.debug(
-                f"Inserting attr change for {attrname} to {newval} from {prevval}")
+            """            logger.debug(
+                f"Inserting attr change for {attrname} to {newval} from {prevval}")"""
             all_inserts.append({
                 "prj": ObjectId(prjid),
                 "fft": ObjectId(fftid),
@@ -593,13 +590,15 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "time": modification_time
             })
             fft_edits.add(ObjectId(fftid))
-        else:
-            insert_count["total"] -= 1
+
+    #If one of the fields is invalid, and we have an error
+    if error_str != "":
+        logger.debug("ENTIRE ROW REJECTED, ONE BAD VALUE")
+        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
-        insert_count["success"] = len(all_inserts)
-        insert_count["fftedit"] = len(fft_edits)
+        insert_count["success"] +=1
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
@@ -614,10 +613,12 @@ def validate_insert_range(attr, val):
     """
     try:
         if attr == "ray_trace":
-            return True if (int(val) is None) or int(val) >= 0 else False
+            if val == '' or val is None:
+                return True
+            return bool(int(val) >= 0)
         # empty strings valid for angles, catch before other verifications
-        if ("nom" in attr):
-            if (val == ""):
+        if "nom" in attr:
+            if val == "":
                 return True
             if attr == "nom_loc_z":
                 if float(val) < 0 or float(val) > 2000:
@@ -625,10 +626,10 @@ def validate_insert_range(attr, val):
             if "nom_ang_" in attr:
                 if float(val) > math.pi or float(val) < -(math.pi):
                     return False
-    except ValueError as v:
+    except ValueError:
         logger.debug(f'Value {val} wrong type for attribute {attr}.')
         return False
-    except TypeError as e:
+    except TypeError:
         logger.debug(f'Value {val} not verified for attribute {attr}.')
         return False
     return True
@@ -657,7 +658,7 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
 
     current_attrs = get_project_attributes(
         licco_db[line_config_db_name], ObjectId(destprjid))
@@ -789,7 +790,7 @@ def __flatten__(obj, prefix=""):
     if isinstance(obj, collections.abc.Mapping):
         for k, v in obj.items():
             ret.extend(__flatten__(v, prefix + "." + k if prefix else k))
-    elif type(obj) == list:
+    elif isinstance(obj, list):
         for c, e in enumerate(obj):
             ret.extend(__flatten__(
                 e, prefix + ".[" + str(c) + "]" if prefix else "[" + str(c) + "]"))
@@ -867,7 +868,7 @@ def clone_project(prjid, name, description, userid):
 
     newprj = create_new_project(name, description, userid)
     if not newprj:
-        return False, f"Created a project but could not get the object from the database", None
+        return False, "Created a project but could not get the object from the database", None
 
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 
