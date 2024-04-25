@@ -8,8 +8,8 @@
 </div>
 
 <script type="text/javascript">
-  let showallentries = true, srchparm = { fc: null, fg: null, state: null, location: null, asoftimestamp: null }, currfcedit = "", edittoastshown = false;
-  let resetsearchparam = function() { srchparm = { fc: null, fg: null, state: null, location: null, asoftimestamp: null } }
+  let showallentries = true, srchparm = { fc: null, fg: null, state: null, asoftimestamp: null }, currfcedit = "", edittoastshown = false;
+  let resetsearchparam = function() { srchparm = { fc: null, fg: null, state: null, asoftimestamp: null } }
   $("#project_tab").data("cur_sort_attr", "nom_loc_z").data("cur_sort_desc", false);
 
   let showhidetlbrbtns = function() {
@@ -27,7 +27,6 @@
           {{#srchparm.fc}}<span><span class="fl">FC:</span> {{srchparm.fc}}</span>{{/srchparm.fc}}
           {{#srchparm.fg}}<span><span class="fl">FG:</span> {{srchparm.fg}}</span>{{/srchparm.fg}}
           {{#srchparm.state}}<span><span class="fl">State:</span> {{srchparm.state}}</span>{{/srchparm.state}}
-          {{#srchparm.location}}<span><span class="fl">Location:</span> {{srchparm.location}}</span>{{/srchparm.location}}
           </div>
           {{#srchparm.asoftimestamp}}<div class="filt"><span class="fl">As of:</span> {{#FormatDateTime}}{{srchparm.asoftimestamp}}{{/FormatDateTime}} <span class="text-secondary">{{#matchingtags}}<span class="tagnm">{{.}}</span>{{/matchingtags}}</span></div>{{/srchparm.asoftimestamp}}
         </div></div>`;
@@ -138,7 +137,7 @@
 
   $("#project_tab").on("lg.loaded.bs.tab", function() {
     let filter = { showallentries : showallentries };
-    _.each(["fc", "fg", "state", "location"], (a) => { if(!_.isEmpty(_.get(srchparm, a))) { filter[a] = _.get(srchparm, a); } })
+    _.each(["fc", "fg", "state"], (a) => { if(!_.isEmpty(_.get(srchparm, a))) { filter[a] = _.get(srchparm, a); } })
     if(!_.isEmpty(srchparm.asoftimestamp)) { filter["asoftimestamp"] = dayjs(srchparm.asoftimestamp).toISOString(); }
     $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags"), $.getJSON("../../ws/fcattrs"))
     .done(function(d0, d1, d2, d3){
@@ -212,7 +211,7 @@
       $("#global_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, fcstates: fcstates, srchparm: srchparm }));
       $("#global_mdl_holder").find(".modal").modal("show");
       $("#global_mdl_holder").find(".sbm").on("click", function(){
-        srchparm = _.defaults({asoftimestamp: null}, _.fromPairs(_.map(["fc", "fg", "state", "location"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]})));
+        srchparm = _.defaults({asoftimestamp: null}, _.fromPairs(_.map(["fc", "fg", "state"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]})));
         $("#global_mdl_holder").find(".modal").modal("hide");
         $("#global_mdl_holder").empty();
         $("#project_tab").trigger("lg.loaded.bs.tab");
