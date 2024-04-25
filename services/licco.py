@@ -11,7 +11,6 @@ from datetime import datetime
 import pytz
 import copy
 from functools import wraps
-from pprint import pprint
 
 import context
 
@@ -92,14 +91,11 @@ def update_ffts_in_project(prjid, ffts):
         db_values = get_fft_values_by_project(fft["_id"], prjid)
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
         fcupdate.update(fft)
-        print(fft, "db vals")
-        pprint(db_values)
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
             else:
                 fcupdate["state"] = "Conceptual"
-        print("using ", fcupdate['state'])
         # If invalid, don't try to add to DB
         status, msg = validate_import_headers(fcupdate, prjid, fftid)
         if not status:
@@ -116,12 +112,11 @@ def update_ffts_in_project(prjid, ffts):
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
         if not status:
-            print("FAILED", errormsg)
-            print(fft)
-            return status, errormsg, fft, None
+            logger.debug(errormsg)
         # Add the individual FFT update results into overall count
-        update_status = {k: update_status[k]+results[k]
-                         for k in update_status.keys()}
+        if results:
+            update_status = {k: update_status[k]+results[k]
+                             for k in update_status.keys()}
     return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
 
 
@@ -129,37 +124,30 @@ def validate_import_headers(fft, prjid, fftid=None):
     """
     Helper function to pre-validate that all required data is present
     """
-    print('ffts')
-    pprint(fft)
     attrs = get_fcattrs(fromstr=True)
     if not fftid:
         fftid = fft["_id"]
     db_values = get_fft_values_by_project(fftid, prjid)
-    print("DB VALUES")
-    pprint(db_values)
     if not "state" in fft:
         fft["state"] = db_values["state"]
     for header in attrs:
         # If header is required for all, or if the FFT is non-conceptual and header is required
         if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
             # If required header not present in upload dataset
-            print("non conceptual param change ")
             if not header in fft:
-                print("update missing required header")
                 # Check if in DB already, continue to validate next if so
                 if header not in db_values:
                     error_str = f"Upload rejected for FFT ID {fftid}: Missing Required Header {header}"
                     logger.debug(error_str)
                     return False, error_str
-                print("db has missing header)")
                 fft[header] = db_values[header]
-                print("looking at ", header, " : ", fft[header])
             # Check for missing or invalid data
             if (fft[header] == '') or (not validate_insert_range(header, fft[header])):
                 # Check if in DB already, continue to validate next if so
                 error_str = f"Upload rejected for FFT ID {fftid}: {header} Required for a Non-Conceptual Device"
                 logger.debug(error_str)
                 return False, error_str
+
         # Header not in data
         if not header in fft:
             continue
@@ -319,7 +307,6 @@ def svc_get_project_ffts(prjid):
     if asoftimestampstr:
         asoftimestamp = datetime.strptime(
             asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
-        print(asoftimestamp)
     else:
         asoftimestamp = None
     project_fcs = get_project_ffts(
@@ -543,6 +530,7 @@ def svc_import_project(prjid):
         for line in reader:
             # No FC present in the data line
             if not line["FC"]:
+                status_val["fftfail"] += 1
                 continue
             if line["FC"] in fcs.keys():
                 fcs[line["FC"]].append(line)
@@ -551,6 +539,7 @@ def svc_import_project(prjid):
                 clean_line = re.sub(
                     u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
                 if not clean_line:
+                    status_val["fftfail"] += 1
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
@@ -620,8 +609,6 @@ def svc_import_project(prjid):
     status, errormsg, fft, update_status = update_ffts_in_project(
         prjid, fcuploads)
     # Avoid double counting new ffts
-    print("___________")
-    print(update_status)
     if not update_status["fftedit"]:
         status_val["fftedit"] = 0
     else:

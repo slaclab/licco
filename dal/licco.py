@@ -10,7 +10,6 @@ from enum import Enum
 import copy
 import json
 import math
-from pprint import pprint
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -121,7 +120,6 @@ def get_fft_values_by_project(fftid, prjid):
         {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}).sort("time", 1))
     for res in results:
         fft_pairings[res["key"]] = res["val"]
-    pprint(fft_pairings)
     return fft_pairings
 
 
@@ -549,15 +547,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
-        print("fcupdate")
-        pprint(fcupdate)
         for attrname, attrmeta in fcattrs.items():
-            if (attrmeta.get("is_required_dimension") == True) and current_attrs.get(attrname, None) is None:
-                db_values = get_fft_values_by_project(fft["_id"], prjid)
-                # if (attrname in db_values) and attrmeta !="":
-                print(attrname, attrmeta)
+            if (attrmeta.get("is_required_dimension") == True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
 
+    error_str = ""
     all_inserts = []
     fft_edits = set()
     insert_count = {"total": len(fcupdate.items()),
@@ -575,16 +569,16 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
                 insert_count["fftedit"] = len(fft_edits)
-            logger.debug(
-                f"Invalid input rejected : Wrong type - {attrname}, {attrval}")
+            error_str = f"Invalid input rejected : Wrong type - {attrname}, {attrval}"
+            logger.debug(error_str)
             continue
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             if insert_count["total"] == 1:
                 insert_count["fftedit"] = len(fft_edits)
-            logger.debug(
-                f"Invalid input rejected : Out of range - {attrname}, {attrval}")
+            error_str = f"Invalid input rejected : Out of range - {attrname}, {attrval}"
+            logger.debug(error_str)
             continue
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
@@ -610,7 +604,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             all_inserts)
     else:
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
-
+        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
@@ -618,18 +612,25 @@ def validate_insert_range(attr, val):
     """
     Helper function to validate data prior to being saved in DB
     """
-    if attr == "ray_trace":
-        return True if val == None or val >= 0 else False
-    # empty strings valid for angles, catch before other verifications
-    if ("nom" in attr):
-        if (val == ""):
-            return True
-        if attr == "nom_loc_z":
-            if val < 0 or val > 2000:
-                return False
-        if "nom_ang_" in attr:
-            if val > math.pi or val < -(math.pi):
-                return False
+    try:
+        if attr == "ray_trace":
+            return True if (int(val) is None) or int(val) >= 0 else False
+        # empty strings valid for angles, catch before other verifications
+        if ("nom" in attr):
+            if (val == ""):
+                return True
+            if attr == "nom_loc_z":
+                if float(val) < 0 or float(val) > 2000:
+                    return False
+            if "nom_ang_" in attr:
+                if float(val) > math.pi or float(val) < -(math.pi):
+                    return False
+    except ValueError as v:
+        logger.debug(f'Value {val} wrong type for attribute {attr}.')
+        return False
+    except TypeError as e:
+        logger.debug(f'Value {val} not verified for attribute {attr}.')
+        return False
     return True
 
 
