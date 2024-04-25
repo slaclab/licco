@@ -518,7 +518,7 @@ def svc_import_project(prjid):
 
         # Ensure FC and FG (required headers) are present
         if not req_headers:
-            error_msg = "Import Rejected: FC and Fungible headers are required for import."
+            error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
             logger.debug(error_msg)
             return error_msg
 
