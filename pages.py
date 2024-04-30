@@ -17,14 +17,23 @@ logger = logging.getLogger(__name__)
 @pages_blueprint.route("/")
 @context.security.authentication_required
 def index():
-    return render_template("licco.html", logged_in_user=context.security.get_current_user_id())
+    privileges = { x : context.security.check_privilege_for_project(x, None) for x in [ "read", "write", "edit", "approve" ]}
+    return render_template("licco.html",
+                           logged_in_user=context.security.get_current_user_id(),
+                           privileges=json.dumps(privileges))
 
 
 @pages_blueprint.route("/projects/<prjid>/index.html")
 @context.security.authentication_required
 def project(prjid):
     prjobj = get_project(prjid)
-    return render_template("project.html", logged_in_user=context.security.get_current_user_id(), project_id=prjid, prjstatus=prjobj["status"], template_name="project.html")
+    privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
+    return render_template("project.html", 
+                           logged_in_user=context.security.get_current_user_id(), 
+                           privileges=json.dumps(privileges),
+                           project_id=prjid, 
+                           prjstatus=prjobj["status"], 
+                           template_name="project.html")
 
 
 @pages_blueprint.route("/projects/<prjid>/diff.html")
@@ -32,7 +41,13 @@ def project(prjid):
 def project_diff(prjid):
     prjobj = get_project(prjid)
     otherprjid = request.args["otherprjid"]
-    return render_template("project.html", logged_in_user=context.security.get_current_user_id(), project_id=prjid, prjstatus=prjobj["status"], template_name="projectdiff.html", otherprjid=otherprjid)
+    privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
+    return render_template("project.html", 
+                           logged_in_user=context.security.get_current_user_id(),
+                           privileges=json.dumps(privileges),
+                           project_id=prjid, prjstatus=prjobj["status"], 
+                           template_name="projectdiff.html", 
+                           otherprjid=otherprjid)
 
 
 @pages_blueprint.route('/js/<path:path>')

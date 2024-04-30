@@ -25,19 +25,25 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               {{^_submitted}}{{^_approved}}<span class="icn sbmfrap" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
               <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
               <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>
-              {{#_submitted}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_submitted}}
+              {{#_submitted}}{{#_can_approve}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_can_approve}}{{/_submitted}}
             </td>
             <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
             Mustache.parse(projstmpl);
-      _.each(projects, (p) => { p["_submitted"] = _.get(p, "status", "development") == "submitted"; p["_approved"] = _.get(p, "status", "development") == "approved"; p["datefmt"] = licco_formatdatetime; p["status_changed_time"] = _.get(p, stat2time[p["status"]], "");  })
+      _.each(projects, (p) => { 
+        p["_submitted"] = _.get(p, "status", "development") == "submitted"; 
+        p["_approved"] = _.get(p, "status", "development") == "approved"; 
+        p["datefmt"] = licco_formatdatetime; 
+        p["status_changed_time"] = _.get(p, stat2time[p["status"]], "");
+        p["_can_approve"] = _.get(privileges, "approve", false);
+      })
       let rendered = $(Mustache.render(projstmpl, { projects : projects }));
       rendered.find(".prjnm").on("click", function() { let prjid = $(this).closest("tr").attr("data-id"); console.log(prjid); displayProject(prjid); } )
       rendered.find(".sbmfrap").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
-        $.when($.ajax("static/html/tabs/prjsubmit.html"), $.getJSON("ws/users/"))
-        .done(function(d0, d1) {
+        $.when($.ajax("static/html/tabs/prjsubmit.html"), $.getJSON("ws/users/"), $.getJSON("ws/approvers/"))
+        .done(function(d0, d1, d2) {
           $("#global_mdl_holder").empty().append(d0[0]);
-          let approvers = _.without(_.union(d1[0].value, ["awallace", "klafortu", "mlng"]), logged_in_user);
+          let approvers = _.without(_.union(d1[0].value, d2[0].value), logged_in_user);
           prj_submit_for_approval(prjid, "ws/projects/" + prjid + "/submit_for_approval", approvers, () => { window.location.reload() });
         })
       })

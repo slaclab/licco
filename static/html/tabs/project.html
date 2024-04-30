@@ -304,10 +304,10 @@
   });
 
   $("#toolbar_for_tab").find(".subapp").on("click", function() {
-    $.when($.ajax("../../static/html/tabs/prjsubmit.html"), $.getJSON("../../ws/users/"))
-    .done(function(d0, d1) {
+    $.when($.ajax("../../static/html/tabs/prjsubmit.html"), $.getJSON("../../ws/users/"), $.getJSON("../../ws/approvers/"))
+    .done(function(d0, d1, d2) {
       $("#global_mdl_holder").empty().append(d0[0]);
-      let approvers = _.without(_.union(d1[0].value, ["awallace", "klafortu", "mlng"]), logged_in_user);
+      let approvers = _.without(_.union(d1[0].value, d2[0].value), logged_in_user);
       prj_submit_for_approval(project_id, "../../ws/projects/" + project_id + "/submit_for_approval", approvers, () => { window.location.assign("../../#projects"); });
     })
   });

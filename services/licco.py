@@ -22,7 +22,8 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_currently_approved_project, diff_project, FCState, clone_project, get_project_changes, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
-    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project
+    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project, \
+    get_users_with_privilege
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -220,6 +221,15 @@ def svc_get_users():
     """
     logged_in_user = context.security.get_current_user_id()
     users = get_all_users()
+    return JSONEncoder().encode({"success": True, "value": users})
+
+@licco_ws_blueprint.route("/approvers/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_users_with_approve_privilege():
+    """
+    Get the users in the system who have the approve privilege
+    """
+    users = get_users_with_privilege("approve")
     return JSONEncoder().encode({"success": True, "value": users})
 
 
@@ -671,6 +681,7 @@ def svc_submit_for_approval(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
 @context.security.authentication_required
+@context.security.authorization_required("approve")
 def svc_approve_project(prjid):
     """
     Approve a project
@@ -682,6 +693,7 @@ def svc_approve_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
 @context.security.authentication_required
+@context.security.authorization_required("approve")
 def svc_reject_project(prjid):
     """
     Do not approve a project
