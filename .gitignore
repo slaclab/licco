@@ -1,5 +1,6 @@
 node_modules/
 csvs/
+logs/
 package-lock.json
 .DS_Store
 # Byte-compiled / optimized / DLL files
