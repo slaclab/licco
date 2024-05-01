@@ -137,7 +137,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               // request successful
               document.body.style.cursor='default';
               $("#global_mdl_holder").find(".modal").modal("hide");
-              showToast("../../static/html/tabs/toasts/prjimportstatus.html", {status: request.responseText});
+              showToast("static/html/tabs/toasts/prjimportstatus.html", {status: request.responseText});
             };
             request.onerror = function() {
               document.body.style.cursor='default';
