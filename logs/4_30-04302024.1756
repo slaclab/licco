@@ -1,0 +1,14 @@
+FFT Good-Con Import Succeeded.
+FFT Good-Ready Import Failed. Reason: No changes detected.
+FFT Good-Con Import Succeeded.
+FFT Good-ConEmpty Import Failed. Reason: No changes detected.
+FFT Header-Yaw Import Failed. Reason: Value out of range - nom_ang_y, -2388888
+FFT Header-Roll Import Failed. Reason: Value out of range - nom_ang_z, 888888888
+FFT Header-RayTraceNeg Import Failed. Reason: Value out of range - ray_trace, -2222222
+FFT Header-Zloc Import Failed. Reason: Value out of range - nom_loc_z, -1000000
+Project Name: 4/30.
+________________________________________
+Valid headers recognized: 15.
+________________________________________
+Successful row imports: 2.
+Failed row imports: 12.

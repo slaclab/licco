@@ -1,0 +1,32 @@
+FFT Good-Con Import Succeeded.
+FFT Good-Ready Import Failed.
+No changes detected.
+FFT Good-Con Import Succeeded.
+FFT Good-ConEmpty Import Failed.
+No changes detected.
+FFT Header-Pitch Import Failed.
+Invalid Data Abc For Type of nom_ang_x.
+FFT Header-Yaw Import Failed.
+Value out of range - nom_ang_y, -2388888
+FFT Header-Roll Import Failed.
+Value out of range - nom_ang_z, 888888888
+FFT Header-RayTraceNeg Import Failed.
+Value out of range - ray_trace, -2222222
+FFT Header-RayTraceFormat Import Failed.
+Invalid Data AHDJABDH For Type of ray_trace.
+FFT Header-Zloc Import Failed.
+Value out of range - nom_loc_z, -1000000
+FFT Header-AllFormat Import Failed.
+Invalid Data WHAT For Type of state.
+FFT BadState-MissingAll Import Failed.
+Header nom_loc_z Value Required for a Non-Conceptual Device
+FFT BadState-MissingLoc Import Failed.
+Header nom_loc_z Value Required for a Non-Conceptual Device
+FFT BadState-MissingRad Import Failed.
+Header nom_ang_z Value Required for a Non-Conceptual Device
+Project Name: 4/30.
+________________________________________
+Valid headers recognized: 15.
+________________________________________
+Successful row imports: 2.
+Failed row imports: 12.

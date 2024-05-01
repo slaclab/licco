@@ -4,6 +4,7 @@ Web service endpoints for licco
 import csv
 import json
 import logging
+import os
 import fnmatch
 import re
 from io import BytesIO, StringIO
@@ -22,7 +23,8 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_currently_approved_project, diff_project, FCState, clone_project, get_project_changes, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
-    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project
+    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, get_fft_values_by_project, \
+    get_fft_name_by_id
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -77,10 +79,20 @@ def project_writable(wrapped_function):
     return function_interceptor
 
 
-def update_ffts_in_project(prjid, ffts):
+def create_imp_msg(fft, status, errormsg=None):
+    if status:
+        res = "Succeeded."
+    else:
+        res = f"Failed. Reason: {errormsg}"
+    msg = f"FFT {fft["fc"]}-{fft["fg"]} Import {res}"
+    return msg
+
+def update_ffts_in_project(prjid, ffts, def_logger=None):
     """
     Insert multiple FFTs into a project
     """
+    if def_logger is None:
+        def_logger = logger
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
@@ -97,20 +109,23 @@ def update_ffts_in_project(prjid, ffts):
             else:
                 fcupdate["state"] = "Conceptual"
         # If invalid, don't try to add to DB
-        status, msg = validate_import_headers(fcupdate, prjid, fftid)
+        status, errormsg = validate_import_headers(fcupdate, prjid, fftid)
         if not status:
-            # 3 : One for DB ID, One for FC, one for FG
             update_status["fail"] += 1
-            errormsg = "invalid import"
+            print("bad status")
+            def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
         for attr in ["_id", "name", "fc", "fg"]:
             if attr in fcupdate:
                 del fcupdate[attr]
-        status, errormsg, fft, results = update_fft_in_project(
+        status, errormsg, prj_fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
         if not status:
-            logger.debug(errormsg)
+            print("bad ststus post fft")
+            def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
+        else:
+            def_logger.info(create_imp_msg(fft, True))
         # Add the individual FFT update results into overall count
         if results:
             update_status = {k: update_status[k]+results[k]
@@ -135,14 +150,14 @@ def validate_import_headers(fft, prjid, fftid=None):
             if not header in fft:
                 # Check if in DB already, continue to validate next if so
                 if header not in db_values:
-                    error_str = f"Upload rejected for FFT ID {fftid}: Missing Required Header {header}"
+                    error_str = f"Missing Required Header {header}"
                     logger.debug(error_str)
                     return False, error_str
                 fft[header] = db_values[header]
             # Check for missing data
             if (fft[header] == ''):
                 # Check if in DB already, continue to validate next if so
-                error_str = f"Upload rejected for FFT ID {fftid}: {header} Required for a Non-Conceptual Device"
+                error_str = f"Header {header} Value Required for a Non-Conceptual Device"
                 logger.debug(error_str)
                 return False, error_str
 
@@ -152,7 +167,7 @@ def validate_import_headers(fft, prjid, fftid=None):
         try:
             val = attrs[header]["fromstr"](fft[header])
         except (ValueError, KeyError) as e:
-            error_str = f"Upload rejected for FFT ID {fftid}: Invalid Data For {header}"
+            error_str = f"Invalid Data {fft[header]} For Type of {header}."
             logger.debug(error_str)
             return False, error_str
     return True, "Success"
@@ -172,9 +187,22 @@ def create_status_update(prj_name, status):
     ])
     return status_str
 
+def create_logger(logname):
+    """
+    Create and return a logger that writes to a provided file
+    """
+    # TODO: set a temp path here...how to?
+    default_path = os.getcwd() + '/logs/'
+
+    # create a file 
+    handler = logging.FileHandler(default_path + logname)
+
+    logger = logging.getLogger(logname)
+    logger.addHandler(handler)
+    return logger
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_enum_descriptions(enumName):
     """
     Get the labels and descriptions for the specified enum
@@ -187,7 +215,7 @@ def svc_get_enum_descriptions(enumName):
 
 
 @licco_ws_blueprint.route("/fcattrs", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_fcattrs():
     """
     Get the metadata for the attributes for the functional components
@@ -196,7 +224,7 @@ def svc_get_fcattrs():
 
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_users():
     """
     Get the users in the system.
@@ -208,7 +236,7 @@ def svc_get_users():
 
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_projects_for_user():
     """
     Get the projects for a user
@@ -221,7 +249,7 @@ def svc_get_projects_for_user():
 
 
 @licco_ws_blueprint.route("/approved", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_currently_approved_project():
     """ Get the currently approved project """
     logged_in_user = context.security.get_current_user_id()
@@ -234,7 +262,7 @@ def svc_get_currently_approved_project():
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_project(prjid):
     """
     Get the project details given a project id.
@@ -245,7 +273,7 @@ def svc_get_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_create_project():
     """
     Create an empty project; do we really have a use case for this?
@@ -263,7 +291,7 @@ def svc_create_project():
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_update_project(prjid):
     """
     Get the project details given a project id.
@@ -280,7 +308,7 @@ def svc_update_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_project_ffts(prjid):
     """
     Get the project's FFT's given a project id.
@@ -318,7 +346,7 @@ def svc_get_project_ffts(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/changes/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_project_changes(prjid):
     """
     Get the functional component objects
@@ -328,7 +356,7 @@ def svc_get_project_changes(prjid):
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_fcs():
     """
     Get the functional component objects
@@ -338,7 +366,7 @@ def svc_get_fcs():
 
 
 @licco_ws_blueprint.route("/fgs/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_fgs():
     """
     Get the fungible tokens
@@ -348,7 +376,7 @@ def svc_get_fgs():
 
 
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_ffts():
     """
     Get a list of functional fungible tokens
@@ -358,7 +386,7 @@ def svc_get_ffts():
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_create_fc():
     """
     Create a functional component
@@ -370,7 +398,7 @@ def svc_create_fc():
 
 
 @licco_ws_blueprint.route("/fgs/", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_create_fg():
     """
     Create a fungible token
@@ -382,7 +410,7 @@ def svc_create_fg():
 
 
 @licco_ws_blueprint.route("/ffts/", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_create_fft():
     """
     Create a new functional fungible token.
@@ -395,7 +423,7 @@ def svc_create_fft():
 
 
 @licco_ws_blueprint.route("/ffts/<fftid>", methods=["DELETE"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_delete_fft(fftid):
     """
     Delete a FFT if it is not being used in any project
@@ -405,7 +433,7 @@ def svc_delete_fft(fftid):
 
 
 @licco_ws_blueprint.route("/fcs/<fcid>", methods=["DELETE"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_delete_fc(fcid):
     """
     Delete a FC if it is not being used by an FFT
@@ -415,7 +443,7 @@ def svc_delete_fc(fcid):
 
 
 @licco_ws_blueprint.route("/fgs/<fgid>", methods=["DELETE"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_delete_fg(fgid):
     """
     Delete a FG if it is not being used by an FFT
@@ -425,7 +453,7 @@ def svc_delete_fg(fgid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 @project_writable
 def svc_update_fc_in_project(prjid, fftid):
     """
@@ -443,7 +471,7 @@ def svc_update_fc_in_project(prjid, fftid):
 
 @licco_ws_blueprint.route(
     "/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 @project_writable
 def svc_sync_fc_from_approved_in_project(prjid, fftid):
     """
@@ -463,7 +491,7 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["POST"])
 @project_writable
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_update_ffts_in_project(prjid):
     """
     Insert multiple FFTs into a project
@@ -475,12 +503,13 @@ def svc_update_ffts_in_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/import/", methods=["POST"])
 @project_writable
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_import_project(prjid):
     """
     Import project data from csv file
     """
-    status_str = f'Import Results for:  {get_project(prjid)["name"]}\n'
+    prj_name = get_project(prjid)["name"]
+    status_str = f'Import Results for:  {prj_name}\n'
     status_val = {"headers": 0, "fail": 0, "success": 0}
 
     with BytesIO() as stream:
@@ -529,6 +558,9 @@ def svc_import_project(prjid):
         if not fcs:
             return "Import Error: No data detected in import file."
 
+    log_name = (prj_name.replace("/", "_")) + "-" + datetime.now().strftime("%m%d%Y.%H%M")
+    imp_log = create_logger(log_name)
+
     fc2id = {
         value["name"]: value["_id"]
         for value in json.loads(svc_get_fcs())["value"]
@@ -548,8 +580,9 @@ def svc_import_project(prjid):
                 else:
                     # Count failed imports - excluding FC & FG
                     status_val["fail"] += 1
-                    logger.debug(
-                        f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}")
+                    error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
+                    logger.debug(error_str)
+                    imp_log.info(error_str)
             else:
                 current_list.append(fc)
         fcs[nm] = current_list
@@ -588,7 +621,7 @@ def svc_import_project(prjid):
             fcuploads.append(fcupload)
 
     status, errormsg, fft, update_status = update_ffts_in_project(
-        prjid, fcuploads)
+        prjid, fcuploads, imp_log)
 
     # Include imports failed from bad FC/FGs
     prj_name = get_project(prjid)["name"]
@@ -600,12 +633,13 @@ def svc_import_project(prjid):
     status_val["headers"] = len(fcuploads[0].keys())-1
     status_str = create_status_update(prj_name, status_val)
     logger.debug(re.sub('\n|_', '', status_str))
+    imp_log.info(status_str)
     return status_str
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
 @project_writable
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_export_project(prjid):
     """
     Export project into a cvs that downloads
@@ -637,7 +671,7 @@ def svc_export_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval",
                           methods=["GET", "POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_submit_for_approval(prjid):
     """
     Submit a project for approval
@@ -650,7 +684,7 @@ def svc_submit_for_approval(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_approve_project(prjid):
     """
     Approve a project
@@ -661,7 +695,7 @@ def svc_approve_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_reject_project(prjid):
     """
     Do not approve a project
@@ -675,7 +709,7 @@ def svc_reject_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_project_diff(prjid):
     """
     Get a list of diff between this project and the specified project.
@@ -689,7 +723,7 @@ def svc_project_diff(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/clone", methods=["POST"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_clone_project(prjid):
     """
     Clone the specified project into the new project; 
@@ -711,7 +745,7 @@ def svc_clone_project(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/tags", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_project_tags(prjid):
     """
     Get the tags for the project
@@ -721,7 +755,7 @@ def svc_project_tags(prjid):
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/add_tag", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_add_project_tag(prjid):
     """
     Add a new tag to the project.
@@ -744,7 +778,7 @@ def svc_add_project_tag(prjid):
 
 
 @licco_ws_blueprint.route("/history/project_approvals", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_projects_approval_history():
     """
     Get the approval history of projects in the system

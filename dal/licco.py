@@ -107,6 +107,20 @@ def get_all_users():
             ret.add(ed)
     return list(ret)
 
+def get_fft_name_by_id(fftid):
+    """
+    Return string names of both FC and FG components of FFT
+    based off of a provided ID. 
+    :param: fftid - the id of the FFT
+    :return: Tuple of string names FC, FG
+    """
+    fft = licco_db[line_config_db_name]["ffts"].find_one(
+        {"_id": ObjectId(fftid)})
+    fc = licco_db[line_config_db_name]["fcs"].find_one(
+        {"_id": fft["fc"]})
+    fg = licco_db[line_config_db_name]["fgs"].find_one(
+        {"_id": fft["fg"]}) 
+    return fc["name"], fg["name"]
 
 def get_fft_values_by_project(fftid, prjid):
     """
@@ -163,21 +177,21 @@ def get_project_by_name(name):
     return prj
 
 
-def get_project_ffts(id, showallentries=True, asoftimestamp=None):
+def get_project_ffts(prjid, showallentries=True, asoftimestamp=None):
     """
     Get the FFTs for a project given its id.
     """
-    oid = ObjectId(id)
+    oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db[line_config_db_name], id, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
+    return get_project_attributes(licco_db[line_config_db_name], prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
 
 
-def get_project_changes(id):
+def get_project_changes(prjid):
     """
     Get a history of changes to the project.
     """
-    oid = ObjectId(id)
-    logger.info("Looking for project details for %s", id)
+    oid = ObjectId(prjid)
+    logger.info("Looking for project details for %s", prjid)
     return get_all_project_changes(licco_db[line_config_db_name], oid)
 
 
@@ -200,7 +214,7 @@ def delete_fc(fcid):
     fcs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fc"))
     if fcid in fcs_used:
         return False, "This FC is being used by an FFT", None
-    logger.info("Deleting FC with id " + str(fcid))
+    logger.info(f"Deleting FC with id {str(fcid)}")
     licco_db[line_config_db_name]["fcs"].delete_one({"_id": fcid})
     return True, "", None
 
@@ -557,7 +571,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     fft_edits = set()
     insert_count = {"success": 0, "fail": 0}
     for attrname, attrval in fcupdate.items():
-        print("in FC update item", attrname, attrval)
         if attrname == "fft":
             continue
         attrmeta = fcattrs[attrname]
@@ -568,19 +581,17 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
-            error_str = f"Invalid input rejected : Wrong type - {attrname}, {attrval}"
+            error_str = f"Wrong type - {attrname}, {attrval}"
             logger.debug(error_str)
             break
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
-            error_str = f"Invalid input rejected : Out of range - {attrname}, {attrval}"
+            error_str = f"Value out of range - {attrname}, {attrval}"
             logger.debug(error_str)
             break
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
-            """            logger.debug(
-                f"Inserting attr change for {attrname} to {newval} from {prevval}")"""
             all_inserts.append({
                 "prj": ObjectId(prjid),
                 "fft": ObjectId(fftid),
@@ -591,9 +602,10 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             })
             fft_edits.add(ObjectId(fftid))
 
+    print("IN HEREEEEE ", error_str)
     #If one of the fields is invalid, and we have an error
     if error_str != "":
-        logger.debug("ENTIRE ROW REJECTED, ONE BAD VALUE")
+        logger.info("ENTIRE ROW REJECTED, ONE BAD VALUE")
         return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
@@ -602,9 +614,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
+        logger.debug(fft["fc"])
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
+        error_str = "No changes detected."
         return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
-    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+    return True, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
 def validate_insert_range(attr, val):
