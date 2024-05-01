@@ -1,0 +1,17 @@
+db.getSiblingDB("lineconfigdb").roles.insertOne({
+  "app" : "Licco",
+  "name" : "Approver",
+  "privileges" : [
+    "read",
+    "write",
+    "edit",
+    "approve"
+  ],
+  "players" : [
+    "uid:awallace",
+    "uid:klafortu",
+    "uid:mlng",
+    "uid:lking",
+    "uid:suyzhu"
+  ]
+})

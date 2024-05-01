@@ -92,6 +92,9 @@ def initialize_collections():
     if 'name_prj_1' not in licco_db[line_config_db_name]["tags"].index_information().keys():
         licco_db[line_config_db_name]["tags"].create_index(
             [("name", ASCENDING), ("prj", ASCENDING)], unique=True, name="name_prj_1")
+    if 'app_1_name_1' not in licco_db[line_config_db_name]["roles"].index_information().keys():
+        licco_db[line_config_db_name]["roles"].create_index(
+            [("app", ASCENDING), ("name", ASCENDING)], unique=True, name="app_1_name_1")
 
 
 def get_all_users():
@@ -121,6 +124,20 @@ def get_fft_name_by_id(fftid):
     fg = licco_db[line_config_db_name]["fgs"].find_one(
         {"_id": fft["fg"]}) 
     return fc["name"], fg["name"]
+
+def get_users_with_privilege(privilege):
+    """
+    From the roles database, get all the users with the necessary privilege. 
+    For now we do not take into account group memberships. 
+    We return a unique list of userid's, for example, [ "awallace", "klafortu", "mlng" ]
+    """
+    ret = set()
+    for role in licco_db[line_config_db_name]["roles"].find({"privileges": privilege}):
+        for player in role.get("players", []):
+            if player.startswith("uid:"):
+                ret.add(player.replace("uid:", ""))
+    return sorted(list(ret))
+
 
 def get_fft_values_by_project(fftid, prjid):
     """
