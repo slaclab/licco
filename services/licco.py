@@ -81,11 +81,14 @@ def project_writable(wrapped_function):
 
 
 def create_imp_msg(fft, status, errormsg=None):
+    """
+    Creates a message to be logged for the import report.
+    """
     if status:
-        res = "Succeeded."
+        res = "SUCCESS"
     else:
-        res = f"Failed. Reason: {errormsg}"
-    msg = f"FFT {fft["fc"]}-{fft["fg"]} Import {res}"
+        res = f"FAIL"
+    msg = f"{res}: {fft["fc"]}-{fft["fg"]} - {errormsg}"
     return msg
 
 def update_ffts_in_project(prjid, ffts, def_logger=None):
@@ -122,7 +125,6 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
         if not status:
-            print("bad ststus post fft")
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
         else:
             def_logger.info(create_imp_msg(fft, True))
@@ -178,8 +180,9 @@ def create_status_update(prj_name, status):
     """
     line_brk = "_"*40
     status_str = '\n'.join([
-        f'Project Name: {prj_name}.',
         f'{line_brk}',
+        f'Summary of Results:',
+        f'Project Name: {prj_name}.',
         f'Valid headers recognized: {status["headers"]}.',
         f'{line_brk}',
         f'Successful row imports: {status["success"]}.',
@@ -196,11 +199,11 @@ def create_logger(logname):
         os.mkdir(dir_path)
     # create a file 
     handler = logging.FileHandler(f'{dir_path}/{logname}.log')
-    handler.setLevel(logging.DEBUG)
-    print("Createing file ", f'{dir_path}/{logname}.log')
+    print("Creating file ", f'{dir_path}/{logname}.log')
 
     logger = logging.getLogger(logname)
     logger.addHandler(handler)
+    logger.propagate = False
     return logger, handler
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
@@ -569,10 +572,8 @@ def svc_import_project(prjid):
         if not fcs:
             return "Import Error: No data detected in import file."
 
-    #log_name = (prj_name.replace("/", "_")) + "-" + datetime.now().strftime("%m%d%Y.%H%M")
-    log_time = datetime.now().strftime("%m%d%Y.%H%M")
-    log_name = f"{context.security.get_current_user_id()}_{prjid}_{log_time}"
-    print("LOG NAME ", log_name)
+    log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
+    log_name = f"{context.security.get_current_user_id()}_{prj_name.replace("/", "_")}_{log_time}"
     imp_log, imp_handler = create_logger(log_name)
 
     fc2id = {
@@ -653,17 +654,18 @@ def svc_import_project(prjid):
     return {"status_str": status_str, "log_name": log_name}
 
 
-@licco_ws_blueprint.route("/projects/<repid>/download/", methods=["GET", "POST"])
+@licco_ws_blueprint.route("/projects/<report>/download/", methods=["GET", "POST"])
 # @context.security.authentication_required
-def svc_download_report(repid):
+def svc_download_report(report):
     """
     Download a status report from a project file import.
+
+    :param: report- full filename of single import log file
     """
     #This is set in the create_logger function-need to be identical paths
     dir_path = f"{tempfile.gettempdir()}/mcd"
     try:
-        repfile = f"{dir_path}/{repid}.log"
-        print("REPFILE", repfile)
+        repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
     except FileNotFoundError:
         return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None}) 

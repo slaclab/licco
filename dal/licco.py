@@ -622,7 +622,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
 
     #If one of the fields is invalid, and we have an error
     if error_str != "":
-        logger.info("ENTIRE ROW REJECTED, ONE BAD VALUE")
         return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     if all_inserts:
         logger.debug("Inserting %s documents into the history",

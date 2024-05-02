@@ -142,12 +142,9 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
                   Mustache.parse(d0);
                   $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Project Import Results"}));
                   var res = JSON.parse(request.responseText);
-                  console.log(res)
-                  document.getElementById('import_status').innerHTML=res.status_str;
+                  document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
                   $("#global_mdl_holder").find(".modal").modal("show");
                   $("#global_mdl_holder").find(".sbm").on("click", () => {
-                    console.log("submitted")
-                    console.log(res.log_name)
                     window.open("ws/projects/" + res.log_name + "/download", "_blank");
                   });
                 });
