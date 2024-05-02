@@ -137,7 +137,19 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               // request successful
               document.body.style.cursor='default';
               $("#global_mdl_holder").find(".modal").modal("hide");
-              showToast("static/html/tabs/toasts/prjimportstatus.html", {status: request.responseText});
+              $.ajax("static/html/tabs/impreport.html")
+                .done(function(d0) {
+                  Mustache.parse(d0);
+                  $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Project Import Results"}));
+                  document.getElementById('import_status').innerHTML=request.responseText;
+                  $("#global_mdl_holder").find(".modal").modal("show");
+                  $("#global_mdl_holder").find(".sbm").on("click", () => {
+                    console.log("submitted")
+                    let report = logged_in_user + "_" + prjid
+                    console.log(report)
+                    window.open("ws/projects/" + report + "/download", "_blank");
+                  });
+                });
             };
             request.onerror = function() {
               document.body.style.cursor='default';

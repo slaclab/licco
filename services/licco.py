@@ -15,7 +15,7 @@ from functools import wraps
 
 import context
 
-from flask import Blueprint, request, Response
+from flask import Blueprint, request, Response, send_file
 
 from dal.utils import JSONEncoder
 from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
@@ -112,7 +112,6 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         status, errormsg = validate_import_headers(fcupdate, prjid, fftid)
         if not status:
             update_status["fail"] += 1
-            print("bad status")
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
         for attr in ["_id", "name", "fc", "fg"]:
@@ -235,7 +234,7 @@ def svc_get_users():
     return JSONEncoder().encode({"success": True, "value": users})
 
 @licco_ws_blueprint.route("/approvers/", methods=["GET"])
-@context.security.authentication_required
+# @context.security.authentication_required
 def svc_get_users_with_approve_privilege():
     """
     Get the users in the system who have the approve privilege
@@ -567,7 +566,9 @@ def svc_import_project(prjid):
         if not fcs:
             return "Import Error: No data detected in import file."
 
-    log_name = (prj_name.replace("/", "_")) + "-" + datetime.now().strftime("%m%d%Y.%H%M")
+    #log_name = (prj_name.replace("/", "_")) + "-" + datetime.now().strftime("%m%d%Y.%H%M")
+    log_name = context.security.get_current_user_id() + "_" + prjid + ".txt"
+    print("LOG NAME ", log_name)
     imp_log = create_logger(log_name)
 
     fc2id = {
@@ -645,6 +646,15 @@ def svc_import_project(prjid):
     imp_log.info(status_str)
     return status_str
 
+
+@licco_ws_blueprint.route("/projects/<repid>/download/", methods=["GET", "POST"])
+# @context.security.authentication_required
+def svc_download_report(repid):
+    """
+    Download a status report from a project file import.
+    """
+    repfile = os.getcwd() + '/logs/' + repid
+    return send_file(f"{repfile}.txt",as_attachment=True,mimetype="text/plain")
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
 @project_writable

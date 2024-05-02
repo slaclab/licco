@@ -619,7 +619,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             })
             fft_edits.add(ObjectId(fftid))
 
-    print("IN HEREEEEE ", error_str)
     #If one of the fields is invalid, and we have an error
     if error_str != "":
         logger.info("ENTIRE ROW REJECTED, ONE BAD VALUE")
