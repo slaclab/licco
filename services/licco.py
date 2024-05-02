@@ -11,6 +11,7 @@ from io import BytesIO, StringIO
 from datetime import datetime
 import pytz
 import copy
+import tempfile
 from functools import wraps
 
 import context
@@ -190,15 +191,17 @@ def create_logger(logname):
     """
     Create and return a logger that writes to a provided file
     """
-    # TODO: set a temp path here...how to?
-    default_path = os.getcwd() + '/logs/'
-
+    dir_path = f"{tempfile.gettempdir()}/mcd"
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
     # create a file 
-    handler = logging.FileHandler(default_path + logname)
+    handler = logging.FileHandler(f'{dir_path}/{logname}.log')
+    handler.setLevel(logging.DEBUG)
+    print("Createing file ", f'{dir_path}/{logname}.log')
 
     logger = logging.getLogger(logname)
     logger.addHandler(handler)
-    return logger
+    return logger, handler
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
 # @context.security.authentication_required
@@ -567,9 +570,10 @@ def svc_import_project(prjid):
             return "Import Error: No data detected in import file."
 
     #log_name = (prj_name.replace("/", "_")) + "-" + datetime.now().strftime("%m%d%Y.%H%M")
-    log_name = context.security.get_current_user_id() + "_" + prjid + ".txt"
+    log_time = datetime.now().strftime("%m%d%Y.%H%M")
+    log_name = f"{context.security.get_current_user_id()}_{prjid}_{log_time}"
     print("LOG NAME ", log_name)
-    imp_log = create_logger(log_name)
+    imp_log, imp_handler = create_logger(log_name)
 
     fc2id = {
         value["name"]: value["_id"]
@@ -644,7 +648,9 @@ def svc_import_project(prjid):
     status_str = create_status_update(prj_name, status_val)
     logger.debug(re.sub('\n|_', '', status_str))
     imp_log.info(status_str)
-    return status_str
+    imp_log.removeHandler(imp_handler)
+    imp_handler.close()
+    return {"status_str": status_str, "log_name": log_name}
 
 
 @licco_ws_blueprint.route("/projects/<repid>/download/", methods=["GET", "POST"])
@@ -653,8 +659,14 @@ def svc_download_report(repid):
     """
     Download a status report from a project file import.
     """
-    repfile = os.getcwd() + '/logs/' + repid
-    return send_file(f"{repfile}.txt",as_attachment=True,mimetype="text/plain")
+    #This is set in the create_logger function-need to be identical paths
+    dir_path = f"{tempfile.gettempdir()}/mcd"
+    try:
+        repfile = f"{dir_path}/{repid}.log"
+        print("REPFILE", repfile)
+        return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
+    except FileNotFoundError:
+        return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None}) 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
 @project_writable
