@@ -129,7 +129,8 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           document.getElementById('projectname').innerHTML=prjnm;
           $("#global_mdl_holder").find(".modal").modal("show");
           $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
-            document.body.style.cursor='wait';
+            document.getElementById("import_sub_btn").disabled = true;
+            document.body.style.cursor='progress';
             var url = "ws/projects/" + prjid + "/import";
             var request = new XMLHttpRequest();
             request.open('POST', url, true);

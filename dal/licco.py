@@ -600,13 +600,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
             error_str = f"Wrong type - {attrname}, {attrval}"
-            logger.debug(error_str)
             break
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             error_str = f"Value out of range - {attrname}, {attrval}"
-            logger.debug(error_str)
             break
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
