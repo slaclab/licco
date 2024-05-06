@@ -84,10 +84,12 @@ def create_imp_msg(fft, status, errormsg=None):
     """
     Creates a message to be logged for the import report.
     """
-    if status:
+    if status is None:
+        res = "IGNORED"
+    elif status is True:
         res = "SUCCESS"
     else:
-        res = f"FAIL"
+        res = "FAIL"
     msg = f"{res}: {fft["fc"]}-{fft["fg"]} - {errormsg}"
     return msg
 
@@ -100,7 +102,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
     prj = get_currently_approved_project()
     prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
-    update_status = {"success": 0, "fail": 0}
+    update_status = {"success": 0, "fail": 0, "ignored": 0}
 
     for fft in ffts:
         fftid = fft["_id"]
@@ -124,10 +126,8 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         status, errormsg, prj_fft, results = update_fft_in_project(
             prjid, fftid, fcupdate, userid)
         # Have smarter error handling here for different exit conditions
-        if not status:
-            def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
-        else:
-            def_logger.info(create_imp_msg(fft, True))
+        def_logger.info(create_imp_msg(fft, status=status, errormsg=errormsg))
+ 
         # Add the individual FFT update results into overall count
         if results:
             update_status = {k: update_status[k]+results[k]
@@ -170,7 +170,6 @@ def validate_import_headers(fft, prjid, fftid=None):
             val = attrs[header]["fromstr"](fft[header])
         except (ValueError, KeyError) as e:
             error_str = f"Invalid Data {fft[header]} For Type of {header}."
-            logger.debug(error_str)
             return False, error_str
     return True, "Success"
 
@@ -187,6 +186,7 @@ def create_status_update(prj_name, status):
         f'{line_brk}',
         f'Successful row imports: {status["success"]}.',
         f'Failed row imports: {status["fail"]}.',
+        f'Ignored row imports: {status["ignored"]}.',
     ])
     return status_str
 
@@ -199,12 +199,12 @@ def create_logger(logname):
         os.mkdir(dir_path)
     # create a file 
     handler = logging.FileHandler(f'{dir_path}/{logname}.log')
-    print("Creating file ", f'{dir_path}/{logname}.log')
+    logger.debug(f"Creating log file {dir_path}/{logname}.log")
 
-    logger = logging.getLogger(logname)
-    logger.addHandler(handler)
-    logger.propagate = False
-    return logger, handler
+    new_logger = logging.getLogger(logname)
+    new_logger.addHandler(handler)
+    new_logger.propagate = False
+    return new_logger, handler
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
 # @context.security.authentication_required
@@ -480,6 +480,9 @@ def svc_update_fc_in_project(prjid, fftid):
         return JSONEncoder().encode({"success": False, "errormsg": msg})
     status, errormsg, fc, results = update_fft_in_project(
         prjid, fftid, fcupdate, userid)
+    # No changes were detected
+    if status is None:
+        status = True
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
@@ -524,7 +527,7 @@ def svc_import_project(prjid):
     """
     prj_name = get_project(prjid)["name"]
     status_str = f'Import Results for:  {prj_name}\n'
-    status_val = {"headers": 0, "fail": 0, "success": 0}
+    status_val = {"headers": 0, "fail": 0, "success": 0, "ignored": 0}
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -575,6 +578,9 @@ def svc_import_project(prjid):
     log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace("/", "_")}_{log_time}"
     imp_log, imp_handler = create_logger(log_name)
+
+    if status_val["fail"] > 0:
+        imp_log.debug(f"FAIL: {status_val['fail']} FFTS malformed.")
 
     fc2id = {
         value["name"]: value["_id"]

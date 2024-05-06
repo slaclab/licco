@@ -587,7 +587,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
     error_str = ""
     all_inserts = []
     fft_edits = set()
-    insert_count = {"success": 0, "fail": 0}
+    insert_count = {"success": 0, "fail": 0, "ignored": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -630,10 +630,10 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
-        logger.debug(fft["fc"])
+        insert_count["ignored"] +=1
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
         error_str = "No changes detected."
-        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+        return None, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     return True, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
@@ -654,7 +654,7 @@ def validate_insert_range(attr, val):
                 if float(val) < 0 or float(val) > 2000:
                     return False
             if "nom_ang_" in attr:
-                if float(val) > math.pi or float(val) < -(math.pi):
+                if (float(val) > math.pi) or (float(val) < -(math.pi)):
                     return False
     except ValueError:
         logger.debug(f'Value {val} wrong type for attribute {attr}.')
