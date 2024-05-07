@@ -576,7 +576,7 @@ def svc_import_project(prjid):
             return "Import Error: No data detected in import file."
 
     log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
-    log_name = f"{context.security.get_current_user_id()}_{prj_name.replace("/", "_")}_{log_time}"
+    log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
     imp_log, imp_handler = create_logger(log_name)
 
     if status_val["fail"] > 0:
