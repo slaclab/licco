@@ -129,7 +129,8 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           document.getElementById('projectname').innerHTML=prjnm;
           $("#global_mdl_holder").find(".modal").modal("show");
           $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
-            document.body.style.cursor='wait';
+            document.getElementById("import_sub_btn").disabled = true;
+            document.body.style.cursor='progress';
             var url = "ws/projects/" + prjid + "/import";
             var request = new XMLHttpRequest();
             request.open('POST', url, true);
@@ -137,7 +138,17 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               // request successful
               document.body.style.cursor='default';
               $("#global_mdl_holder").find(".modal").modal("hide");
-              showToast("static/html/tabs/toasts/prjimportstatus.html", {status: request.responseText});
+              $.ajax("static/html/tabs/impreport.html")
+                .done(function(d0) {
+                  Mustache.parse(d0);
+                  $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Project Import Results"}));
+                  var res = JSON.parse(request.responseText);
+                  document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
+                  $("#global_mdl_holder").find(".modal").modal("show");
+                  $("#global_mdl_holder").find(".sbm").on("click", () => {
+                    window.open("ws/projects/" + res.log_name + "/download", "_blank");
+                  });
+                });
             };
             request.onerror = function() {
               document.body.style.cursor='default';

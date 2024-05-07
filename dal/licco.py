@@ -4,12 +4,13 @@ Most of the code here gets a connection to the database, executes a query and fo
 '''
 import logging
 import datetime
-import pytz
 import collections
 from enum import Enum
 import copy
 import json
 import math
+import pytz
+import tempfile
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -110,6 +111,20 @@ def get_all_users():
             ret.add(ed)
     return list(ret)
 
+def get_fft_name_by_id(fftid):
+    """
+    Return string names of both FC and FG components of FFT
+    based off of a provided ID. 
+    :param: fftid - the id of the FFT
+    :return: Tuple of string names FC, FG
+    """
+    fft = licco_db[line_config_db_name]["ffts"].find_one(
+        {"_id": ObjectId(fftid)})
+    fc = licco_db[line_config_db_name]["fcs"].find_one(
+        {"_id": fft["fc"]})
+    fg = licco_db[line_config_db_name]["fgs"].find_one(
+        {"_id": fft["fg"]}) 
+    return fc["name"], fg["name"]
 
 def get_users_with_privilege(privilege):
     """
@@ -180,21 +195,21 @@ def get_project_by_name(name):
     return prj
 
 
-def get_project_ffts(id, showallentries=True, asoftimestamp=None):
+def get_project_ffts(prjid, showallentries=True, asoftimestamp=None):
     """
     Get the FFTs for a project given its id.
     """
-    oid = ObjectId(id)
+    oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db[line_config_db_name], id, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
+    return get_project_attributes(licco_db[line_config_db_name], prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
 
 
-def get_project_changes(id):
+def get_project_changes(prjid):
     """
     Get a history of changes to the project.
     """
-    oid = ObjectId(id)
-    logger.info("Looking for project details for %s", id)
+    oid = ObjectId(prjid)
+    logger.info("Looking for project details for %s", prjid)
     return get_all_project_changes(licco_db[line_config_db_name], oid)
 
 
@@ -217,7 +232,7 @@ def delete_fc(fcid):
     fcs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fc"))
     if fcid in fcs_used:
         return False, "This FC is being used by an FFT", None
-    logger.info("Deleting FC with id " + str(fcid))
+    logger.info(f"Deleting FC with id {str(fcid)}")
     licco_db[line_config_db_name]["fcs"].delete_one({"_id": fcid})
     return True, "", None
 
@@ -529,7 +544,8 @@ fcattrs = {
 def get_fcattrs(fromstr=False):
     """
     Return the FC attribute metadata.
-    Since functions cannot be serialized into JSON, we make a copy and delete the fromstr and other function parts
+    Since functions cannot be serialized into JSON, 
+    we make a copy and delete the fromstr and other function parts
     """
     fcattrscopy = copy.deepcopy(fcattrs)
     if not fromstr:
@@ -561,18 +577,17 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None, None
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None, None
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
-            if (attrmeta.get("is_required_dimension") == True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
+            if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
 
     error_str = ""
     all_inserts = []
     fft_edits = set()
-    insert_count = {"total": len(fcupdate.items()),
-                    "success": 0, "fail": 0, "fftedit": 0}
+    insert_count = {"success": 0, "fail": 0, "ignored": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
@@ -584,23 +599,15 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_count["fail"] += 1
-            if insert_count["total"] == 1:
-                insert_count["fftedit"] = len(fft_edits)
-            error_str = f"Invalid input rejected : Wrong type - {attrname}, {attrval}"
-            logger.debug(error_str)
-            continue
+            error_str = f"Wrong type - {attrname}, {attrval}"
+            break
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
-            if insert_count["total"] == 1:
-                insert_count["fftedit"] = len(fft_edits)
-            error_str = f"Invalid input rejected : Out of range - {attrname}, {attrval}"
-            logger.debug(error_str)
-            continue
+            error_str = f"Value out of range - {attrname}, {attrval}"
+            break
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
-            logger.debug(
-                f"Inserting attr change for {attrname} to {newval} from {prevval}")
             all_inserts.append({
                 "prj": ObjectId(prjid),
                 "fft": ObjectId(fftid),
@@ -610,19 +617,22 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
                 "time": modification_time
             })
             fft_edits.add(ObjectId(fftid))
-        else:
-            insert_count["total"] -= 1
+
+    #If one of the fields is invalid, and we have an error
+    if error_str != "":
+        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
     if all_inserts:
         logger.debug("Inserting %s documents into the history",
                      len(all_inserts))
-        insert_count["success"] = len(all_inserts)
-        insert_count["fftedit"] = len(fft_edits)
+        insert_count["success"] +=1
         licco_db[line_config_db_name]["projects_history"].insert_many(
             all_inserts)
     else:
+        insert_count["ignored"] +=1
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
-        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
-    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+        error_str = "No changes detected."
+        return None, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+    return True, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
 
 
 def validate_insert_range(attr, val):
@@ -631,21 +641,23 @@ def validate_insert_range(attr, val):
     """
     try:
         if attr == "ray_trace":
-            return True if (int(val) is None) or int(val) >= 0 else False
+            if val == '' or val is None:
+                return True
+            return bool(int(val) >= 0)
         # empty strings valid for angles, catch before other verifications
-        if ("nom" in attr):
-            if (val == ""):
+        if "nom" in attr:
+            if val == "":
                 return True
             if attr == "nom_loc_z":
                 if float(val) < 0 or float(val) > 2000:
                     return False
             if "nom_ang_" in attr:
-                if float(val) > math.pi or float(val) < -(math.pi):
+                if (float(val) > math.pi) or (float(val) < -(math.pi)):
                     return False
-    except ValueError as v:
+    except ValueError:
         logger.debug(f'Value {val} wrong type for attribute {attr}.')
         return False
-    except TypeError as e:
+    except TypeError:
         logger.debug(f'Value {val} not verified for attribute {attr}.')
         return False
     return True
@@ -674,7 +686,7 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server " + modification_time.isoformat() + " is before the most recent change from the server " + latest_changes[0]["time"].isoformat(), None
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
 
     current_attrs = get_project_attributes(
         licco_db[line_config_db_name], ObjectId(destprjid))
@@ -745,7 +757,7 @@ def approve_project(prjid, userid):
         {"status": "approved"}, {"$set": {"status": "archived"}})
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
-    return True, "", prj
+    return True, f"Project {prj['name']} approved by {prj["submitter"]}.", prj
 
 
 def reject_project(prjid, userid, reason):
@@ -806,7 +818,7 @@ def __flatten__(obj, prefix=""):
     if isinstance(obj, collections.abc.Mapping):
         for k, v in obj.items():
             ret.extend(__flatten__(v, prefix + "." + k if prefix else k))
-    elif type(obj) == list:
+    elif isinstance(obj, list):
         for c, e in enumerate(obj):
             ret.extend(__flatten__(
                 e, prefix + ".[" + str(c) + "]" if prefix else "[" + str(c) + "]"))
@@ -884,7 +896,7 @@ def clone_project(prjid, name, description, userid):
 
     newprj = create_new_project(name, description, userid)
     if not newprj:
-        return False, f"Created a project but could not get the object from the database", None
+        return False, "Created a project but could not get the object from the database", None
 
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 

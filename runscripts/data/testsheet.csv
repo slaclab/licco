@@ -2,19 +2,29 @@ Units,,,,,,,,,,,,,,
 Integer,Any,Any,Preset,Any,Meters,Meters,Meters,Meters,Meters,Meters,Radians,Radians,Radians,true/false/left blank
 Data,,,,,,,,,,,,,,
 TC_part_no,FC,Fungible,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,Y_dim,X_dim,LCLS_X_pitch,LCLS_Y_yaw,LCLS_Z_roll,Must_Ray_Trace
-,Good,Con,Conceptual,Shouldn’t see this,1,1,1,1,1,1,1,1,1,1
-,Good,Ready,ReadyForInstallation,,1,1,1,1,1,1,1,1,1,1
-,Good,Con,Conceptual,Clear,1,1,1,1,1,1,1,1,1,1
-,Good,ConEmpty,,,,,,,,,,,,
-,Header,Pitch,Conceptual,,,,,,,,Abc,,,
-,Header,Yaw,Conceptual,,,,,,,,,-2388888,,
-,Header,Roll,Conceptual,,,,,,,,,,888888888,
-,Header,RayTraceNeg,Conceptual,,,,,,,,,,,-2222222
-,Header,RayTraceFormat,Conceptual,,,,,,,,,,,AHDJABDH
-,Header,Zloc,,,-1000000,,,,,,,,,
-,Header,AllFormat,WHAT,$$$$,Abc,$$$,3#njnfa,-421984291,None,Qwjeb,-30000000,ABD,3312932,Null
+1,Good,ConDouble,Conceptual,Shouldn’t see this,1,1,1,1,1,1,1,1,1,1
+2,Good,Ready,ReadyForInstallation,,1,1,1,1,1,1,1,1,1,1
+3,Good,ConDouble,Conceptual,Clear,1,1,1,1,1,1,1,1,1,1
+4,Good,ConEmpty,,,,,,,,,,,,
+5,Header,AlphaPitch,Conceptual,,,,,,,,Abc,,,
+6,Header,NegYaw,Conceptual,,,,,,,,,-2388888,,
+7,Header,LargeRoll,Conceptual,,,,,,,,,,888888888,
+8,Header,RayTraceNeg,Conceptual,,,,,,,,,,,-2222222
+9,Header,RayTraceFormat,Conceptual,,,,,,,,,,,AHDJABDH
+10,Header,Zloc,,,-1000000,,,,,,,,,
+11,Header,AllFormat,BadState,$$$$,Abc,$$$,3#njnfa,-421984291,None,Qwjeb,-30000000,ABD,3312932,Null
+12,Header,AllFormat,,,Abc,$$$,3#njnfa,-421984291,None,Qwjeb,-30000000,ABD,3312932,Null
+13,Header,AllFormat,,,,$$$,3#njnfa,-421984291,None,Qwjeb,-30000000,ABD,3312932,Null
+14,Header,AllFormat,,,,,3#njnfa,-421984291,None,Qwjeb,-30000000,ABD,3312932,Null
+15,Header,AllFormat,,,,,,ABCD,None,Qwjeb,-30000000,ABD,3312932,Null
+16,Header,AllFormat,,,,,,,None,Qwjeb,-30000000,ABD,3312932,Null
+17,Header,AllFormat,,,,,,,,Qwjeb,-30000000,ABD,3312932,Null
+18,Header,AllFormat,,,,,,,,,&DSA,,,Null
+19,Header,AllFormat,,,,,,,,,,ABD,3312932,Null
+20,Header,AllFormat,,,,,,,,,,,())(',Null
+21,Header,AllFormat,,,,,,,,,,,,Null
 ,BadState,MissingAll,ReadyForInstallation,,,,,,,,,,,
-,BadState,MissingLoc,ReadyForInstallation,,,,,1,1,1,1,1,1,1
+,BadState,MissingLoc,ReadyForInstallation,,1,1,,1,1,1,1,1,1,1
 ,BadState,MissingRad,ReadyForInstallation,,1,1,1,1,1,1,,,,1
 ,,,,No FC/FG,,,,,,,,,,
 ,,NoFC,,NO FC,,,,,,,,,,
