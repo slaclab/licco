@@ -90,7 +90,7 @@ def create_imp_msg(fft, status, errormsg=None):
         res = "SUCCESS"
     else:
         res = "FAIL"
-    msg = f"{res}: {fft["fc"]}-{fft["fg"]} - {errormsg}"
+    msg = f"{res}: {fft['fc']}-{fft['fg']} - {errormsg}"
     return msg
 
 def update_ffts_in_project(prjid, ffts, def_logger=None):
