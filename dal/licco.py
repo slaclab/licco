@@ -757,7 +757,7 @@ def approve_project(prjid, userid):
         {"status": "approved"}, {"$set": {"status": "archived"}})
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
-    return True, "", prj
+    return True, f"Project {prj['name']} approved by {prj["submitter"]}.", prj
 
 
 def reject_project(prjid, userid, reason):
