@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @pages_blueprint.route("/")
-@context.security.authentication_required
+#@context.security.authentication_required
 def index():
     privileges = { x : context.security.check_privilege_for_project(x, None) for x in [ "read", "write", "edit", "approve" ]}
     return render_template("licco.html",
@@ -24,7 +24,7 @@ def index():
 
 
 @pages_blueprint.route("/projects/<prjid>/index.html")
-@context.security.authentication_required
+#@context.security.authentication_required
 def project(prjid):
     prjobj = get_project(prjid)
     privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
@@ -37,7 +37,7 @@ def project(prjid):
 
 
 @pages_blueprint.route("/projects/<prjid>/diff.html")
-@context.security.authentication_required
+#@context.security.authentication_required
 def project_diff(prjid):
     prjobj = get_project(prjid)
     otherprjid = request.args["otherprjid"]
