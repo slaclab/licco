@@ -25,7 +25,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -105,6 +105,8 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
     update_status = {"success": 0, "fail": 0, "ignored": 0}
 
     for fft in ffts:
+        if "_id" not in fft:
+            fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
         fftid = fft["_id"]
         db_values = get_fft_values_by_project(fft["_id"], prjid)
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -514,6 +516,8 @@ def svc_update_ffts_in_project(prjid):
     Insert multiple FFTs into a project
     """
     ffts = request.json
+    if isinstance(ffts, dict):
+        ffts = [ffts]
     status, errormsg, fft, update_status = update_ffts_in_project(prjid, ffts)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 

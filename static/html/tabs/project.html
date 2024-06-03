@@ -183,7 +183,7 @@
     <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
     <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
     <span class="ps-1 py-2 border-end text-color-secondary devonly"></span>
-    <span class="icn srchadd devonly"><i class="fa-solid fa-magnifying-glass-plus" title="Search and add new FC's"></i></span>
+    <span class="icn addfft devonly"><i class="fa-solid fa-magnifying-glass-plus" title="Search and add new FC's"></i></span>
     <span class="ps-1 py-2 border-end text-color-secondary"></span>
     <span class="icn clearfilter"><i class="fa-solid fa-broom fa-lg" title="Clear all filter to show all FCs"></i></span>
     <span class="icn postcrt"><i class="fa-solid fa-tree fa-lg" title="Show only FC's with changes after the project was created"></i></span>
@@ -295,14 +295,25 @@
     })
   });
 
-  $("#toolbar_for_tab").find(".srchadd").on("click", function() {
-    $.when($.ajax("../../static/html/tabs/srchaddfc.html"), 
-    $.getJSON("../../ws/fcs/"), $.getJSON("../../ws/fgs/"), $.getJSON("../../ws/ffts/"), 
-    $.getJSON("../../ws/projects/" + project_id + "/ffts/"), $.getJSON("../../ws/approved"), $.getJSON("../../ws/fcattrs"))
-    .done(function(d0, d1, d2, d3, d4, d5, d6) {
-      let tmpl = d0[0], fcs = d1[0].value, fgs = d2[0].value, ffts = d3[0].value, prjffts = d4[0].value, appffts = d5[0].value, fcattrs = d6[0].value;
-      $("#global_mdl_holder").empty().append(d0[0]);
-      fcsrch(fcs, fgs, ffts, prjffts, appffts, fcattrs, () => { $("#project_tab").trigger("lg.loaded.bs.tab"); });
+  $("#toolbar_for_tab").find(".addfft").on("click", function() {
+    let prj_url = window.location.origin + "/"
+    $.when($.ajax(prj_url + "static/html/tabs/newfft.html"), 
+    $.getJSON(prj_url + "ws/fcs/"), $.getJSON(prj_url + "ws/fgs/"), $.getJSON(prj_url + "ws/ffts/"))
+    .done(function(d0, d1, d2, d3) {
+      let tmpl = d0[0], fcs = d1[0].value, fgs = d2[0].value, ffts = d3[0].value;
+      Mustache.parse(tmpl);
+      $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {fcs: fcs, fgs: fgs, ffts: ffts}));
+      console.log(ffts);
+      newfft(prj_url, fcs, fgs, ffts, () => { 
+        let fc = $("#global_mdl_holder").find("[name=fc]").val();
+        let fg = $("#global_mdl_holder").find("[name=fg]").val();
+        $.when($.ajax({type: "POST", url: "../../ws/projects/" + project_id + "/ffts/", data: JSON.stringify({"fc":fc, "fg":fg}), contentType: "application/json; charset=utf-8", dataType: "json"})
+        .done(function(){
+          console.log("here", fc, fg, project_id);
+          window.location.reload();
+        })
+        )
+      });
     });
   });
 
