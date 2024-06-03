@@ -180,6 +180,9 @@
   })
 
   $("#toolbar_for_tab").empty().append(`<span class="tabtblbar">
+    <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
+    <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
+    <span class="ps-1 py-2 border-end text-color-secondary devonly"></span>
     <span class="icn srchadd devonly"><i class="fa-solid fa-magnifying-glass-plus" title="Search and add new FC's"></i></span>
     <span class="ps-1 py-2 border-end text-color-secondary"></span>
     <span class="icn clearfilter"><i class="fa-solid fa-broom fa-lg" title="Clear all filter to show all FCs"></i></span>
@@ -196,6 +199,11 @@
   if(project_status != "development") { $("#toolbar_for_tab").find(".devonly").addClass("d-none") }
   licco_helptlbr($("#toolbar_for_tab").find(".tabtblbar"));
   showhidetlbrbtns();
+
+  $("#toolbar_for_tab").find(".export").on("click", function() {
+  });
+  $("#toolbar_for_tab").find(".import").on("click", function() {
+  });
 
   $("#toolbar_for_tab").find(".clearfilter").on("click", function() {
     showallentries = true; 

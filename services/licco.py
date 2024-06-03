@@ -532,10 +532,11 @@ def svc_import_project(prjid):
     with BytesIO() as stream:
         request.files['file'].save(stream)
         try:
-            filestring = stream.getvalue().decode()
-        except UnicodeDecodeError:
-            error_msg = "Import Rejected: File not in Unicode (utf-8) Format."
+            filestring = stream.getvalue().decode("utf-8", "ignore")
+        except UnicodeDecodeError as e:
+            error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
             logger.debug(error_msg)
+            print(e)
             return error_msg
 
     with StringIO(filestring) as fp:

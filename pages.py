@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @pages_blueprint.route("/")
-#@context.security.authentication_required
+context#@.security.authentication_required
 def index():
     privileges = { x : context.security.check_privilege_for_project(x, None) for x in [ "read", "write", "edit", "approve" ]}
     return render_template("licco.html",
