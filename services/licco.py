@@ -25,7 +25,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -105,6 +105,8 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
     update_status = {"success": 0, "fail": 0, "ignored": 0}
 
     for fft in ffts:
+        if "_id" not in fft:
+            fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
         fftid = fft["_id"]
         db_values = get_fft_values_by_project(fft["_id"], prjid)
         fcupdate = copy.copy(prj_ffts.get(fftid, {}))
@@ -514,6 +516,8 @@ def svc_update_ffts_in_project(prjid):
     Insert multiple FFTs into a project
     """
     ffts = request.json
+    if isinstance(ffts, dict):
+        ffts = [ffts]
     status, errormsg, fft, update_status = update_ffts_in_project(prjid, ffts)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 
@@ -531,7 +535,13 @@ def svc_import_project(prjid):
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
-        filestring = stream.getvalue().decode()
+        try:
+            filestring = stream.getvalue().decode("utf-8", "ignore")
+        except UnicodeDecodeError as e:
+            error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
+            logger.debug(error_msg)
+            print(e)
+            return error_msg
 
     with StringIO(filestring) as fp:
         fp.seek(0)
@@ -580,7 +590,7 @@ def svc_import_project(prjid):
     imp_log, imp_handler = create_logger(log_name)
 
     if status_val["fail"] > 0:
-        imp_log.debug(f"FAIL: {status_val['fail']} FFTS malformed.")
+        imp_log.debug(f"FAIL: {status_val['fail']} FFTS malformed. (FC values likely missing)")
 
     fc2id = {
         value["name"]: value["_id"]
@@ -677,7 +687,6 @@ def svc_download_report(report):
         return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None}) 
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
-@project_writable
 @context.security.authentication_required
 def svc_export_project(prjid):
     """
