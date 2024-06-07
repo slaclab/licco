@@ -758,6 +758,7 @@ def approve_project(prjid, userid):
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
     approved = get_currently_approved_project()
+    print(approved)
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
@@ -766,8 +767,11 @@ def approve_project(prjid, userid):
         #TODO: dont forget to reject this after testing 
         pass
         #return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
-    # change the project status to development instead of submitted
+    # update the most recent approved time
     licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
+                                                         "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+    # change the project status to development instead of submitted
+    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
 

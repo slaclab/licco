@@ -1,7 +1,7 @@
 '''
 Web service endpoints for licco
 '''
-import csv, pprint
+import csv
 import json
 import logging
 import os

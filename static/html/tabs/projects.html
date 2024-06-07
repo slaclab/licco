@@ -16,7 +16,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
   let displayProjects = function() {
     $.getJSON({ url: "ws/projects/", data: {sort: JSON.stringify([[$("#projects_tab").data("cur_sort_attr"), $("#projects_tab").data("cur_sort_desc") ? -1 : 1 ]])} })
     .done((data) => {
-      let stat2time = { "development": "N/A", "submitted": "submitted_time", "approved": "approved_time" }
+      let stat2time = { "development": "approved_time", "submitted": "submitted_time", "approved": "approved_time" }
       let projects = data.value, projstmpl = `{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
             <td>
               <span class="icn diff" title="Compare ( diff) with another project"><i class="fas fa-code-compare fa-lg"></i></span>
