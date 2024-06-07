@@ -369,6 +369,9 @@
               $("#global_mdl_holder").find(".sbm").on("click", () => {
                 window.open("../../ws/projects/" + res.log_name + "/download", "_blank");
               });
+              $("#global_mdl_holder").find(".cls").on("click", () => {
+                location.reload();
+              });
             });
         };
         request.onerror = function() {

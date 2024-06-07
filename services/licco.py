@@ -99,8 +99,6 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
     """
     if def_logger is None:
         def_logger = logger
-    #prj = get_currently_approved_project()
-    #prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
     update_status = {"success": 0, "fail": 0, "ignored": 0}
     print("ffts to update")
@@ -109,11 +107,8 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         for entry in ffts:
             new_ffts.append(ffts[entry])
         ffts = new_ffts
-    pprint.pprint(ffts)
     # Iterate through parameter fft set
     for fft in ffts:
-        print("FFT~~~~~~~~~~~~~~~~")
-        print(fft)
         if "_id" not in fft:
             # If the fft set comes from the database, unpack the fft ids
             if "fft" in fft:
@@ -124,16 +119,10 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
             else:
                 fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
         fftid = fft["_id"]
+        # previous values
         db_values = get_fft_values_by_project(fft["_id"], prjid)
-        #fcupdate = copy.copy(prj_ffts.get(fftid, {}))
         fcupdate = {}
-        print("what are we getting from the approved project? below")
-        pprint.pprint(fcupdate)
-        print("__________________")
-        fcupdate.update(fft)
-        print("this is adding the current fft in below")
-        pprint.pprint(fcupdate)
-        print("__________________")        
+        fcupdate.update(fft)   
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
@@ -145,7 +134,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
             update_status["fail"] += 1
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
-        for attr in ["_id", "name", "fc", "fg"]:
+        for attr in ["_id", "name", "fc", "fg", "fft"]:
             if attr in fcupdate:
                 del fcupdate[attr]
         status, errormsg, prj_fft, results = update_fft_in_project(
@@ -762,16 +751,17 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
+    # See if approval confitions are good
     status, errormsg, prj = approve_project(prjid, userid)
     if status is True:
         approved = get_currently_approved_project()
         if not approved:
-            print("NO APPROVED!!!!!")
-            pass
-        proj_ffts = get_project_ffts(prjid)
-
-        status, errormsg, ffts, update_status = update_ffts_in_project(approved["_id"], proj_ffts)
+            return {"success": False, "errormsg": errormsg}
+    # merge project in to previously approved project
+    ffts = get_project_ffts(prjid)
+    status, errormsg, ffts, update_status = update_ffts_in_project(approved["_id"], ffts)
     logger.debug(errormsg)
+    logger.debug(update_status)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": ffts})
 
 

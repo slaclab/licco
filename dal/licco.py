@@ -757,6 +757,7 @@ def approve_project(prjid, userid):
     """
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
+    approved = get_currently_approved_project()
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
@@ -765,16 +766,9 @@ def approve_project(prjid, userid):
         #TODO: dont forget to reject this after testing 
         pass
         #return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
-    licco_db[line_config_db_name]["switch"].insert_one({
-        "prj": prj["_id"],
-        "switch_time": datetime.datetime.utcnow(),
-        "requestor_uid": userid
-    })
-    # update the project status to development
-    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
+    # change the project status to development instead of submitted
+    licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
                                                          "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
-    #merge project in to previously approved project
-    
     return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
 
 
