@@ -181,7 +181,7 @@
 
   $("#toolbar_for_tab").empty().append(`<span class="tabtblbar">
     <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
-    <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
+    <span class="icn import devonly" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
     <span class="ps-1 py-2 border-end text-color-secondary devonly"></span>
     <span class="icn addfft devonly"><i class="fa-solid fa-magnifying-glass-plus" title="Search and add new FC's"></i></span>
     <span class="ps-1 py-2 border-end text-color-secondary"></span>
@@ -297,8 +297,8 @@
 
   $("#toolbar_for_tab").find(".addfft").on("click", function() {
     let prj_url = window.location.origin + "/"
-    $.when($.ajax(prj_url + "static/html/tabs/newfft.html"), 
-    $.getJSON(prj_url + "ws/fcs/"), $.getJSON(prj_url + "ws/fgs/"), $.getJSON(prj_url + "ws/ffts/"))
+    $.when($.ajax("../../static/html/tabs/newfft.html"), 
+    $.getJSON("../../ws/fcs/"), $.getJSON("../../ws/fgs/"), $.getJSON("../../ws/ffts/"))
     .done(function(d0, d1, d2, d3) {
       let tmpl = d0[0], fcs = d1[0].value, fgs = d2[0].value, ffts = d3[0].value;
       Mustache.parse(tmpl);
@@ -336,7 +336,7 @@
       $("#global_mdl_holder").find(".modal").modal("show");
       $("#global_mdl_holder").find(".sbm").on("click", () => {
         if(!licco_validate_form()) { return false; }
-        window.open(prj_url + "/ws/projects/" + project_id + "/export", "_blank");
+        window.open("../../ws/projects/" + project_id + "/export", "_blank");
       });
     });
   });
@@ -352,7 +352,7 @@
       $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
         document.getElementById("import_sub_btn").disabled = true;
         document.body.style.cursor='progress';
-        var url = prj_url + "/ws/projects/" + project_id + "/import";
+        var url = "../../ws/projects/" + project_id + "/import";
         var request = new XMLHttpRequest();
         request.open('POST', url, true);
         request.onload = function() {
@@ -367,7 +367,7 @@
               document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
               $("#global_mdl_holder").find(".modal").modal("show");
               $("#global_mdl_holder").find(".sbm").on("click", () => {
-                window.open(prj_url + "/ws/projects/" + res.log_name + "/download", "_blank");
+                window.open("../../ws/projects/" + res.log_name + "/download", "_blank");
               });
             });
         };
