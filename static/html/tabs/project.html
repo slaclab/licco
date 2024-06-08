@@ -58,7 +58,7 @@
         let thetr = $(this).closest("tr"), thefftid = $(this).closest("tr").attr("data-id");
         $.when($.ajax("../../static/html/tabs/syncdiff.html"), $.getJSON("../../ws/approved"))
         .done(function(c0, c1) {
-          let tmpl = c0[0], approved = c1[0].value, otherprjid = approved["_id"];
+          let tmpl = c0[0], approved_prj = c1[0].value, otherprjid = approved_prj["_id"];
           $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
             $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
             $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
@@ -303,13 +303,11 @@
       let tmpl = d0[0], fcs = d1[0].value, fgs = d2[0].value, ffts = d3[0].value;
       Mustache.parse(tmpl);
       $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {fcs: fcs, fgs: fgs, ffts: ffts}));
-      console.log(ffts);
       newfft(prj_url, fcs, fgs, ffts, () => { 
         let fc = $("#global_mdl_holder").find("[name=fc]").val();
         let fg = $("#global_mdl_holder").find("[name=fg]").val();
         $.when($.ajax({type: "POST", url: "../../ws/projects/" + project_id + "/ffts/", data: JSON.stringify({"fc":fc, "fg":fg}), contentType: "application/json; charset=utf-8", dataType: "json"})
         .done(function(){
-          console.log("here", fc, fg, project_id);
           window.location.reload();
         })
         )

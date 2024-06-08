@@ -758,15 +758,12 @@ def approve_project(prjid, userid):
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
     approved = get_currently_approved_project()
-    print(approved)
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
     if prj["submitter"] == userid:
-        #TODO: dont forget to reject this after testing 
-        pass
-        #return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
+        return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
     # update the most recent approved time
     licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
                                                          "approver": userid, "approved_time": datetime.datetime.utcnow()}})
@@ -863,7 +860,7 @@ def __replace_fc__(fcs):
     return ret
 
 
-def diff_project(prjid, other_prjid, userid):
+def diff_project(prjid, other_prjid, userid, approved=False):
     """
     Diff two projects
     """
@@ -894,6 +891,9 @@ def diff_project(prjid, other_prjid, userid):
 
     diff = []
     for k in keys_u:
+        # skip keys that exist in the approved project, but not in submitted project
+        if approved and (k in keys_r):
+            continue
         if k in keys_i and mydict[k] == thdict[k]:
             diff.append({"diff": False, "key": k,
                         "my": mydict[k], "ot": thdict[k]})

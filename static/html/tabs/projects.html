@@ -52,7 +52,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
         $.getJSON("ws/approved")
         .done(function(data){
           if(data.success) {
-            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"]));
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"])+ "&approved=1");
           } else {
             console.log("No project is currently approved");
             $.getJSON("ws/projects/" + prjid + "/approve_project").done(function(){ window.location.reload(); })
@@ -72,7 +72,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
             let selPrjId = $("#global_mdl_holder").find(".prjsel").val();
             $("#global_mdl_holder").find(".modal").modal("hide");
             $("#global_mdl_holder").empty();
-            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(selPrjId));
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(selPrjId)+"&approved=0");
           })
         })
       })
