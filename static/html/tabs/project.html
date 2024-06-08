@@ -58,7 +58,7 @@
         let thetr = $(this).closest("tr"), thefftid = $(this).closest("tr").attr("data-id");
         $.when($.ajax("../../static/html/tabs/syncdiff.html"), $.getJSON("../../ws/approved"))
         .done(function(c0, c1) {
-          let tmpl = c0[0], approved = c1[0].value, otherprjid = approved["_id"];
+          let tmpl = c0[0], approved_prj = c1[0].value, otherprjid = approved_prj["_id"];
           $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
             $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
             $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
@@ -181,7 +181,7 @@
 
   $("#toolbar_for_tab").empty().append(`<span class="tabtblbar">
     <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
-    <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
+    <span class="icn import devonly" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>   
     <span class="ps-1 py-2 border-end text-color-secondary devonly"></span>
     <span class="icn addfft devonly"><i class="fa-solid fa-magnifying-glass-plus" title="Search and add new FC's"></i></span>
     <span class="ps-1 py-2 border-end text-color-secondary"></span>
@@ -297,19 +297,17 @@
 
   $("#toolbar_for_tab").find(".addfft").on("click", function() {
     let prj_url = window.location.origin + "/"
-    $.when($.ajax(prj_url + "static/html/tabs/newfft.html"), 
-    $.getJSON(prj_url + "ws/fcs/"), $.getJSON(prj_url + "ws/fgs/"), $.getJSON(prj_url + "ws/ffts/"))
+    $.when($.ajax("../../static/html/tabs/newfft.html"), 
+    $.getJSON("../../ws/fcs/"), $.getJSON("../../ws/fgs/"), $.getJSON("../../ws/ffts/"))
     .done(function(d0, d1, d2, d3) {
       let tmpl = d0[0], fcs = d1[0].value, fgs = d2[0].value, ffts = d3[0].value;
       Mustache.parse(tmpl);
       $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {fcs: fcs, fgs: fgs, ffts: ffts}));
-      console.log(ffts);
       newfft(prj_url, fcs, fgs, ffts, () => { 
         let fc = $("#global_mdl_holder").find("[name=fc]").val();
         let fg = $("#global_mdl_holder").find("[name=fg]").val();
         $.when($.ajax({type: "POST", url: "../../ws/projects/" + project_id + "/ffts/", data: JSON.stringify({"fc":fc, "fg":fg}), contentType: "application/json; charset=utf-8", dataType: "json"})
         .done(function(){
-          console.log("here", fc, fg, project_id);
           window.location.reload();
         })
         )
@@ -336,7 +334,7 @@
       $("#global_mdl_holder").find(".modal").modal("show");
       $("#global_mdl_holder").find(".sbm").on("click", () => {
         if(!licco_validate_form()) { return false; }
-        window.open(prj_url + "/ws/projects/" + project_id + "/export", "_blank");
+        window.open("../../ws/projects/" + project_id + "/export", "_blank");
       });
     });
   });
@@ -352,7 +350,7 @@
       $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
         document.getElementById("import_sub_btn").disabled = true;
         document.body.style.cursor='progress';
-        var url = prj_url + "/ws/projects/" + project_id + "/import";
+        var url = "../../ws/projects/" + project_id + "/import";
         var request = new XMLHttpRequest();
         request.open('POST', url, true);
         request.onload = function() {
@@ -367,7 +365,10 @@
               document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
               $("#global_mdl_holder").find(".modal").modal("show");
               $("#global_mdl_holder").find(".sbm").on("click", () => {
-                window.open(prj_url + "/ws/projects/" + res.log_name + "/download", "_blank");
+                window.open("../../ws/projects/" + res.log_name + "/download", "_blank");
+              });
+              $("#global_mdl_holder").find(".cls").on("click", () => {
+                location.reload();
               });
             });
         };

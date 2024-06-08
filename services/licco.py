@@ -99,18 +99,29 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
     """
     if def_logger is None:
         def_logger = logger
-    prj = get_currently_approved_project()
-    prj_ffts = get_project_ffts(prj["_id"]) if prj else {}
     userid = context.security.get_current_user_id()
     update_status = {"success": 0, "fail": 0, "ignored": 0}
-
+    if isinstance(ffts, dict):
+        new_ffts = []
+        for entry in ffts:
+            new_ffts.append(ffts[entry])
+        ffts = new_ffts
+    # Iterate through parameter fft set
     for fft in ffts:
         if "_id" not in fft:
-            fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
+            # If the fft set comes from the database, unpack the fft ids
+            if "fft" in fft:
+                fft["_id"] = fft["fft"]["_id"]
+                fft["fc"] = fft["fft"]["fc"]
+                fft["fg"] = fft["fft"]["fg"]
+            # Otherwise, look up the fft ids
+            else:
+                fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
         fftid = fft["_id"]
+        # previous values
         db_values = get_fft_values_by_project(fft["_id"], prjid)
-        fcupdate = copy.copy(prj_ffts.get(fftid, {}))
-        fcupdate.update(fft)
+        fcupdate = {}
+        fcupdate.update(fft)   
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
@@ -122,7 +133,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
             update_status["fail"] += 1
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
-        for attr in ["_id", "name", "fc", "fg"]:
+        for attr in ["_id", "name", "fc", "fg", "fft"]:
             if attr in fcupdate:
                 del fcupdate[attr]
         status, errormsg, prj_fft, results = update_fft_in_project(
@@ -739,9 +750,20 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
+    # See if approval confitions are good
     status, errormsg, prj = approve_project(prjid, userid)
+    if status is True:
+        approved = get_currently_approved_project()
+        if not approved:
+            return {"success": False, "errormsg": errormsg}
+    else:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
+    # merge project in to previously approved project
+    ffts = get_project_ffts(prjid)
+    status, errormsg, ffts, update_status = update_ffts_in_project(approved["_id"], ffts)
     logger.debug(errormsg)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+    logger.debug(update_status)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": ffts})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
@@ -767,9 +789,11 @@ def svc_project_diff(prjid):
     """
     userid = context.security.get_current_user_id()
     other_prjid = request.args.get("other_id", None)
+    approved = request.args.get("approved", None)
+
     if not other_prjid:
         return logAndAbort("Please specify the other project id using the parameter other_id")
-    status, errormsg, diff = diff_project(prjid, other_prjid, userid)
+    status, errormsg, diff = diff_project(prjid, other_prjid, userid, approved=approved)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": diff})
 
 

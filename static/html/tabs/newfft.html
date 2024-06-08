@@ -74,7 +74,7 @@
       }
 
       console.log("Creating new FFT with " + fc + " and " + fg);
-      $.post({url: prefix+"ws/ffts/", data: JSON.stringify(postparams), contentType: "application/json; charset=utf-8", dataType: "json"})
+      $.post({url: "../../ws/ffts/", data: JSON.stringify(postparams), contentType: "application/json; charset=utf-8", dataType: "json"})
       .done(function(data, textStatus, jqXHR) {
         if(!_.get(data, "success", false)) {
           $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
