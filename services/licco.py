@@ -756,6 +756,8 @@ def svc_approve_project(prjid):
         approved = get_currently_approved_project()
         if not approved:
             return {"success": False, "errormsg": errormsg}
+    else:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
     # merge project in to previously approved project
     ffts = get_project_ffts(prjid)
     status, errormsg, ffts, update_status = update_ffts_in_project(approved["_id"], ffts)
@@ -779,7 +781,7 @@ def svc_reject_project(prjid):
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET", "POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET"])
 @context.security.authentication_required
 def svc_project_diff(prjid):
     """
