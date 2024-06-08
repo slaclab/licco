@@ -126,6 +126,21 @@ def get_fft_name_by_id(fftid):
         {"_id": fft["fg"]}) 
     return fc["name"], fg["name"]
 
+def get_fft_id_by_names(fc, fg):
+    """
+    Return ID of FFT
+    based off of a provided string FC and FG names. 
+    :param: fft - dict of {fc, fg} with string names of fc, fg
+    :return: Tuple of ids FC, FG
+    """
+    fc_obj = licco_db[line_config_db_name]["fcs"].find_one(
+        {"name": fc})
+    fg_obj = licco_db[line_config_db_name]["fgs"].find_one(
+        {"name": fg}) 
+    fft = licco_db[line_config_db_name]["ffts"].find_one(
+        {"fc": ObjectId(fc_obj["_id"]), "fg": ObjectId(fg_obj["_id"])})
+    return fft["_id"]
+
 def get_users_with_privilege(privilege):
     """
     From the roles database, get all the users with the necessary privilege. 
