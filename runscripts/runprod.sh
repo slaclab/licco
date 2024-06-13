@@ -25,4 +25,4 @@ export PYTHONPATH="${PWD}/modules/flask_authnz":"${PYTHONPATH}"
 # The exec assumes you are calling this from supervisord. If you call this from the command line; your bash shell is proabably gone and you need to log in.
 exec gunicorn start:app -b ${SERVER_IP_PORT} --worker-class gthread --reload \
        --log-level=${LOG_LEVEL} --capture-output --enable-stdio-inheritance \
-       --access-logfile - --access-logformat "${ACCESS_LOG_FORMAT}"
+       --access-logfile - --access-logformat "${ACCESS_LOG_FORMAT}" --timeout=10000000

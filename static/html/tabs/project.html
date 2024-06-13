@@ -142,8 +142,6 @@
     $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags"), $.getJSON("../../ws/fcattrs"))
     .done(function(d0, d1, d2, d3){
       let prj = d0[0].value, tags=d2[0].value, fcs = _.map(d1[0].value, (v,k) => { return _.defaults({}, v, {"_id": k})  }), fcattrs = d3[0].value;
-      console.log(fcs);
-
       $("#prjNav").find(".prjnm").empty().append(prj["name"]);
       let cathdr = `<tr class="cathdr"><th></th><th></th><th></th>` + _.join(_.map(fcattrs, (x) => { if(_.has(x, "category")) {  if(_.has(x, "category.span")) {  return "<th colspan='" + _.get(x, "category.span") + "'>" + _.get(x, "category.label") + "</th>" } else {  return ""  }  } else {  return "<th></th>"  } }), " ") + `<\tr>`;
       let lblhdr = `<tr><th>&nbsp;</th><th data-sort-attr="fft.fc">FC</th><th data-sort-attr="fft.fg">Fungible</th>` + _.join(_.map(fcattrs, (v, k) => { return "<th data-sort-attr=" + k + ">" + v["label"] + "</th>"; }), " ") + `</tr>`
@@ -364,6 +362,9 @@
               var res = JSON.parse(request.responseText);
               document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
               $("#global_mdl_holder").find(".modal").modal("show");
+              if(!res.log_name){
+                document.getElementById("report_btn").disabled = true;
+              }
               $("#global_mdl_holder").find(".sbm").on("click", () => {
                 window.open("../../ws/projects/" + res.log_name + "/download", "_blank");
               });
