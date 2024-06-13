@@ -757,21 +757,19 @@ def approve_project(prjid, userid):
     """
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
+    approved = get_currently_approved_project()
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
     if prj["submitter"] == userid:
         return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
-    licco_db[line_config_db_name]["switch"].insert_one({
-        "prj": prj["_id"],
-        "switch_time": datetime.datetime.utcnow(),
-        "requestor_uid": userid
-    })
-    licco_db[line_config_db_name]["projects"].update_many(
-        {"status": "approved"}, {"$set": {"status": "archived"}})
+    # update the most recent approved time
+    licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
+                                                         "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+    # change the project status to development instead of submitted
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+                                                         "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
 
 
@@ -791,7 +789,7 @@ def reject_project(prjid, userid, reason):
     return True, "", prj
 
 
-def get_currently_approved_project():
+def get_currently_approved_project_by_switch():
     """
     Get the current approved project.
     This is really the most recently approved project
@@ -803,6 +801,13 @@ def get_currently_approved_project():
         return licco_db[line_config_db_name]["projects"].find_one({"_id": current_id})
     return None
 
+def get_currently_approved_project():
+    """
+    Get the current approved project by status
+    """
+    prj = licco_db[line_config_db_name]["projects"].find_one(
+        {"status": "approved"})
+    return prj if prj else None
 
 def get_projects_approval_history():
     """
@@ -855,7 +860,7 @@ def __replace_fc__(fcs):
     return ret
 
 
-def diff_project(prjid, other_prjid, userid):
+def diff_project(prjid, other_prjid, userid, approved=False):
     """
     Diff two projects
     """
@@ -886,6 +891,9 @@ def diff_project(prjid, other_prjid, userid):
 
     diff = []
     for k in keys_u:
+        # skip keys that exist in the approved project, but not in submitted project
+        if approved and (k in keys_r):
+            continue
         if k in keys_i and mydict[k] == thdict[k]:
             diff.append({"diff": False, "key": k,
                         "my": mydict[k], "ot": thdict[k]})

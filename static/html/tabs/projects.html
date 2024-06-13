@@ -16,7 +16,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
   let displayProjects = function() {
     $.getJSON({ url: "ws/projects/", data: {sort: JSON.stringify([[$("#projects_tab").data("cur_sort_attr"), $("#projects_tab").data("cur_sort_desc") ? -1 : 1 ]])} })
     .done((data) => {
-      let stat2time = { "development": "N/A", "submitted": "submitted_time", "approved": "approved_time" }
+      let stat2time = { "development": "approved_time", "submitted": "submitted_time", "approved": "approved_time" }
       let projects = data.value, projstmpl = `{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
             <td>
               <span class="icn diff" title="Compare ( diff) with another project"><i class="fas fa-code-compare fa-lg"></i></span>
@@ -24,7 +24,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               <span class="icn edit" title="Edit this project"><i class="fa fa-pen-to-square fa-lg"></i></span>
               {{^_submitted}}{{^_approved}}<span class="icn sbmfrap" title="Submit this project for approval"><i class="fas fa-user-tie fa-lg"></i></span>{{/_approved}}{{/_submitted}}
               <span class="icn export" title="Download this project"><i class="fas fa-download fa-lg"></i></span>
-              <span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>
+              {{^_submitted}}{{^_approved}}<span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>{{/_approved}}{{/_submitted}}
               {{#_submitted}}{{#_can_approve}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_can_approve}}{{/_submitted}}
             </td>
             <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
@@ -52,7 +52,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
         $.getJSON("ws/approved")
         .done(function(data){
           if(data.success) {
-            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"]));
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"])+ "&approved=1");
           } else {
             console.log("No project is currently approved");
             $.getJSON("ws/projects/" + prjid + "/approve_project").done(function(){ window.location.reload(); })
@@ -72,7 +72,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
             let selPrjId = $("#global_mdl_holder").find(".prjsel").val();
             $("#global_mdl_holder").find(".modal").modal("hide");
             $("#global_mdl_holder").empty();
-            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(selPrjId));
+            window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(selPrjId)+"&approved=0");
           })
         })
       })
