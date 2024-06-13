@@ -90,6 +90,10 @@ def create_imp_msg(fft, status, errormsg=None):
         res = "SUCCESS"
     else:
         res = "FAIL"
+    if 'fc' not in fft:
+        fft['fc'] = "NO VALID FC"
+    if 'fg' not in fft:
+        fft['fg'] = ''
     msg = f"{res}: {fft['fc']}-{fft['fg']} - {errormsg}"
     return msg
 
@@ -116,6 +120,8 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
                 fft["fg"] = fft["fft"]["fg"]
             # Otherwise, look up the fft ids
             else:
+                if "fg" not in fft:
+                    fft["fg"] = ""
                 fft["_id"] = get_fft_id_by_names(fc=fft["fc"], fg=fft["fg"])
         fftid = fft["_id"]
         # previous values
@@ -169,9 +175,8 @@ def validate_import_headers(fft, prjid, fftid=None):
                     logger.debug(error_str)
                     return False, error_str
                 fft[header] = db_values[header]
-            # Check for missing data
+            # Header is a required value, but user is trying to null this value
             if (fft[header] == ''):
-                # Check if in DB already, continue to validate next if so
                 error_str = f"Header {header} Value Required for a Non-Conceptual Device"
                 logger.debug(error_str)
                 return False, error_str
@@ -551,8 +556,7 @@ def svc_import_project(prjid):
         except UnicodeDecodeError as e:
             error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
             logger.debug(error_msg)
-            print(e)
-            return error_msg
+            return {"status_str": error_msg, "log_name": None}
 
     with StringIO(filestring) as fp:
         fp.seek(0)
@@ -571,7 +575,7 @@ def svc_import_project(prjid):
         if not req_headers:
             error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
             logger.debug(error_msg)
-            return error_msg
+            return {"status_str": error_msg, "log_name": None}
 
         # Set reader at beginning of header row
         fp.seek(loc)
@@ -594,7 +598,7 @@ def svc_import_project(prjid):
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
-            return "Import Error: No data detected in import file."
+            return {"status_str": "Import Error: No data detected in import file.", "log_name": None}
 
     log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
