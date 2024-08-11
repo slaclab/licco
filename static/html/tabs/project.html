@@ -345,7 +345,19 @@
       $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Upload CSV to Project"}));
       document.getElementById('projectname').innerHTML=project_name;
       $("#global_mdl_holder").find(".modal").modal("show");
+      $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("change", event => {
+        if(event.target.files[0].size > 15000) {
+              document.getElementById("import_sub_btn").disabled = true;
+              document.getElementById('error_msg').style.display = 'block';
+              var err_msg = "The file is too large at " + event.target.files[0].size;
+              document.getElementById('error_msg').innerHTML=err_msg;
+            } else {
+              document.getElementById('error_msg').style.display = 'none';
+              document.getElementById("import_sub_btn").disabled = false;
+            }
+      });
       $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
+
         document.getElementById("import_sub_btn").disabled = true;
         document.body.style.cursor='progress';
         var url = "../../ws/projects/" + project_id + "/import";
