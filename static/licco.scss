@@ -158,7 +158,7 @@ body {
     overflow: scroll;
 
     .fcstbl > thead {
-      position: sticky;
+      position: sticky !important;
       inset-block-start: 0;
       z-index: 2;
       background-color: white;
@@ -371,6 +371,11 @@ body {
     thead {
       background-color: $poppy;
       color: white;
+    }
+  }
+  .mdltblplain {
+    thead {
+      position: sticky;
     }
   }
 }

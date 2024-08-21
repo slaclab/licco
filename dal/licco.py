@@ -829,6 +829,20 @@ def get_projects_approval_history():
     ]))
     return hist
 
+def get_projects_recent_edit_time():
+    """
+    Gets the most recent time of edit for all projects in development status
+    """
+    edit_list = {}
+    projects = licco_db[line_config_db_name]["projects"].find()
+    for project in projects:
+        most_recent = licco_db[line_config_db_name]["projects_history"].find_one(
+        {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )]) 
+        if not most_recent:
+            most_recent = {"_id": "", "time": ""}
+        edit_list[project["_id"]] = most_recent
+    return edit_list
+
 
 def __flatten__(obj, prefix=""):
     """
@@ -904,14 +918,15 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     return True, "", sorted(diff, key=lambda x: x["key"])
 
 
-def clone_project(prjid, name, description, userid):
+def clone_project(prjid, name, description, userid, new=False):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
+    if new != True:
+        prj = licco_db[line_config_db_name]["projects"].find_one(
+            {"_id": ObjectId(prjid)})
+        if not prj:
+            return False, f"Cannot find project for {prjid}", None
 
     otr = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if otr:
@@ -920,7 +935,10 @@ def clone_project(prjid, name, description, userid):
     newprj = create_new_project(name, description, userid)
     if not newprj:
         return False, "Created a project but could not get the object from the database", None
-
+    
+    if new == True:
+        return True, "", newprj
+ 
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 
     modification_time = newprj["creation_time"]

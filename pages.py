@@ -5,7 +5,7 @@ import pkg_resources
 
 import context
 
-from flask import Blueprint, render_template, send_file, abort, request
+from flask import Blueprint, render_template, send_file, abort, request, redirect, url_for
 
 from dal.licco import get_project
 
@@ -22,7 +22,6 @@ def index():
                            logged_in_user=context.security.get_current_user_id(),
                            privileges=json.dumps(privileges))
 
-
 @pages_blueprint.route("/projects/<prjid>/index.html")
 @context.security.authentication_required
 def project(prjid):
@@ -30,9 +29,9 @@ def project(prjid):
     privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
     return render_template("project.html", 
                            logged_in_user=context.security.get_current_user_id(), 
-                           privileges=json.dumps(privileges),
                            project_id=prjid, 
-                           prjstatus=prjobj["status"], 
+                           prjstatus=prjobj["status"],
+                           privileges=json.dumps(privileges),
                            template_name="project.html")
 
 
@@ -46,10 +45,10 @@ def project_diff(prjid):
     privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
     return render_template("project.html", 
                            logged_in_user=context.security.get_current_user_id(),
-                           privileges=json.dumps(privileges),
                            project_id=prjid, prjstatus=prjobj["status"], 
                            template_name="projectdiff.html",
                            approved=approved,
+                           privileges=json.dumps(privileges),
                            otherprjid=otherprjid)
 
 

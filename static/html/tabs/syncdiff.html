@@ -2,28 +2,44 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Copy values from <span class="text-secondary">{{otprj}}</span> into {{myprj}} for {{fc}}&brvbar;{{fg}}</h5>
+                <h5 class="modal-title">Copy values from <span class="text-secondary">{{otprj}}</span> into {{myprj}} for FFT {{fc}}&brvbar;{{fg}}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-              {{^isdiff}}
-              The projects {{myprj}} and {{otprj}} do not differ in their values for {{fc}}&brvbar;{{fg}}
+            {{^isdiff}}
+            The projects {{myprj}} and {{otprj}} do not differ in their values for {{fc}}&brvbar;{{fg}}
+            {{/isdiff}}
+            {{#isdiff}}    
+              {{^ismissing}}
+              <p>
+                <div class="fw-bolder">
+                  Cannot sync values.
+                </div><br>
+                The project <span class="fw-bolder">{{otprj}}</span> does not have the FFT <span class="fw-bolder">{{fc}}&brvbar;{{fg}}</span>.
+              </p>
+              {{/ismissing}}
+              {{#ismissing}}
+                <div class="text-danger errormsg"></div>
+                <table class="table table-condensed table-striped table-bordered mgattbl">
+                    <thead><tr><th>Name</th><th>{{otprj}}</th><th></th><th>{{myprj}}</th><th class="incl"><input type="checkbox" class="chk"></th></tr></thead>
+                    <tbody>
+                        {{#diffs}}
+                        <tr data-attr-name="{{attr.name}}"><td>{{attr.name}}</td><td>{{oval}}</td><td class="text-center"><span>&Rightarrow;</span></td><td>{{mval}}</td><td><input type="checkbox" class="chk"></td></tr>
+                        {{/diffs}}
+                        </tbody>
+                </table>
+                {{/ismissing}}
               {{/isdiff}}
-              {{#isdiff}}
-              <div class="text-danger errormsg"></div>
-              <table class="table table-condensed table-striped table-bordered mgattbl">
-                <thead><tr><th>Name</th><th>{{otprj}}</th><th></th><th>{{myprj}}</th><th class="incl"><input type="checkbox" class="chk"></th></tr></thead>
-                <tbody>
-                    {{#diffs}}
-                    <tr data-attr-name="{{attr.name}}"><td>{{attr.name}}</td><td>{{oval}}</td><td class="text-center"><span>&Rightarrow;</span></td><td>{{mval}}</td><td><input type="checkbox" class="chk"></td></tr>
-                    {{/diffs}}
-                    </tbody>
-              </table>
-              {{/isdiff}}
+
             </div>
             <div class="modal-footer">
                 <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary copyvals">Copy</button>
+                {{^ismissing}}
+                    <button type="submit" class="btn btn-primary copyvals" disabled>Copy</button>
+                {{/ismissing}}
+                {{#ismissing}}
+                    <button type="submit" class="btn btn-primary copyvals">Copy</button>
+                {{/ismissing}}   
             </div>
         </div>
     </div>
