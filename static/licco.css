@@ -4994,6 +4994,8 @@ textarea.form-control-lg {
   --bs-modal-footer-bg: ;
   --bs-modal-footer-border-color: var(--bs-border-color);
   --bs-modal-footer-border-width: 1px;
+  min-height: 500px;
+  max-height: calc(100vh - 120px);
   position: fixed;
   top: 0;
   left: 0;
@@ -5106,6 +5108,7 @@ textarea.form-control-lg {
   position: relative;
   flex: 1 1 auto;
   padding: var(--bs-modal-padding);
+  overflow-x: auto;
 }
 
 .modal-footer {

@@ -1,16 +1,16 @@
 <div class="modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-lg modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">History for project {{prj.name}}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-              <table class="table table-condensed table-striped table-bordered fcstbl">
+              <table class="table table-striped table-bordered mdltblplain">
                 <thead>
                   <tr>
                     <td></td>
-                    <td>FC name</td>
+                    <td>FFT</td>
                     <td>Attribute</td>
                     <td>Value</td>
                     <td>Changed by</td>
@@ -21,7 +21,7 @@
                   {{#changes}}
                   <tr data-id={{_id}}>
                     <td>{{#checkout_possible}}<span class="icn checkout" title="View the project as of this point in time"><i class="fa-solid fa-code-branch"></i></span>{{/checkout_possible}}</td>
-                    <td>{{fc}}</td>
+                    <td>{{fc}}-{{fg}}</td>
                     <td>{{key}}</td>
                     <td>{{val}}</td>
                     <td>{{user}}</td>

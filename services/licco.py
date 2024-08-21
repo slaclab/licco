@@ -37,20 +37,20 @@ logger = logging.getLogger(__name__)
 
 KEYMAP = {
     # Column names defined in confluence
-    "TC_part_no": "tc_part_no",
     "FC": "fc",
     "Fungible": "fg",
+    "TC_part_no": "tc_part_no",
     "State": "state",
     "Comments": "comments",
     "LCLS_Z_loc": "nom_loc_z",
     "LCLS_X_loc": "nom_loc_x",
     "LCLS_Y_loc": "nom_loc_y",
     "Z_dim": "nom_dim_z",
-    "Y_dim": "nom_dim_x",
-    "X_dim": "nom_dim_y",
+    "X_dim": "nom_dim_x",
+    "Y_dim": "nom_dim_y",
+    "LCLS_Z_roll": "nom_ang_z",
     "LCLS_X_pitch": "nom_ang_x",
     "LCLS_Y_yaw": "nom_ang_y",
-    "LCLS_Z_roll": "nom_ang_z",
     "Must_Ray_Trace": "ray_trace"
 }
 KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
@@ -713,7 +713,7 @@ def svc_download_report(report):
 @context.security.authentication_required
 def svc_export_project(prjid):
     """
-    Export project into a cvs that downloads
+    Export project into a csv that downloads
     """
     with StringIO() as stream:
         writer = csv.DictWriter(stream, fieldnames=KEYMAP.keys())
@@ -733,6 +733,7 @@ def svc_export_project(prjid):
                     continue
                 row_dict[KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
 
+            # Download file will have column order of KEYMAP var
             writer.writerow(row_dict)
 
         csv_string = stream.getvalue()
