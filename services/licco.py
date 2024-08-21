@@ -13,10 +13,11 @@ import pytz
 import copy
 import tempfile
 from functools import wraps
+from pprint import pprint
 
 import context
 
-from flask import Blueprint, request, Response, send_file
+from flask import Blueprint, request, Response, send_file, render_template
 
 from dal.utils import JSONEncoder
 from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
@@ -25,7 +26,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
     create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time
 
 
 __author__ = 'mshankar@slac.stanford.edu'
@@ -277,6 +278,13 @@ def svc_get_projects_for_user():
     sort_criteria = json.loads(
         request.args.get("sort", '[["start_time", -1]]'))
     projects = get_all_projects(sort_criteria)
+    edits = get_projects_recent_edit_time()
+    for project in projects:
+        project["edit_time"] = edits[(project["_id"])]["time"]
+    if sort_criteria[0][0] == "edit_time":
+        reverse = (sort_criteria[0][1] == -1)
+        min_date = datetime.min.replace(tzinfo=pytz.UTC)
+        projects = sorted(projects, key=lambda d: d['edit_time'] or min_date, reverse=reverse)
     return JSONEncoder().encode({"success": True, "value": projects})
 
 
@@ -813,13 +821,11 @@ def svc_clone_project(prjid):
     if not newprjdetails["name"] or not newprjdetails["description"]:
         return JSONEncoder().encode(
             {"success": False, "errormsg": "Please specify a project name and description"})
-    if get_project_by_name(newprjdetails["name"]):
-        return JSONEncoder().encode(
-            {"success": False, 
-             "errormsg": "Project with the name " + newprjdetails["name"] + " already exists"})
 
+    # Set new to true if a new project is requested
+    new = (prjid == "NewBlankProjectClone")
     status, erorrmsg, newprj = clone_project(
-        prjid, newprjdetails["name"], newprjdetails["description"], userid)
+        prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 

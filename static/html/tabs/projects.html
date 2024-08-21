@@ -2,7 +2,7 @@
     <div class="maincontent">
       <div class="table-responsive">
         <table class="table table-condensed table-striped table-bordered" id="projectstbl">
-          <thead><tr><th></th><th data-sort-attr="name">Name</th><th data-sort-attr="status">Status</th><th data-sort-attr="owner">Owner</th><th data-sort-attr="creation_time">Created</th><th>Status changed</th><th>Description</th><th>Notes</th></tr></thead>
+          <thead><tr><th></th><th data-sort-attr="name">Name</th><th data-sort-attr="owner">Owner</th><th data-sort-attr="creation_time">Created</th><th data-sort-attr="edit_time">Last Edit</th><th>Description</th><th>Notes</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -11,12 +11,12 @@
 
 <script type="text/javascript">
 $("#projects_tab").on("lg.loaded.bs.tab", function() {
-  $("#projects_tab").data("cur_sort_attr", "name");
+  $("#projects_tab").data("cur_sort_attr", "status");
   $("#projects_tab").data("cur_sort_desc", false);
   let displayProjects = function() {
     $.getJSON({ url: "ws/projects/", data: {sort: JSON.stringify([[$("#projects_tab").data("cur_sort_attr"), $("#projects_tab").data("cur_sort_desc") ? -1 : 1 ]])} })
     .done((data) => {
-      let stat2time = { "development": "approved_time", "submitted": "submitted_time", "approved": "approved_time" }
+      let stat2time = { "development": "edit_time", "submitted": "submitted_time", "approved": "approved_time"}
       let projects = data.value, projstmpl = `{{#projects}}<tr data-id="{{_id}}" {{#_approved}}class="canonical"{{/_approved}}>
             <td>
               <span class="icn diff" title="Compare ( diff) with another project"><i class="fas fa-code-compare fa-lg"></i></span>
@@ -27,14 +27,13 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
               {{^_submitted}}{{^_approved}}<span class="icn import" title="Upload data to this project"><i class="fa fa-upload fa-lg"></i></span>{{/_approved}}{{/_submitted}}
               {{#_submitted}}{{#_can_approve}}<span class="icn approve" title="Approve this project and make it canonical"><i class="fas fa-check-double fa-lg"></i></span>{{/_can_approve}}{{/_submitted}}
             </td>
-            <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{status}}</td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{status_changed_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
+            <td><span class="prjnm"><a href="projects/{{_id}}/index.html">{{name}}</a></span></td><td>{{owner}}</td><td>{{#datefmt}}{{creation_time}}{{/datefmt}}</td><td>{{#datefmt}}{{edit_time}}{{/datefmt}}</td><td>{{description}}</td><td>{{#notes}}<div>{{.}}</div>{{/notes}}</td></tr>{{/projects}}`; 
             Mustache.parse(projstmpl);
       _.each(projects, (p) => { 
         p["_submitted"] = _.get(p, "status", "development") == "submitted"; 
         p["_approved"] = _.get(p, "status", "development") == "approved"; 
         p["datefmt"] = licco_formatdatetime; 
-        p["status_changed_time"] = _.get(p, stat2time[p["status"]], "");
-        p["_can_approve"] = _.get(privileges, "approve", false);
+        //p["_can_approve"] = _.get(privileges, "approve", false);
       })
       let rendered = $(Mustache.render(projstmpl, { projects : projects }));
       rendered.find(".prjnm").on("click", function() { let prjid = $(this).closest("tr").attr("data-id"); console.log(prjid); displayProject(prjid); } )
@@ -154,7 +153,9 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
                   Mustache.parse(d0);
                   $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Project Import Results"}));
                   var res = JSON.parse(request.responseText);
-                  document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
+                  console.log(res.status_str);
+                  document.getElementById('import_status').innerHTML=res.status_str.replaceAll("\n", "<br>");
+
                   $("#global_mdl_holder").find(".modal").modal("show");
                   $("#global_mdl_holder").find(".sbm").on("click", () => {
                     window.open("ws/projects/" + res.log_name + "/download", "_blank");
@@ -230,18 +231,23 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
     displayProjects();
     $("#toolbar_for_tab").append(`<span class="icn addnewprj"><i class="fa fa-plus fa-lg"></i></span><span class="icn hist"><i class="fa-solid fa-clock-rotate-left fa-lg" title="Show the history of project approvals"></i></span>`);
     $("#toolbar_for_tab").find(".addnewprj").on("click", function(){
-      $.when($.ajax("static/html/tabs/srcnmdsmdl.html"), $.getJSON("ws/projects/"))
+      $.when($.ajax("static/html/tabs/srcnmdsmdl.html"), $.getJSON("ws/approved"))
       .done(function(d0, d1) {
         let tmpl = d0[0], projects = d1[0].value; Mustache.parse(tmpl);
-        _.each(projects, function(prj){ if(_.get(prj, "status", "") == "approved") { prj.selected = true;  } });
         $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Create a New Project", projects: projects }));
         $("#global_mdl_holder").find(".modal").modal("show");
         $("#global_mdl_holder").find(".sbm").on("click", function(){
           if(!licco_validate_form()) { return false; }
-          let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
           let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
-          console.log(newprj);
-          $.post({url: "ws/projects/" + prjid + "/clone", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
+          let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
+          if(prjid != "Blank Project"){
+            let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
+            var prjurl = "ws/projects/" + prjid + "/clone";
+          } else {
+            var prjurl = "ws/projects/NewBlankProjectClone/clone";         
+          }
+          console.log(prjurl);
+          $.post({url: prjurl, data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
           .done(function(data, textStatus, jqXHR) {
             if(!_.get(data, "success", false)) {
               $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");

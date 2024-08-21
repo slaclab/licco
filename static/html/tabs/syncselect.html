@@ -1,24 +1,27 @@
 <div class="modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Download This Project?</h5>
+                <h5 class="modal-title">Select a Project to Sync to</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <span class="fw-bolder">Selected Project Name:
-                     <p class="text-primary" id="projectname"></p>
-                </span>
                 <form role="form" novalidate>
                   <div class="text-danger errormsg"></div>
                   <div class="mb-3">
-                    <div class="text">This will download a csv of the current version of the selected project.</div>
+                    <select class="form-select mx-2 syncprj" data-validation="notempty">
+                      <option value="">Please select an project</option>
+                        {{#projects}}
+                        <option value={{_id}}>{{name}}</option>
+                        {{/projects}}
+                    </select>
+                    <div class="invalid-feedback">Please choose a project</div>
                   </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="submit" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary sbm" data-bs-dismiss="modal">Submit</button>
+                <button type="submit" class="btn btn-primary sbm">Submit</button>
             </div>
         </div>
     </div>

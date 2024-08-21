@@ -55,31 +55,50 @@
   let attacheditfn = function(rndrd, tmpl, prj, fcs, fcattrs){
     if((_.get(prj, "status", "") == "development") && (_.isEmpty(srchparm.asoftimestamp))) {
       let syncfn = function() {
+        // get closest project id to sync buttons
         let thetr = $(this).closest("tr"), thefftid = $(this).closest("tr").attr("data-id");
-        $.when($.ajax("../../static/html/tabs/syncdiff.html"), $.getJSON("../../ws/approved"))
+        // open modal to select which project for sync
+        $.when($.ajax("../../static/html/tabs/syncselect.html"), $.getJSON("../../ws/projects/"))
         .done(function(c0, c1) {
-          let tmpl = c0[0], approved_prj = c1[0].value, otherprjid = approved_prj["_id"];
-          $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
-            $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
-            $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
-          .done(function(d0, d1, d2, d3, d4, d5){
-            let prj = d0[0].value, prjffts = d1[0].value, oprj = d2[0].value, oprjffts = d3[0].value, prjdiffs = d4[0].value, fcattrs = d5[0].value;
-            let thefft = _.find(prjffts, ["fft._id", thefftid]);
-            let fcswithdiff = _.sortBy(_.uniq(_.map(_.map(_.reject(prjdiffs, ["diff", false]), "key"), (x) => { return x.split(".")[0]})));
-            let diffs = _.map(fcswithdiff, (x) => {
-              let fft = _.get(prjffts, x, _.get(oprjffts, x)), fc = _.get(fft, "fft.fc", "N/A"), fg = _.get(fft, "fft.fg", "N/A");
-              return { "fft": x, "fc": fc, "fg": fg, "prj": _.get(prjffts, x, {}), "oprj": _.get(oprjffts, x, {}) } 
-            })
-            let thediffs = _.filter(diffs, [ "fft", thefftid ]);
-            let diffslist = _.reject(_.map(fcattrs, (attr) => { 
-              let mval = _.get(thediffs, "0.prj."+attr["name"]), oval = _.get(thediffs, "0.oprj."+attr["name"]);
-              return { attr: attr, mval: mval, oval: oval, issameornull: ((mval == oval) || _.isNil(oval)) }
-            }), (x) => x["issameornull"]);
-            console.log(diffslist);
-            $("#global_mdl_holder").empty().append(Mustache.render(tmpl, { isdiff: !_.isEmpty(thediffs), myprj: prj["name"], otprj: oprj["name"], fc: thefft["fft"]["fc"], fg: thefft["fft"]["fg"], diffs: diffslist }));
-            sync_diff_post_render("../../", project_id, otherprjid, thefftid, () => window.location.reload());
-            $("#global_mdl_holder").find(".modal").modal("show");
-          })
+          let tmpl = c0[0], projects = c1[0].value; Mustache.parse(tmpl);
+          _.each(projects, function(prj){ if(_.get(prj, "status", "") == "approved") { prj.selected = true;  } });
+          $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Select a Project to Sync to", projects: projects }));
+          $("#global_mdl_holder").find(".modal").modal("show");
+          $("#global_mdl_holder").find(".sbm").on("click", function(){
+            let prjid = $("#global_mdl_holder").find(".syncprj").val();   
+            console.log(prjid)
+            // get requested syncing project in diff view
+            $.when($.ajax("../../static/html/tabs/syncdiff.html"), $.getJSON("../../ws/projects/" + prjid + "/"))
+            .done(function(c0, c1) {
+              let tmpl = c0[0], sync_prj = c1[0].value, otherprjid = sync_prj["_id"];
+              $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
+                $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
+                $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
+              .done(function(d0, d1, d2, d3, d4, d5){
+                let prj = d0[0].value, prjffts = d1[0].value, oprj = d2[0].value, oprjffts = d3[0].value, prjdiffs = d4[0].value, fcattrs = d5[0].value;
+                let thefft = _.find(prjffts, ["fft._id", thefftid]);
+                console.log(thefft);
+                let fcswithdiff = _.sortBy(_.uniq(_.map(_.map(_.reject(prjdiffs, ["diff", false]), "key"), (x) => { return x.split(".")[0]})));
+                console.log(fcswithdiff);
+                let diffs = _.map(fcswithdiff, (x) => {
+                  let fft = _.get(prjffts, x, _.get(oprjffts, x)), fc = _.get(fft, "fft.fc", "N/A"), fg = _.get(fft, "fft.fg", "N/A");
+                  return { "fft": x, "fc": fc, "fg": fg, "prj": _.get(prjffts, x, {}), "oprj": _.get(oprjffts, x, {}) } 
+                })
+                let thediffs = _.filter(diffs, [ "fft", thefftid ]);
+                console.log(thediffs);
+                let diffslist = _.reject(_.map(fcattrs, (attr) => { 
+                  let mval = _.get(thediffs, "0.prj."+attr["name"]), oval = _.get(thediffs, "0.oprj."+attr["name"]);
+                  return { attr: attr, mval: mval, oval: oval, issameornull: ((mval == oval) || _.isNil(oval)) }
+                }), (x) => x["issameornull"]);
+                console.log(diffslist);
+                $("#global_mdl_holder").find(".modal").modal("hide");
+                // Setup the modal to display values, or empty sync error message
+                $("#global_mdl_holder").empty().append(Mustache.render(tmpl, { ismissing: !_.isEmpty(diffslist), isdiff: !_.isEmpty(thediffs), myprj: prj["name"], otprj: oprj["name"], fc: thefft["fft"]["fc"], fg: thefft["fft"]["fg"], diffs: diffslist }));
+                sync_diff_post_render("../../", project_id, otherprjid, thefftid, () => window.location.reload());
+                $("#global_mdl_holder").find(".modal").modal("show");
+              });
+            });
+          });
         })
       }
       let editfn = function () {
@@ -372,7 +391,7 @@
               Mustache.parse(d0);
               $("#global_mdl_holder").empty().append(Mustache.render(d0, {"title": "Project Import Results"}));
               var res = JSON.parse(request.responseText);
-              document.getElementById('import_status').innerHTML=res.status_str.replace(/_/gi, "");
+              document.getElementById('import_status').innerHTML=res.status_str.replaceAll("\n", "<br>");
               $("#global_mdl_holder").find(".modal").modal("show");
               if(!res.log_name){
                 document.getElementById("report_btn").disabled = true;
