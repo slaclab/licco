@@ -15,7 +15,7 @@
 
 <script type="text/javascript">
   $("#apprv_tab").on("lg.loaded.bs.tab", function() {
-    $.when($.getJSON("ws/fcattrs"), $.getJSON("ws/approved"))
+    $.when($.getJSON("ws/fcattrs/"), $.getJSON("ws/approved/"))
     .done(function(d0, d1){
       let fcattrs = d0[0].value, prj = d1[0].value, fcs = _.sortBy(_.map(_.get(prj, "ffts", {}), (v,k) => { return _.defaults({}, v, {"value": k}) }), "nom_loc_z");
       _.each(fcattrs, (v, k) => { $("#apprv_tab").find(".fcstbl thead tr").append("<th>" + v["label"] + "</th>"); })

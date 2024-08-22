@@ -73,7 +73,7 @@
               let tmpl = c0[0], sync_prj = c1[0].value, otherprjid = sync_prj["_id"];
               $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
                 $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
-                $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs"))
+                $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid}), $.getJSON("../../ws/fcattrs/"))
               .done(function(d0, d1, d2, d3, d4, d5){
                 let prj = d0[0].value, prjffts = d1[0].value, oprj = d2[0].value, oprjffts = d3[0].value, prjdiffs = d4[0].value, fcattrs = d5[0].value;
                 let thefft = _.find(prjffts, ["fft._id", thefftid]);
@@ -158,7 +158,7 @@
     let filter = { showallentries : showallentries };
     _.each(["fc", "fg", "state"], (a) => { if(!_.isEmpty(_.get(srchparm, a))) { filter[a] = _.get(srchparm, a); } })
     if(!_.isEmpty(srchparm.asoftimestamp)) { filter["asoftimestamp"] = dayjs(srchparm.asoftimestamp).toISOString(); }
-    $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags"), $.getJSON("../../ws/fcattrs"))
+    $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags/"), $.getJSON("../../ws/fcattrs/"))
     .done(function(d0, d1, d2, d3){
       let prj = d0[0].value, tags=d2[0].value, fcs = _.map(d1[0].value, (v,k) => { return _.defaults({}, v, {"_id": k})  }), fcattrs = d3[0].value;
       $("#prjNav").find(".prjnm").empty().append(prj["name"]);
@@ -261,7 +261,7 @@
   });
 
   $("#toolbar_for_tab").find(".tags").on("click", function() {
-    $.when($.ajax("../../static/html/tabs/choosetag.html"), $.getJSON("../../ws/projects/" + project_id + "/tags"))
+    $.when($.ajax("../../static/html/tabs/choosetag.html"), $.getJSON("../../ws/projects/" + project_id + "/tags/"))
     .done(function(d0, d1) {
       let tmpl=d0[0], tags=d1[0].value; Mustache.parse(tmpl);
       $("#global_mdl_holder").empty().append(Mustache.render(tmpl, { prj: prj, tags: tags }));
@@ -351,7 +351,7 @@
       $("#global_mdl_holder").find(".modal").modal("show");
       $("#global_mdl_holder").find(".sbm").on("click", () => {
         if(!licco_validate_form()) { return false; }
-        window.open("../../ws/projects/" + project_id + "/export", "_blank");
+        window.open("../../ws/projects/" + project_id + "/export/", "_blank");
       });
     });
   });
@@ -379,7 +379,7 @@
 
         document.getElementById("import_sub_btn").disabled = true;
         document.body.style.cursor='progress';
-        var url = "../../ws/projects/" + project_id + "/import";
+        var url = "../../ws/projects/" + project_id + "/import/";
         var request = new XMLHttpRequest();
         request.open('POST', url, true);
         request.onload = function() {
@@ -397,7 +397,7 @@
                 document.getElementById("report_btn").disabled = true;
               }
               $("#global_mdl_holder").find(".sbm").on("click", () => {
-                window.open("../../ws/projects/" + res.log_name + "/download", "_blank");
+                window.open("../../ws/projects/" + res.log_name + "/download/", "_blank");
               });
               $("#global_mdl_holder").find(".cls").on("click", () => {
                 location.reload();

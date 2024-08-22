@@ -10,7 +10,7 @@
 <script type="text/javascript">
   $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/"),
     $.getJSON("../../ws/projects/" + otherprjid + "/"), $.getJSON("../../ws/projects/" + otherprjid + "/ffts/"),
-    $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid, approved: approved}), $.getJSON("../../ws/fcattrs"))
+    $.getJSON("../../ws/projects/"+project_id+"/diff_with", {other_id: otherprjid, approved: approved}), $.getJSON("../../ws/fcattrs/"))
   .done(function(d0, d1, d2, d3, d4, d5){
     let prj = d0[0].value, prjfcs = d1[0].value, oprj = d2[0].value, oprjfcs = d3[0].value, prjdiffs = d4[0].value, fcattrs = d5[0].value;
     let titletmpl = `<span class="prjdifftitle">Difference between <span class="prj">{{prj.name}}</span> and <span class="oprj">{{oprj.name}}</span></span>`; Mustache.parse(titletmpl);

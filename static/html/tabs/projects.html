@@ -48,7 +48,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
       })
       rendered.find(".approve").on("click", function() {
         let prjid = $(this).closest("tr").attr("data-id");
-        $.getJSON("ws/approved")
+        $.getJSON("ws/approved/")
         .done(function(data){
           if(data.success) {
             window.location.assign("projects/" + prjid + "/diff.html?otherprjid="+encodeURIComponent(data["value"]["_id"])+ "&approved=1");
@@ -86,7 +86,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
             if(!licco_validate_form()) { return false; }
             let newprj = _.fromPairs(_.map(["name", "description"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]}));
             console.log(newprj);
-            $.post({url: "ws/projects/" + prjid + "/clone", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
+            $.post({url: "ws/projects/" + prjid + "/clone/", data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
             .done(function(data, textStatus, jqXHR) {
               if(!_.get(data, "success", false)) {
                 $("#global_mdl_holder").find(".errormsg").text(_.get(data, "errormsg", "Server side error")).removeClass("d-none");
@@ -114,7 +114,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           $("#global_mdl_holder").find(".modal").modal("show");
           $("#global_mdl_holder").find(".sbm").on("click", () => {
             if(!licco_validate_form()) { return false; }
-            window.open("ws/projects/" + prjid + "/export", "_blank");
+            window.open("ws/projects/" + prjid + "/export/", "_blank");
           });
         });
       });
@@ -141,7 +141,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           $("#global_mdl_holder").find(".fileuploader")[0].addEventListener("submit", event => {
             document.getElementById("import_sub_btn").disabled = true;
             document.body.style.cursor='progress';
-            var url = "ws/projects/" + prjid + "/import";
+            var url = "ws/projects/" + prjid + "/import/";
             var request = new XMLHttpRequest();
             request.open('POST', url, true);
             request.onload = function() {
@@ -231,7 +231,7 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
     displayProjects();
     $("#toolbar_for_tab").append(`<span class="icn addnewprj"><i class="fa fa-plus fa-lg"></i></span><span class="icn hist"><i class="fa-solid fa-clock-rotate-left fa-lg" title="Show the history of project approvals"></i></span>`);
     $("#toolbar_for_tab").find(".addnewprj").on("click", function(){
-      $.when($.ajax("static/html/tabs/srcnmdsmdl.html"), $.getJSON("ws/approved"))
+      $.when($.ajax("static/html/tabs/srcnmdsmdl.html"), $.getJSON("ws/approved/"))
       .done(function(d0, d1) {
         let tmpl = d0[0], projects = d1[0].value; Mustache.parse(tmpl);
         $("#global_mdl_holder").empty().append(Mustache.render(tmpl, {"title": "Create a New Project", projects: projects }));
@@ -242,9 +242,9 @@ $("#projects_tab").on("lg.loaded.bs.tab", function() {
           let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
           if(prjid != "Blank Project"){
             let prjid = $("#global_mdl_holder").find(".srcprjsel").val();
-            var prjurl = "ws/projects/" + prjid + "/clone";
+            var prjurl = "ws/projects/" + prjid + "/clone/";
           } else {
-            var prjurl = "ws/projects/NewBlankProjectClone/clone";         
+            var prjurl = "ws/projects/NewBlankProjectClone/clone/";         
           }
           console.log(prjurl);
           $.post({url: prjurl, data: JSON.stringify(newprj), contentType: "application/json; charset=utf-8", dataType: "json"})
