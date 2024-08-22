@@ -238,7 +238,7 @@ def svc_get_enum_descriptions(enumName):
     return JSONEncoder().encode({"success": True, "value": {k.value: v for k, v in descs.items()}})
 
 
-@licco_ws_blueprint.route("/fcattrs", methods=["GET"])
+@licco_ws_blueprint.route("/fcattrs/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_fcattrs():
     """
@@ -288,7 +288,7 @@ def svc_get_projects_for_user():
     return JSONEncoder().encode({"success": True, "value": projects})
 
 
-@licco_ws_blueprint.route("/approved", methods=["GET"])
+@licco_ws_blueprint.route("/approved/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_currently_approved_project():
     """ Get the currently approved project """
@@ -810,7 +810,7 @@ def svc_project_diff(prjid):
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": diff})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/clone", methods=["POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/clone/", methods=["POST"])
 @context.security.authentication_required
 def svc_clone_project(prjid):
     """
@@ -830,7 +830,7 @@ def svc_clone_project(prjid):
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/tags", methods=["GET"])
+@licco_ws_blueprint.route("/projects/<prjid>/tags/", methods=["GET"])
 @context.security.authentication_required
 def svc_project_tags(prjid):
     """
