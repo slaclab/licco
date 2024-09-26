@@ -9,6 +9,8 @@ from enum import Enum
 import copy
 import json
 import math
+from typing import Tuple, Dict
+
 import pytz
 import tempfile
 
@@ -123,7 +125,7 @@ def get_fft_name_by_id(fftid):
     fc = licco_db[line_config_db_name]["fcs"].find_one(
         {"_id": fft["fc"]})
     fg = licco_db[line_config_db_name]["fgs"].find_one(
-        {"_id": fft["fg"]}) 
+        {"_id": fft["fg"]})
     return fc["name"], fg["name"]
 
 def get_fft_id_by_names(fc, fg):
@@ -136,7 +138,7 @@ def get_fft_id_by_names(fc, fg):
     fc_obj = licco_db[line_config_db_name]["fcs"].find_one(
         {"name": fc})
     fg_obj = licco_db[line_config_db_name]["fgs"].find_one(
-        {"name": fg}) 
+        {"name": fg})
     fft = licco_db[line_config_db_name]["ffts"].find_one(
         {"fc": ObjectId(fc_obj["_id"]), "fg": ObjectId(fg_obj["_id"])})
     return fft["_id"]
@@ -569,21 +571,30 @@ def get_fcattrs(fromstr=False):
     return fcattrscopy
 
 
-def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None):
+def update_fft_in_project(prjid, fftid, fcupdate, userid,
+                          modification_time=None,
+                          current_project_attributes=None) -> Tuple[bool, str, Dict[str, int]]:
     """
     Update the value(s) of an FFT in a project
+    Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
+    insert_count = {"success": 0, "fail": 0, "ignored": 0}
     prj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", None, None
+        return False, f"Cannot find project for {prjid}", insert_count
     fft = licco_db[line_config_db_name]["ffts"].find_one(
         {"_id": ObjectId(fftid)})
     if not fft:
-        return False, f"Cannot find functional+fungible token for {fftid}", None, None
+        return False, f"Cannot find functional+fungible token for {fftid}", insert_count
 
-    current_attrs = get_project_attributes(
-        licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
+    current_attrs = current_project_attributes
+    if current_attrs is None:
+        # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
+        # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
+        # (cca 150-300 ms per query).
+        current_attrs = get_project_attributes(
+            licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
         modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
@@ -592,23 +603,22 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
         {}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None, None
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_count
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
             if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
-                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", None, None
+                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_count
 
     error_str = ""
     all_inserts = []
     fft_edits = set()
-    insert_count = {"success": 0, "fail": 0, "ignored": 0}
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
-            return False, f"Parameter {attrname} is a required attribute", None, insert_count
+            return False, f"Parameter {attrname} is a required attribute", insert_count
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
@@ -635,19 +645,21 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid, modification_time=None
 
     #If one of the fields is invalid, and we have an error
     if error_str != "":
-        return False, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+        return False, error_str, insert_count
     if all_inserts:
-        logger.debug("Inserting %s documents into the history",
-                     len(all_inserts))
-        insert_count["success"] +=1
-        licco_db[line_config_db_name]["projects_history"].insert_many(
-            all_inserts)
+        logger.debug("Inserting %s documents into the history", len(all_inserts))
+        insert_count["success"] += 1
+        licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
     else:
-        insert_count["ignored"] +=1
+        insert_count["ignored"] += 1
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
         error_str = "No changes detected."
-        return None, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
-    return True, error_str, get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)), insert_count
+        return True, error_str, insert_count
+    return True, error_str, insert_count
+
+
+def query_project_attributes(proj_id):
+    return get_project_attributes(licco_db[line_config_db_name], ObjectId(proj_id))
 
 
 def validate_insert_range(attr, val):
@@ -837,7 +849,7 @@ def get_projects_recent_edit_time():
     projects = licco_db[line_config_db_name]["projects"].find()
     for project in projects:
         most_recent = licco_db[line_config_db_name]["projects_history"].find_one(
-        {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )]) 
+        {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )])
         if not most_recent:
             most_recent = {"_id": "", "time": ""}
         edit_list[project["_id"]] = most_recent
@@ -935,10 +947,10 @@ def clone_project(prjid, name, description, userid, new=False):
     newprj = create_new_project(name, description, userid)
     if not newprj:
         return False, "Created a project but could not get the object from the database", None
-    
+
     if new == True:
         return True, "", newprj
- 
+
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 
     modification_time = newprj["creation_time"]

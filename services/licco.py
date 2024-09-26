@@ -10,11 +10,8 @@ import re
 from io import BytesIO, StringIO
 from datetime import datetime
 import pytz
-import copy
 import tempfile
 from functools import wraps
-from pprint import pprint
-
 import context
 
 from flask import Blueprint, request, Response, send_file, render_template
@@ -24,10 +21,12 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     create_new_functional_component, update_fft_in_project, submit_project_for_approval, approve_project, \
     get_currently_approved_project, diff_project, FCState, clone_project, get_project_changes, \
     get_tags_for_project, add_project_tag, get_all_projects, get_all_users, update_project_details, get_project_by_name, \
-    create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, create_new_fft, \
-    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time
-
+    create_empty_project, reject_project, copy_ffts_from_project, get_fgs, create_new_fungible_token, get_ffts, \
+    create_new_fft, \
+    get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
+    get_fft_values_by_project, \
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
+    line_config_db_name, query_project_attributes
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -98,6 +97,7 @@ def create_imp_msg(fft, status, errormsg=None):
     msg = f"{res}: {fft['fc']}-{fft['fg']} - {errormsg}"
     return msg
 
+
 def update_ffts_in_project(prjid, ffts, def_logger=None):
     """
     Insert multiple FFTs into a project
@@ -111,9 +111,16 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         for entry in ffts:
             new_ffts.append(ffts[entry])
         ffts = new_ffts
+
+    current_attrs = query_project_attributes(prjid)
+
     # Iterate through parameter fft set
     for fft in ffts:
         if "_id" not in fft:
+            # REVIEW: the database layer should return the kind of structure that you
+            # need, so you don't have to fix it everyhwere that structure is used.
+            # That fix should be already in the database layer.
+            #
             # If the fft set comes from the database, unpack the fft ids
             if "fft" in fft:
                 fft["_id"] = fft["fft"]["_id"]
@@ -128,7 +135,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         # previous values
         db_values = get_fft_values_by_project(fft["_id"], prjid)
         fcupdate = {}
-        fcupdate.update(fft)   
+        fcupdate.update(fft)
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
@@ -143,15 +150,23 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
         for attr in ["_id", "name", "fc", "fg", "fft"]:
             if attr in fcupdate:
                 del fcupdate[attr]
-        status, errormsg, prj_fft, results = update_fft_in_project(
-            prjid, fftid, fcupdate, userid)
+
+        # Performance: when updating fft in a project, we used to do hundreds of database calls
+        # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
+        # querying the current project attributes once and passing it to the update routine
+        current_project_attributes = current_attrs.get(str(fftid), {})
+        status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid,
+                                                          current_project_attributes=current_project_attributes)
         # Have smarter error handling here for different exit conditions
         def_logger.info(create_imp_msg(fft, status=status, errormsg=errormsg))
- 
+
         # Add the individual FFT update results into overall count
         if results:
             update_status = {k: update_status[k]+results[k]
                              for k in update_status.keys()}
+
+    # BUG: error message is not declared anywhere, so it will always be None or set to the last value
+    # that comes out of fft update loop
     return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
 
 
@@ -504,11 +519,8 @@ def svc_update_fc_in_project(prjid, fftid):
     status, msg = validate_import_headers(fcupdate, prjid, fftid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
-    status, errormsg, fc, results = update_fft_in_project(
-        prjid, fftid, fcupdate, userid)
-    # No changes were detected
-    if status is None:
-        status = True
+    status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid)
+    fc = query_project_attributes(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
@@ -682,7 +694,7 @@ def svc_import_project(prjid):
     if update_status:
         status_val = {k: update_status[k]+status_val[k]
                             for k in update_status.keys()}
-        
+
     # number of recognized headers minus the id used for DB reference
     status_val["headers"] = len(fcuploads[0].keys())-1
     status_str = create_status_update(prj_name, status_val)
@@ -707,7 +719,7 @@ def svc_download_report(report):
         repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
     except FileNotFoundError:
-        return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None}) 
+        return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None})
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
 @context.security.authentication_required
