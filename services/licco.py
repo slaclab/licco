@@ -9,6 +9,8 @@ import fnmatch
 import re
 from io import BytesIO, StringIO
 from datetime import datetime
+from typing import Tuple, Dict
+
 import pytz
 import tempfile
 from functools import wraps
@@ -98,7 +100,7 @@ def create_imp_msg(fft, status, errormsg=None):
     return msg
 
 
-def update_ffts_in_project(prjid, ffts, def_logger=None):
+def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dict[str, int]]:
     """
     Insert multiple FFTs into a project
     """
@@ -167,7 +169,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None):
 
     # BUG: error message is not declared anywhere, so it will always be None or set to the last value
     # that comes out of fft update loop
-    return True, errormsg, get_project_ffts(prjid, showallentries=True, asoftimestamp=None), update_status
+    return True, errormsg, update_status
 
 
 def validate_import_headers(fft, prjid, fftid=None):
@@ -554,7 +556,8 @@ def svc_update_ffts_in_project(prjid):
     ffts = request.json
     if isinstance(ffts, dict):
         ffts = [ffts]
-    status, errormsg, fft, update_status = update_ffts_in_project(prjid, ffts)
+    status, errormsg, update_status = update_ffts_in_project(prjid, ffts)
+    fft = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 
 
@@ -686,7 +689,7 @@ def svc_import_project(prjid):
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
 
-    status, errormsg, fft, update_status = update_ffts_in_project(
+    status, errormsg, update_status = update_ffts_in_project(
         prjid, fcuploads, imp_log)
 
     # Include imports failed from bad FC/FGs
@@ -784,11 +787,12 @@ def svc_approve_project(prjid):
     else:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
     # merge project in to previously approved project
-    ffts = get_project_ffts(prjid)
-    status, errormsg, ffts, update_status = update_ffts_in_project(approved["_id"], ffts)
+    current_ffts = get_project_ffts(prjid)
+    status, errormsg, update_status = update_ffts_in_project(approved["_id"], current_ffts)
+    updated_ffts = get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
     logger.debug(errormsg)
     logger.debug(update_status)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": ffts})
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": updated_ffts})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
