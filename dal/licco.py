@@ -658,10 +658,6 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     return True, error_str, insert_count
 
 
-def query_project_attributes(proj_id):
-    return get_project_attributes(licco_db[line_config_db_name], ObjectId(proj_id))
-
-
 def validate_insert_range(attr, val):
     """
     Helper function to validate data prior to being saved in DB

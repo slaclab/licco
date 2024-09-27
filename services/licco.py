@@ -27,8 +27,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
-    line_config_db_name, query_project_attributes
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -114,7 +113,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
             new_ffts.append(ffts[entry])
         ffts = new_ffts
 
-    current_attrs = query_project_attributes(prjid)
+    project_ffts = get_project_ffts(prjid)
 
     # Iterate through parameter fft set
     for fft in ffts:
@@ -156,9 +155,9 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
         # Performance: when updating fft in a project, we used to do hundreds of database calls
         # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
         # querying the current project attributes once and passing it to the update routine
-        current_project_attributes = current_attrs.get(str(fftid), {})
+        current_attributes = project_ffts.get(str(fftid), {})
         status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid,
-                                                          current_project_attributes=current_project_attributes)
+                                                          current_project_attributes=current_attributes)
         # Have smarter error handling here for different exit conditions
         def_logger.info(create_imp_msg(fft, status=status, errormsg=errormsg))
 
@@ -522,7 +521,7 @@ def svc_update_fc_in_project(prjid, fftid):
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
     status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid)
-    fc = query_project_attributes(prjid)
+    fc = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
@@ -789,7 +788,7 @@ def svc_approve_project(prjid):
     # merge project in to previously approved project
     current_ffts = get_project_ffts(prjid)
     status, errormsg, update_status = update_ffts_in_project(approved["_id"], current_ffts)
-    updated_ffts = get_project_ffts(prjid, showallentries=True, asoftimestamp=None)
+    updated_ffts = get_project_ffts(prjid)
     logger.debug(errormsg)
     logger.debug(update_status)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": updated_ffts})
