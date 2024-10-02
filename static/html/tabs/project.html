@@ -8,8 +8,23 @@
 </div>
 
 <script type="text/javascript">
-  let showallentries = true, srchparm = { fc: null, fg: null, state: null, asoftimestamp: null }, currfcedit = "", edittoastshown = false;
-  let resetsearchparam = function() { srchparm = { fc: null, fg: null, state: null, asoftimestamp: null } }
+  let showallentries = true;
+  let srchparm = { fc: null, fg: null, state: null, asoftimestamp: null };
+  let currfcedit = "";
+  let edittoastshown = false;
+
+  let resetsearchparam = function () {
+    srchparm = { fc: null, fg: null, state: null, asoftimestamp: null };
+
+    const currentUrl = new URL(window.location);
+    const params = new URLSearchParams(currentUrl);
+    for (const key of Object.keys(srchparm)) {
+      params.delete(key);
+    }
+    const newUrl = `${currentUrl.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
+  }
+
   $("#project_tab").data("cur_sort_attr", "nom_loc_z").data("cur_sort_desc", false);
 
   let showhidetlbrbtns = function() {
