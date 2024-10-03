@@ -3,9 +3,8 @@ import logging
 import os
 import sys
 import json
-import requests
+from flask_cors import CORS
 
-from context import app, licco_db, security
 from pages import pages_blueprint
 from services.licco import licco_ws_blueprint
 from dal.licco import initialize_collections
@@ -15,6 +14,7 @@ __author__ = 'mshankar@slac.stanford.edu'
 
 # Initialize application.
 app = Flask("licco")
+CORS(app, supports_credentials=True)
 # Set the expiration for static files
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300
 
