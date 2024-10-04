@@ -6,6 +6,7 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Tooltip } from "@blueprintjs/core";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ProjectApprovalDialog } from "../project_approval_dialog";
 import { ProjectDeviceDetails, ProjectInfo } from "../project_model";
 
 // a project specific page displays all properties of a specific project 
@@ -19,6 +20,7 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
 
     // dialogs open state
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
 
     // filters to apply
     const [fftStates, setFftStates] = useState<string[]>([]);
@@ -155,7 +157,10 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
                                 </Tooltip>
 
                                 <Tooltip content={"Submit this project for approval"} position="bottom" disabled={isProjectSubmitted}>
-                                    <Button icon="user" minimal={true} small={true} disabled={isProjectSubmitted}></Button>
+                                    <Button icon="user" minimal={true} small={true}
+                                        disabled={isProjectSubmitted}
+                                        onClick={(e) => setIsApprovalDialogOpen(true)}
+                                    />
                                 </Tooltip>
                             </ButtonGroup>
                         </th>
@@ -236,6 +241,17 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
                     setIsFilterDialogOpen(false);
                 }}
             />
+
+            <ProjectApprovalDialog
+                isOpen={isApprovalDialogOpen}
+                projectTitle={projectData?.name || ''}
+                projectId={projectData?._id || ''}
+                onClose={() => setIsApprovalDialogOpen(false)}
+                onSubmit={(projectInfo) => {
+                    setProjectData(projectInfo);
+                    setIsApprovalDialogOpen(false);
+                }}
+            />
         </HtmlPage >
     )
 }
@@ -276,7 +292,7 @@ const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onC
                         onValueChange={(val: string) => setFgFilter(val)} />
                 </FormGroup>
 
-                <FormGroup label="State">
+                <FormGroup label="State:">
                     <HTMLSelect value={stateFilter} options={possibleStates}
                         onChange={(e) => setStateFilter(e.currentTarget.value)}
                         fill={true} iconName="caret-down" />

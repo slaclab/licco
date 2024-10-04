@@ -2,15 +2,8 @@ import { Button, ButtonGroup, Tooltip } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
-import { Fetch } from "../utils/fetching";
+import { Fetch, LiccoRequest } from "../utils/fetching";
 import { ProjectInfo, isProjectSubmitted } from "./project_model";
-
-
-interface ProjectResponse {
-    success: boolean;
-    value: ProjectInfo[];
-}
-
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
@@ -20,7 +13,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
-        Fetch.get<ProjectResponse>("/ws/projects/")
+        Fetch.get<LiccoRequest<ProjectInfo[]>>("/ws/projects/")
             .then((projects) => {
                 for (let p of projects.value) {
                     p.creation_time = new Date(p.creation_time);

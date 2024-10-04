@@ -739,15 +739,15 @@ def submit_project_for_approval(prjid, userid, approver):
     Submit a project for approval.
     Set the status to submitted
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "development":
         return False, f"Project {prjid} is not in development status", None
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "submitted", "submitter": userid, "approver": approver, "submitted_time": datetime.datetime.utcnow()}})
-    return True, "", prj
+    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    return True, "", updated_project_info
 
 
 def approve_project(prjid, userid):

@@ -9,7 +9,7 @@ export interface ProjectInfo {
     edit_time: Date;
     status: string;
     approver?: string;
-    submitted_time?: string;
+    submitted_time?: Date;
     submitter?: string;
 }
 

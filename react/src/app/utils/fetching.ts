@@ -75,19 +75,9 @@ export class Fetch {
         }
 
         // has to be include, otherwise we can't send credentials/cookies 
-        // to a server that is on a different domain 
+        // to a server that is on a different domain
         // (e.g., localhost:9000 instead of localhost:3000)
         // config["credentials"] = "include";
-
-        // handle csrf headers for REST API
-        let addCsrfTokens = false;
-        if (addCsrfTokens) {
-            // see documentation: https://docs.djangoproject.com/en/5.0/howto/csrf/#acquiring-the-token-if-csrf-use-sessions-and-csrf-cookie-httponly-are-false
-            let csrfToken = this.getCookie("csrftoken");
-            if (csrfToken) {
-                config["headers"]["X-CSRFToken"] = csrfToken;
-            }
-        }
 
         let response;
         try {
