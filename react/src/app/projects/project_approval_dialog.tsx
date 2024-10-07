@@ -1,6 +1,6 @@
 import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
-import { Fetch, LiccoRequest } from "../utils/fetching";
+import { Fetch } from "../utils/fetching";
 import { ProjectInfo } from "./project_model";
 
 type projectApprovers = string[];
@@ -13,9 +13,9 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
     const [disableSubmit, setDisableSubmit] = useState(true);
 
     useEffect(() => {
-        Fetch.get<LiccoRequest<projectApprovers>>('/ws/approvers/')
-            .then(data => {
-                let approvers = [DEFAULT_USER, ...data.value];
+        Fetch.get<projectApprovers>('/ws/approvers/')
+            .then(projectApprovers => {
+                let approvers = [DEFAULT_USER, ...projectApprovers];
                 setApprovers(approvers);
             }).catch((e) => {
                 // TODO: handle error message
@@ -42,9 +42,8 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
         }
 
         setSubmittingForm(true);
-        Fetch.post<LiccoRequest<ProjectInfo>>(`/ws/projects/${projectId}/submit_for_approval?approver=${selectedUser}`)
-            .then((data) => {
-                let newProject = data.value;
+        Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval?approver=${selectedUser}`)
+            .then((newProject) => {
                 onSubmit(newProject);
             }).catch((e) => {
                 // TODO: handle error message

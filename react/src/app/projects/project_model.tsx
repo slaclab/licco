@@ -6,7 +6,7 @@ export interface ProjectInfo {
     owner: string;
     editors: string[];
     creation_time: Date;
-    edit_time: Date;
+    edit_time?: Date;
     status: string;
     approver?: string;
     submitted_time?: Date;

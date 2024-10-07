@@ -1,6 +1,10 @@
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export function formatToLiccoDateTime(date: Date): string {
+export function formatToLiccoDateTime(date?: Date): string {
+    if (!date) {
+        return "";
+    }
+
     const day = date.getDate().toString().padStart(2, '0');
     const month = months[date.getMonth()];
     const year = date.getFullYear();

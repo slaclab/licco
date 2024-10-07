@@ -10,9 +10,10 @@ export interface JsonErrorMsg {
     code: number;
 }
 
-export interface LiccoRequest<T> {
+interface LiccoRequest<T> {
     success: boolean;
     value: T;
+    errormsg?: string;
 }
 
 export class Fetch {
@@ -93,8 +94,13 @@ export class Fetch {
 
         if (response.ok) {
             try {
-                let json = await response.json() as T;
-                return new Promise(ok => ok(json))
+                let json = await response.json() as LiccoRequest<T>;
+                if (json.success) {
+                    return new Promise(ok => ok(json.value))
+                }
+                let msg = json.errormsg || `There was an error when making request for ${HOSTNAME}${path}`;
+                let e: JsonErrorMsg = { error: msg, code: response.status }
+                return new Promise((_, err) => err(e));
             } catch (e) {
                 // failed to parse json.
                 let errorMessage = "Failed to parse response to " + HOSTNAME + path + " as JSON";
@@ -107,8 +113,10 @@ export class Fetch {
 
 
         try {
-            let errJson = await response.json();
-            return new Promise((_, errResponse) => errResponse(errJson));
+            let errJson = await response.json() as LiccoRequest<T>;
+            let msg = errJson.errormsg || `There was an error when making a request for ${HOSTNAME}${path}`;
+            let e: JsonErrorMsg = { error: msg, code: response.status }
+            return new Promise((_, err) => err(e));
         } catch (e) {
             // failed to parse response as json
             return new Promise((_, errResponse) => errResponse({ error: response.statusText, code: response.status }));

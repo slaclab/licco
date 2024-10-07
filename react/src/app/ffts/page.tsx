@@ -4,7 +4,7 @@ import { Button } from "@blueprintjs/core";
 import { useQuery } from "@tanstack/react-query";
 import React from "react";
 import { HtmlPage } from "../components/html_page";
-import { Fetch, LiccoRequest } from "../utils/fetching";
+import { Fetch } from "../utils/fetching";
 
 interface FFT {
     _id: string;
@@ -29,8 +29,8 @@ export const FFTOverviewTable: React.FC = () => {
     const { data, error, isLoading } = useQuery({
         queryKey: ["ffts"],
         queryFn: async (): Promise<FFT[]> => {
-            let d = await Fetch.get<LiccoRequest<FFT[]>>("/ws/ffts/")
-            return d.value;
+            let d = await Fetch.get<FFT[]>("/ws/ffts/")
+            return d;
         }
     })
 

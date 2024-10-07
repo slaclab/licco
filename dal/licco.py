@@ -930,7 +930,7 @@ def clone_project(prjid, name, description, userid, new=False):
 
     otr = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if otr:
-        return False, f"Project with {name} already exists", None
+        return False, f"Project with name {name} already exists", None
 
     newprj = create_new_project(name, description, userid)
     if not newprj:

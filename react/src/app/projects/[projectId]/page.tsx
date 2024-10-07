@@ -1,7 +1,7 @@
 'use client';
 
 import { HtmlPage } from "@/app/components/html_page";
-import { Fetch, LiccoRequest } from "@/app/utils/fetching";
+import { Fetch } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Tooltip } from "@blueprintjs/core";
 import { useSearchParams } from "next/navigation";
@@ -32,16 +32,16 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
     useEffect(() => {
         setIsLoading(true);
 
-        Fetch.get<LiccoRequest<ProjectInfo>>(`/ws/projects/${params.projectId}/`)
+        Fetch.get<ProjectInfo>(`/ws/projects/${params.projectId}/`)
             .then(data => {
-                setProjectData(data.value);
+                setProjectData(data);
             }).catch((e) => {
                 console.error("Failed to make a project request");
             });
 
-        Fetch.get<LiccoRequest<Record<string, ProjectDeviceDetails>>>(`/ws/projects/${params.projectId}/ffts/?showallentries=true`)
+        Fetch.get<Record<string, ProjectDeviceDetails>>(`/ws/projects/${params.projectId}/ffts/?showallentries=true`)
             .then((data) => {
-                let devices = Object.values(data.value);
+                let devices = Object.values(data);
                 // TODO: missing device number field is set to "" (empty string):
                 // we should turn it into an null to avoid having problems when formatting it later
                 setFftData(devices);
@@ -109,7 +109,9 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
                 <thead>
                     <tr>
                         <th colSpan={6}>
+                            {!projectData ? <></> : 
                             <ButtonGroup vertical={false}>
+
                                 <span className="me-3">{projectData?.name}</span>
 
                                 <Tooltip content="Download data to this project" position="bottom">
@@ -143,7 +145,7 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
                                 <Divider />
 
                                 <Tooltip content="Create a tag" position="bottom">
-                                    <Button icon="tag" minimal={true} small={true}></Button>
+                                        <Button icon="tag-add" minimal={true} small={true}></Button>
                                 </Tooltip>
 
                                 <Tooltip content="Show assigned tags" position="bottom">
@@ -163,7 +165,9 @@ export default function ProjectSpecificPage({ params }: { params: { projectId: s
                                     />
                                 </Tooltip>
                             </ButtonGroup>
+                            }
                         </th>
+
                         <th colSpan={3}>Nominal Location (meters in LCLS coordinates)</th>
                         <th colSpan={3}>Nominal Dimension (meters)</th>
                         <th colSpan={3}>Nominal Angle (radians)</th>
