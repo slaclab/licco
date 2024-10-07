@@ -8,16 +8,30 @@
 </div>
 
 <script type="text/javascript">
-  let showallentries = true, srchparm = { fc: null, fg: null, state: null, asoftimestamp: null }, currfcedit = "", edittoastshown = false;
-  let resetsearchparam = function() { srchparm = { fc: null, fg: null, state: null, asoftimestamp: null } }
+  let showallentries = true;
+  let srchparm = { fc: null, fg: null, state: null, asoftimestamp: null };
+  let currfcedit = "";
+  let edittoastshown = false;
+
+  let resetsearchparam = function () {
+    srchparm = { fc: null, fg: null, state: null, asoftimestamp: null };
+
+    const currentUrl = new URL(window.location);
+    const params = new URLSearchParams(currentUrl);
+    for (const key of Object.keys(srchparm)) {
+      params.delete(key);
+    }
+    const newUrl = `${currentUrl.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
+  }
+
   $("#project_tab").data("cur_sort_attr", "nom_loc_z").data("cur_sort_desc", false);
 
   let showhidetlbrbtns = function() {
     $("#toolbar_for_tab").find(".tag").toggleClass("d-none", !_.every(_.reject(_.map(srchparm, (v,k) => { return {k: k, v: v} }), ["k", "asoftimestamp"]), (p) => { return _.isEmpty(p.v)}));
   }
 
-  let displayFilters = function(matchingtags) {
-    console.log(matchingtags);
+  let displayFilters = function (matchingtags) {
     if(!showallentries || !_.every(_.values(srchparm), _.isEmpty)) {
       let tmpl = `<div class="filtp">
         <div>Filters are being applied - <span class="text-secondary"><i class="fa-solid fa-broom"></i></span> to clear.</div>
@@ -156,7 +170,24 @@
 
   $("#project_tab").on("lg.loaded.bs.tab", function() {
     let filter = { showallentries : showallentries };
-    _.each(["fc", "fg", "state"], (a) => { if(!_.isEmpty(_.get(srchparm, a))) { filter[a] = _.get(srchparm, a); } })
+    const currentUrl = new URL(window.location);
+    const params = new URLSearchParams(currentUrl.search);
+
+    if (params.size > 0) {
+      for (const [key, val] of params.entries()) {
+        if (_.isEmpty(val)) {
+          continue;
+        }
+        filter[key] = val;
+        if (key in srchparm) {
+          // update the filter state so that filter dialog displays the params in fields
+          srchparm[key] = val;
+        }
+      }
+    } else {
+      _.each(["fc", "fg", "state"], (a) => { if (!_.isEmpty(_.get(srchparm, a))) { filter[a] = _.get(srchparm, a); } })
+    }
+
     if(!_.isEmpty(srchparm.asoftimestamp)) { filter["asoftimestamp"] = dayjs(srchparm.asoftimestamp).toISOString(); }
     $.when($.getJSON("../../ws/projects/" + project_id + "/"), $.getJSON("../../ws/projects/" + project_id + "/ffts/", filter), $.getJSON("../../ws/projects/" + project_id + "/tags/"), $.getJSON("../../ws/fcattrs/"))
     .done(function(d0, d1, d2, d3){
@@ -232,6 +263,19 @@
       $("#global_mdl_holder").find(".modal").modal("show");
       $("#global_mdl_holder").find(".sbm").on("click", function(){
         srchparm = _.defaults({asoftimestamp: null}, _.fromPairs(_.map(["fc", "fg", "state"], function(k){ return [k, $("#global_mdl_holder").find("[name="+k+"]").val()]})));
+
+        const currentUrl = new URL(window.location);
+        const params = new URLSearchParams();
+        for (let [key, val] of Object.entries(srchparm)) {
+          if (_.isEmpty(val)) {
+            continue;
+          }
+          params.set(key, val);
+        }
+
+        const newUrl = `${currentUrl.pathname}?${params.toString()}`;
+        window.history.replaceState(null, '', newUrl);
+
         $("#global_mdl_holder").find(".modal").modal("hide");
         $("#global_mdl_holder").empty();
         $("#project_tab").trigger("lg.loaded.bs.tab");
