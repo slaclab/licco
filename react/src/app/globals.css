@@ -135,3 +135,7 @@ ul {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.error {
+  color: var(--slac-red);
+}

@@ -1,68 +1,80 @@
 import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
-import { Fetch } from "../utils/fetching";
+import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { ProjectInfo } from "./project_model";
 
 type projectApprovers = string[];
 
 export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: string, projectId: string, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, projectTitle, projectId, onClose, onSubmit }) => {
     const DEFAULT_USER = "Please select an approver";
-    const [selectedUser, setSelectedUser] = useState(DEFAULT_USER);
+    const [selectedApprover, setSelectedApprover] = useState(DEFAULT_USER);
     const [approvers, setApprovers] = useState<string[]>([]);
     const [submittingForm, setSubmittingForm] = useState(false);
     const [disableSubmit, setDisableSubmit] = useState(true);
 
-    useEffect(() => {
-        Fetch.get<projectApprovers>('/ws/approvers/')
-            .then(projectApprovers => {
-                let approvers = [DEFAULT_USER, ...projectApprovers];
-                setApprovers(approvers);
-            }).catch((e) => {
-                // TODO: handle error message
-                console.error("ERROR:", e);
-            })
-    }, []);
+    const [dialogErr, setDialogErr] = useState("");
 
     useEffect(() => {
-        const userNotSelected = !selectedUser || selectedUser === DEFAULT_USER;
+        if (isOpen) {
+            Fetch.get<projectApprovers>('/ws/approvers/')
+                .then(projectApprovers => {
+                    let approvers = [DEFAULT_USER, ...projectApprovers];
+                    setApprovers(approvers);
+                }).catch((e) => {
+                    let err = e as JsonErrorMsg;
+                    let msg = `Failed to fetch project approvers: ${err.error}`;
+                    console.error(msg, e);
+                    setDialogErr(msg);
+                })
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        const userNotSelected = !selectedApprover || selectedApprover === DEFAULT_USER;
         const emptyProjectId = !projectId;
         setDisableSubmit(userNotSelected || emptyProjectId);
-    }, [selectedUser, projectId]);
+    }, [selectedApprover, projectId]);
 
 
     const submitApprover = () => {
-        if (!selectedUser || selectedUser == DEFAULT_USER) {
-            // TODO: display an error message
+        if (!selectedApprover || selectedApprover == DEFAULT_USER) {
+            setDialogErr("Please select a valid approver");
             return;
         }
 
         if (!projectId) {
-            // TODO: display an error message
+            // in general this should never happen, if it does we have a bug
+            setDialogErr(`Invalid project id '${projectId}'`);
             return;
         }
 
         setSubmittingForm(true);
-        Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval?approver=${selectedUser}`)
+        Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval?approver=${selectedApprover}`)
             .then((newProject) => {
                 onSubmit(newProject);
+                setDialogErr('');
             }).catch((e) => {
-                // TODO: handle error message
-                console.error("Failed to submit the user for approver: ", e);
+                let err = e as JsonErrorMsg;
+                let msg = `Failed to submit the '${selectedApprover}' for approver: ${err.error}`;
+                setDialogErr(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setSubmittingForm(false);
             });
     }
 
     return (
-        <Dialog onClose={onClose} isOpen={isOpen} title={`Submit for Approval (${projectTitle})`}>
+        <Dialog onClose={onClose} isOpen={isOpen} title={`Submit Project for Approval (${projectTitle})`}>
             <DialogBody>
                 <FormGroup>
                     <HTMLSelect
-                        value={selectedUser}
+                        value={selectedApprover}
                         options={approvers}
-                        onChange={(e) => setSelectedUser(e.target.value)}
+                        onChange={(e) => setSelectedApprover(e.target.value)}
                     />
                 </FormGroup>
+
+                {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
             </DialogBody>
             <DialogFooter actions={
                 <>

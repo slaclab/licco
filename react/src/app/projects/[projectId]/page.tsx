@@ -280,7 +280,7 @@ const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onC
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Apply Filter to Table" autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
-                <FormGroup label="FC:">
+                <FormGroup label="FC:" labelFor="fc-filter">
                     <InputGroup id="fc-filter"
                         placeholder="Use GLOB pattern to filter on FC name"
                         value={fcFilter}
@@ -288,7 +288,7 @@ const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onC
                         onValueChange={(val: string) => setFcFilter(val)} />
                 </FormGroup>
 
-                <FormGroup label="FG:">
+                <FormGroup label="FG:" labelFor="fg-filter">
                     <InputGroup id="fg-filter"
                         placeholder="Use GLOB pattern to filter on FG name"
                         value={fgFilter}
@@ -296,8 +296,9 @@ const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onC
                         onValueChange={(val: string) => setFgFilter(val)} />
                 </FormGroup>
 
-                <FormGroup label="State:">
-                    <HTMLSelect value={stateFilter} options={possibleStates}
+                <FormGroup label="State:" labelFor="state-filter">
+                    <HTMLSelect id="state-filter"
+                        value={stateFilter} options={possibleStates}
                         onChange={(e) => setStateFilter(e.currentTarget.value)}
                         fill={true} iconName="caret-down" />
                 </FormGroup>

@@ -1,9 +1,10 @@
-import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Tooltip } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { ProjectInfo, isProjectSubmitted } from "./project_model";
+import { ProjectApprovalDialog } from "./project_approval_dialog";
+import { ProjectInfo, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
@@ -11,17 +12,16 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [projectDataLoading, setProjectDataLoading] = useState(false);
     const [err, setError] = useState("");
 
-    const [isAddProjectDialogShowing, setIsAddProjectDialogShowing] = useState(false);
+    const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
+    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+    const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
         Fetch.get<ProjectInfo[]>("/ws/projects/")
             .then((projects) => {
                 for (let p of projects) {
-                    p.creation_time = new Date(p.creation_time);
-                    if (p.edit_time) {
-                        p.edit_time = new Date(p.edit_time);
-                    }
+                    projectTransformTimeIntoDates(p);
                 }
                 setProjectData(projects);
             }).catch((e) => {
@@ -43,7 +43,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     const showAddProjectDialog = () => {
-        setIsAddProjectDialogShowing(true);
+        setIsAddProjectDialogOpen(true);
     }
 
     return (
@@ -79,7 +79,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <td>
                                     <ButtonGroup minimal={true}>
                                         <Tooltip content="Compare (diff) with another project" position="bottom">
-                                            <Button icon="comparison" small={true} onClick={(e) => showAddProjectDialog()} />
+                                            <Button icon="comparison" small={true} />
                                         </Tooltip>
 
                                         <Tooltip content="Clone this project" position="bottom">
@@ -93,7 +93,13 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                 </Tooltip>
 
                                                 <Tooltip content="Submit this project for approval" position="bottom">
-                                                    <Button icon="user" minimal={true} small={true} />
+                                                    <Button icon="user"
+                                                        minimal={true} small={true}
+                                                        onClick={(e) => {
+                                                            setSelectedProject(project);
+                                                            setIsApprovalDialogOpen(true);
+                                                        }}
+                                                    />
                                                 </Tooltip>
 
                                                 <Tooltip content="Upload data to this project">
@@ -131,16 +137,34 @@ export const ProjectsOverview: React.FC = ({ }) => {
             }
 
             <AddProjectDialog
-                isOpen={isAddProjectDialogShowing}
-                onClose={() => setIsAddProjectDialogShowing(false)}
+                isOpen={isAddProjectDialogOpen}
+                onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
-                    newProject.creation_time = new Date(newProject.creation_time);
-                    if (newProject.edit_time) {
-                        newProject.edit_time = new Date(newProject.edit_time);
-                    }
+                    projectTransformTimeIntoDates(newProject);
                     let newData = [...projectData, newProject];
                     setProjectData(newData);
-                    setIsAddProjectDialogShowing(false)
+                    setIsAddProjectDialogOpen(false)
+                }}
+            />
+
+            <ProjectApprovalDialog
+                isOpen={isApprovalDialogOpen}
+                projectTitle={selectedProject?.name ?? ''}
+                projectId={selectedProject?._id ?? ''}
+                onClose={() => setIsApprovalDialogOpen(false)}
+                onSubmit={(approvedProject) => {
+                    // replace an existing project with a new one
+                    projectTransformTimeIntoDates(approvedProject);
+                    let updatedProjects = [];
+                    for (let p of projectData) {
+                        if (p._id !== approvedProject._id) {
+                            updatedProjects.push(p);
+                            continue;
+                        }
+                        updatedProjects.push(approvedProject);
+                    }
+                    setProjectData(updatedProjects);
+                    setIsApprovalDialogOpen(false);
                 }}
             />
         </>
@@ -224,17 +248,14 @@ const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, onSubmi
                         onKeyUp={submitOnEnter}
                         onValueChange={(val: string) => setDescription(val)} />
                 </FormGroup>
+                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
             </DialogBody>
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
                     <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting}>Create</Button>
                 </>
-            }>
-                {dialogError ?
-                    <span style={{ "color": Colors.RED1 }}>{dialogError}</span>
-                    : null}
-            </DialogFooter>
+            } />
         </Dialog>
     )
 }

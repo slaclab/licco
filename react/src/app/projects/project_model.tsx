@@ -7,10 +7,20 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: string;
+    status: string; // TODO: state all the possible project statuses
     approver?: string;
     submitted_time?: Date;
     submitter?: string;
+}
+
+export function projectTransformTimeIntoDates(project: ProjectInfo) {
+    project.creation_time = new Date(project.creation_time);
+    if (project.edit_time) {
+        project.edit_time = new Date(project.edit_time);
+    }
+    if (project.submitted_time) {
+        project.submitted_time = new Date(project.submitted_time)
+    }
 }
 
 export function isProjectSubmitted(project?: ProjectInfo): boolean {
