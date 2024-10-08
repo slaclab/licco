@@ -131,6 +131,15 @@ ul {
   top: 0;
 }
 
+.table-nohead thead th {
+  padding: 0;
+}
+
+.table-nobg th,
+.table-nobg td {
+  background-color: transparent;
+}
+
 .text-number {
   text-align: right;
   font-variant-numeric: tabular-nums;

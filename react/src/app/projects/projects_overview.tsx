@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { ProjectApprovalDialog } from "./project_approval_dialog";
-import { ProjectInfo, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
@@ -18,17 +18,14 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
-        Fetch.get<ProjectInfo[]>("/ws/projects/")
+        fetchAllProjects()
             .then((projects) => {
-                for (let p of projects) {
-                    projectTransformTimeIntoDates(p);
-                }
                 setProjectData(projects);
             }).catch((e) => {
                 console.error(e);
-                setError("Failed to load projects data: " + e.message);
-            })
-            .finally(() => {
+                let err = e as JsonErrorMsg;
+                setError("Failed to load projects data: " + err.error);
+            }).finally(() => {
                 setProjectDataLoading(false);
             });
     }

@@ -1,3 +1,4 @@
+import { Fetch } from "../utils/fetching";
 
 export interface ProjectInfo {
     _id: string;
@@ -23,12 +24,25 @@ export function projectTransformTimeIntoDates(project: ProjectInfo) {
     }
 }
 
+// fetch data about all projects
+export async function fetchAllProjects(): Promise<ProjectInfo[]> {
+    const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
+    for (let p of projects) {
+        projectTransformTimeIntoDates(p);
+    }
+    return projects;
+}
+
 export function isProjectSubmitted(project?: ProjectInfo): boolean {
     if (!project) {
         return false;
     }
     return project.status === "submitted";
 }
+export function isProjectApproved(project?: ProjectInfo): boolean {
+    return project?.status === "approved";
+}
+
 
 export interface ProjectDeviceDetails {
     fft: FFT;
@@ -51,4 +65,15 @@ export interface FFT {
     _id: string;
     fc: string;
     fg: string;
+}
+
+export interface FFTDiff {
+    diff: boolean;
+    key: string;
+    my: string | number;  // our project value
+    ot: string | number;  // other's project value
+}
+
+export function fetchProjectDiff(currentProjectId: string, otherProjectId: string): Promise<FFTDiff[]> {
+    return Fetch.get<FFTDiff[]>(`/ws/projects/${currentProjectId}/diff_with?other_id=${otherProjectId}`)
 }
