@@ -99,14 +99,14 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                     />
                                                 </Tooltip>
 
-                                                <Tooltip content="Upload data to this project">
+                                                <Tooltip content="Upload data to this project" position="bottom">
                                                     <Button icon="export" minimal={true} small={true} />
                                                 </Tooltip>
                                             </>
                                             : null
                                         }
 
-                                        <Tooltip content="Download this project">
+                                        <Tooltip content="Download this project" position="bottom">
                                             <Button icon="import" minimal={true} small={true} />
                                         </Tooltip>
 

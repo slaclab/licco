@@ -69,9 +69,23 @@ export interface FFT {
 
 export interface FFTDiff {
     diff: boolean;
-    key: string;
+    key: string;          // <fft_id>.<field_name>
     my: string | number;  // our project value
     ot: string | number;  // other's project value
+}
+
+export function parseFftIdFromFftDiff(diff: FFTDiff): string {
+    let id = diff.key.split(".")[0];
+    return id;
+}
+
+export function parseFftFieldNameFromFftDiff(diff: FFTDiff): string {
+    let [id, ...rest] = diff.key.split(".",);
+    let nameOfField = rest.join(".");
+    if (!nameOfField) {
+        throw new Error(`Invalid diff key ${diff.key}: diff key should consist of "<fft_id>.<key>"`);
+    }
+    return nameOfField;
 }
 
 export function fetchProjectDiff(currentProjectId: string, otherProjectId: string): Promise<FFTDiff[]> {

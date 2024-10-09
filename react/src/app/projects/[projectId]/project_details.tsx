@@ -1,11 +1,11 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
-import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Label, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Checkbox, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Tooltip } from "@blueprintjs/core";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProjectApprovalDialog } from "../project_approval_dialog";
-import { FFT, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetchProjectDiff, isProjectSubmitted } from "../project_model";
+import { FFT, FFTDiff, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
 
 // a project specific page displays all properties of a specific project 
 export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -175,7 +175,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                         <th></th>
                     </tr>
                     <tr>
-                        <th></th>
+                        {isProjectSubmitted ? null : <th></th>}
                         <th>FC  {displayFilterIconInColumn(fcFilter)}</th>
                         <th>Fungible {displayFilterIconInColumn(fgFilter)}</th>
                         <th>TC Part No.</th>
@@ -200,6 +200,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                     {fftDataDisplay.map(device => {
                         return (
                             <tr key={device.fft._id}>
+                                {isProjectSubmitted ? null : 
                                 <td className="text-nowrap">
                                     <Tooltip content={"Edit this FFT"} position="bottom">
                                         <Button minimal={true} small={true} icon={"edit"} />
@@ -214,6 +215,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                                         />
                                     </Tooltip>
                                 </td>
+                                }
                                 <td>{device.fft.fc}</td>
                                 <td>{device.fft.fg}</td>
                                 <td>{device.tc_part_no}</td>
@@ -253,25 +255,39 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                 }}
             />
 
-            <ProjectApprovalDialog
-                isOpen={isApprovalDialogOpen}
-                projectTitle={projectData?.name || ''}
-                projectId={projectData?._id || ''}
-                onClose={() => setIsApprovalDialogOpen(false)}
-                onSubmit={(projectInfo) => {
-                    setProjectData(projectInfo);
-                    setIsApprovalDialogOpen(false);
-                }}
-            />
+            {projectData ? 
+                <ProjectApprovalDialog
+                    isOpen={isApprovalDialogOpen}
+                    projectTitle={projectData.name}
+                    projectId={projectData._id}
+                    onClose={() => setIsApprovalDialogOpen(false)}
+                    onSubmit={(projectInfo) => {
+                        setProjectData(projectInfo);
+                        setIsApprovalDialogOpen(false);
+                    }}
+                />
+                : null}
 
-            {/* <CopyFFTToProject
-                isOpen={isCopyFFTDialogOpen && projectData !== undefined}
-                FFT={currentFFT}
-                currentProject={projectData!}
-                // currentProjectName={projectData?.name || ''}
-                onClose={() => setIsCopyFFTDialogOpen(false)}
-                onSubmit={() => { }}
-            /> */}
+            {projectData ?
+                <CopyFFTToProjectDialog
+                    isOpen={isCopyFFTDialogOpen}
+                    FFT={currentFFT}
+                    currentProject={projectData}
+                    onClose={() => setIsCopyFFTDialogOpen(false)}
+                    onSubmit={(newDeviceDetails) => {
+                        // find current fft and update device details
+                        let updatedData = [];
+                        for (let d of fftData) {
+                            if (d.fft._id != newDeviceDetails.fft._id) {
+                                updatedData.push(d);
+                                continue;
+                            }
+                            updatedData.push(newDeviceDetails);
+                        }
+                        setFftData(updatedData);
+                        setIsCopyFFTDialogOpen(false);
+                    }}
+                /> : null}
         </HtmlPage >
     )
 }
@@ -331,7 +347,7 @@ const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onC
 }
 
 // this dialog is used to copy the fft setting to a different project
-const CopyFFTToProject: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: FFT, onClose: () => void, onSubmit: () => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
+const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: FFT, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
     const DEFAULT_PROJECT = "Please select a project"
     const [availableProjects, setAvailableProjects] = useState<ProjectInfo[]>([]);
     const [projectNames, setProjectNames] = useState<string[]>([DEFAULT_PROJECT]);
@@ -340,7 +356,10 @@ const CopyFFTToProject: React.FC<{ isOpen: boolean, currentProject: ProjectInfo,
     const [dialogErr, setDialogErr] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
+    const [missingFFTOnOtherProject, setMissingFFTOnOtherProject] = useState(false);
+    const [changedFFTs, setChangedFFTs] = useState<FFTDiff[]>([]);
     const [fetchingProjectDiff, setFetchingProjectDiff] = useState(false);
+    const [fftDiffSelection, setFftDiffSelection] = useState<boolean[]>([]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -361,23 +380,19 @@ const CopyFFTToProject: React.FC<{ isOpen: boolean, currentProject: ProjectInfo,
             })
     }, [isOpen]);
 
-    const submit = () => {
-        if (selectedProject === DEFAULT_PROJECT) {
-            setDialogErr("Invalid project selected");
+
+    // query for fft changes between chosen from/to projects
+    useEffect(() => {
+        if (!isOpen) {
             return;
         }
 
-        setSubmitting(true);
-        // TODO: create a request to update 1 fft value
-        setSubmitting(false);
-        onSubmit();
-    }
+        if (selectedProject === DEFAULT_PROJECT) {
+            setChangedFFTs([]);
+            return;
+        }
 
-    // TODO: we should provide abort signal in case of rapid changes
-    const onProjectChange = (newProjectName: string) => {
-        setSelectedProject(newProjectName);
-        let newProject = availableProjects.filter(p => p.name === newProjectName)[0];
-
+        let newProject = availableProjects.filter(p => p.name === selectedProject)[0];
         // query if there is any change between fft of selected project 
         // and fft of a new project 
         // 
@@ -385,18 +400,170 @@ const CopyFFTToProject: React.FC<{ isOpen: boolean, currentProject: ProjectInfo,
         setFetchingProjectDiff(true);
         fetchProjectDiff(currentProject._id, newProject._id)
             .then(diff => {
-                console.log("DIFF:", diff);
+                let diffsToShow = diff.filter(d => d.diff === true && parseFftIdFromFftDiff(d) === FFT._id);
+
+                // it's possible that the other project does not have this fftid; the backend does not
+                // throw an error in this case, and we have to handle this case manually. 
+                // It only happens if one of the names of fft field starts with "fft.<_id>|<fc>|<fg>"
+                let otherProjectDoesNotHaveFFT = diffsToShow.some(obj => parseFftFieldNameFromFftDiff(obj).startsWith("fft."))
+                if (otherProjectDoesNotHaveFFT) {
+                    setMissingFFTOnOtherProject(true);
+                    setChangedFFTs([]);
+                    setDialogErr("");
+                    return;
+                }
+
+                setMissingFFTOnOtherProject(false);
+                setChangedFFTs(diffsToShow);
+                setDialogErr("");
             }).catch(err => {
                 console.error("Failed to fetch project diff: ", err);
+                let e = err as JsonErrorMsg;
+                setDialogErr("Failed to fetch project diff: " + e.error);
             }).finally(() => {
                 setFetchingProjectDiff(false);
             })
+    }, [selectedProject, FFT, isOpen])
+
+    // clear the checkboxes whenever fft diff changes
+    useEffect(() => {
+        let changed = changedFFTs.map(f => false);
+        setFftDiffSelection(changed);
+    }, [changedFFTs])
+
+    const numOfFFTChanges = useMemo(() => {
+        let count = 0;
+        for (let selected of fftDiffSelection) {
+            if (selected) {
+                count++;
+            }
+        }
+        return count
+    }, [fftDiffSelection]);
+
+
+    // button submit action
+    const submit = () => {
+        if (selectedProject === DEFAULT_PROJECT) {
+            setDialogErr("Invalid project selected");
+            return;
+        }
+
+        if (changedFFTs.length == 0) {
+            // this should never happen
+            setDialogErr("Can't copy from unknown changed ffts: this is a programming bug");
+            return;
+        }
+
+        setSubmitting(true);
+
+        const project = availableProjects.filter(p => p.name == selectedProject)[0];
+        const projectIdToCopyFrom = project._id;
+        const attributeNames = changedFFTs.filter((f, i) => {
+            if (fftDiffSelection[i]) {
+                // this field/value was selected for copying by the end user via a checkbox
+                return true;
+            }
+            return false;
+        }).map(diff => parseFftFieldNameFromFftDiff(diff));
+        let data = { 'other_id': projectIdToCopyFrom, 'attrnames': attributeNames }
+
+        const projectIdToCopyTo = currentProject._id;
+        const fftIdToCopyTo = FFT._id;
+        Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
+            { body: JSON.stringify(data) }
+        ).then(updatedDeviceData => {
+            onSubmit(updatedDeviceData);
+        }).catch((err) => {
+            let e = err as JsonErrorMsg;
+            let msg = `Failed to copy fft changes of ${FFT.fc}-${FFT.fg}: ${e.error}`;
+            console.error(msg, err);
+            setDialogErr(msg);
+        }).finally(() => {
+            setSubmitting(false);
+        })
+    }
+
+    const allChangesAreSelected = numOfFFTChanges == fftDiffSelection.length;
+
+    // render fft diff table
+    const renderDiffTable = () => {
+        if (selectedProject === DEFAULT_PROJECT) {
+            return <NonIdealState icon={"search"} title="No Project Selected" description={"Please select a project"} />
+        }
+
+        if (fetchingProjectDiff) {
+            return <NonIdealState icon={<Spinner />} title="Loading" description={'Please Wait'} />
+        }
+
+        if (missingFFTOnOtherProject) {
+            return <NonIdealState icon={'warning-sign'} title="Missing FFT" description={`${FFT.fc}-${FFT.fg} does not exist on selected project ${selectedProject}`} />
+        }
+
+        if (changedFFTs.length == 0) {
+            // there is no fft difference between projects
+            return <NonIdealState icon={"clean"} title="No Changes" description={"All FFT values are equal between compared projects"} />
+        }
+
+        return (
+            <>
+                <h6>FFT Value Changes:</h6>
+                <table className="table table-bordered table-striped table-sm">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Current Value</th>
+                            <th></th>
+                            <th>New Value</th>
+                            <th>
+                                <Checkbox className="table-checkbox"
+                                    checked={allChangesAreSelected}
+                                    onChange={(e) => {
+                                        if (allChangesAreSelected) {
+                                            let unselectAll = fftDiffSelection.map(_ => false);
+                                            setFftDiffSelection(unselectAll);
+                                        } else {
+                                            let selectAll = fftDiffSelection.map(_ => true);
+                                            setFftDiffSelection(selectAll);
+                                        }
+                                    }
+                                    } />
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {changedFFTs.map((change, i) => {
+                            return (<tr key={change.key}>
+                                <td>{parseFftFieldNameFromFftDiff(change)}</td>
+                                <td>{change.my}</td>
+                                <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
+                                <td>{change.ot}</td>
+                                <td>
+                                    {/* note: leave the comparison === true, otherwise the React will complain about controlled
+                                and uncontrolled components. I think this is a bug in the library and not the issue with our code,
+                                since our usage of controlled component is correct here */}
+                                    <Checkbox className="table-checkbox"
+                                        checked={fftDiffSelection[i] === true} value={''}
+                                        onChange={(e) => {
+                                            let newSelection = [...fftDiffSelection];
+                                            newSelection[i] = !fftDiffSelection[i];
+                                            setFftDiffSelection(newSelection);
+                                        }
+                                        } />
+                                </td>
+                            </tr>)
+                        })
+                        }
+                    </tbody>
+                </table>
+            </>
+        )
     }
 
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title={`Copy FFT Values to "${currentProject.name}"`} autoFocus={true} >
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Copy FFT Changes to "${currentProject.name}"`} autoFocus={true} style={{ width: "45rem" }}>
             <DialogBody useOverflowScrollContainer>
-                <table className="table table-sm table-borderless table-nohead table-nobg m-0">
+                <table className="table table-sm table-borderless table-nohead table-nobg m-0 mb-2">
                     <thead>
                         <tr>
                             <th></th>
@@ -409,30 +576,35 @@ const CopyFFTToProject: React.FC<{ isOpen: boolean, currentProject: ProjectInfo,
                             <td>{FFT.fc}-{FFT.fg}</td>
                         </tr>
                         <tr>
-                            <td><Label className="text-nowrap text-end mb-1" htmlFor="project-select">Copy From:</Label></td>
+                            <td><Label className="text-nowrap text-end mb-1" htmlFor="project-select">Copy From Project:</Label></td>
                             <td>
                                 <HTMLSelect id="project-select"
                                     value={selectedProject}
                                     options={projectNames}
-                                    onChange={(e) => onProjectChange(e.currentTarget.value)}
+                                    onChange={(e) => setSelectedProject(e.currentTarget.value)}
+                                    disabled={fetchingProjectDiff}
                                     fill={false} iconName="caret-down" />
                             </td>
                         </tr>
                         <tr>
-                            <td><Label className="text-end mb-1">Copy To:</Label></td>
+                            <td><Label className="text-end mb-1">Copy To Project:</Label></td>
                             <td>{currentProject.name}</td>
                         </tr>
                     </tbody>
                 </table>
 
-                {dialogErr ? <p className="error">{dialogErr}</p> : null}
+                <hr />
+
+                {renderDiffTable()}
+
             </DialogBody>
             <DialogFooter actions={
                 <>
-                    <Button onClick={onClose}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={submitting} disabled={selectedProject === DEFAULT_PROJECT}>Copy FFT to {currentProject.name}</Button>
+                    <Button onClick={onClose}>Close</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={submitting} disabled={selectedProject === DEFAULT_PROJECT || numOfFFTChanges === 0}>Copy {numOfFFTChanges} {numOfFFTChanges == 1 ? "Change" : "Changes"} to {currentProject.name}</Button>
                 </>
             }>
+                {dialogErr ? <span className="error">ERROR: {dialogErr}</span> : null}
             </DialogFooter>
         </Dialog >
     )

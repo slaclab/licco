@@ -693,11 +693,11 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     srcprj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(srcprjid)})
     if not srcprj:
-        return False, f"Cannot find project for {srcprj}", None
+        return False, f"Cannot find source project {srcprj}", None
     destprj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(destprjid)})
     if not destprj:
-        return False, f"Cannot find project for {destprjid}", None
+        return False, f"Cannot find destination project {destprjid}", None
     fft = licco_db[line_config_db_name]["ffts"].find_one(
         {"_id": ObjectId(fftid)})
     if not fft:

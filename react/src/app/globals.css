@@ -140,6 +140,10 @@ ul {
   background-color: transparent;
 }
 
+label.table-checkbox {
+  margin: 0 !important;
+}
+
 .text-number {
   text-align: right;
   font-variant-numeric: tabular-nums;
