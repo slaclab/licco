@@ -693,11 +693,11 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     srcprj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(srcprjid)})
     if not srcprj:
-        return False, f"Cannot find project for {srcprj}", None
+        return False, f"Cannot find source project {srcprj}", None
     destprj = licco_db[line_config_db_name]["projects"].find_one(
         {"_id": ObjectId(destprjid)})
     if not destprj:
-        return False, f"Cannot find project for {destprjid}", None
+        return False, f"Cannot find destination project {destprjid}", None
     fft = licco_db[line_config_db_name]["ffts"].find_one(
         {"_id": ObjectId(fftid)})
     if not fft:
@@ -747,15 +747,15 @@ def submit_project_for_approval(prjid, userid, approver):
     Submit a project for approval.
     Set the status to submitted
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "development":
         return False, f"Project {prjid} is not in development status", None
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "submitted", "submitter": userid, "approver": approver, "submitted_time": datetime.datetime.utcnow()}})
-    return True, "", prj
+    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    return True, "", updated_project_info
 
 
 def approve_project(prjid, userid):
@@ -938,7 +938,7 @@ def clone_project(prjid, name, description, userid, new=False):
 
     otr = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if otr:
-        return False, f"Project with {name} already exists", None
+        return False, f"Project with name {name} already exists", None
 
     newprj = create_new_project(name, description, userid)
     if not newprj:
