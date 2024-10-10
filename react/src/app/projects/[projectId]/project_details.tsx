@@ -146,7 +146,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
             <table className="table table-bordered table-sm table-sticky table-striped table-sticky">
                 <thead>
                     <tr>
-                        <th colSpan={5}>
+                        <th colSpan={6}>
                             {!projectData ? <></> :
                                 <ButtonGroup vertical={false}>
 
