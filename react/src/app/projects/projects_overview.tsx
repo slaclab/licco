@@ -10,7 +10,7 @@ import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTime
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
-    const [projectDataLoading, setProjectDataLoading] = useState(false);
+    const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
 
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);

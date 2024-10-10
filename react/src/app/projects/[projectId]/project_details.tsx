@@ -9,11 +9,14 @@ import { FFT, FFTDiff, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetc
 
 // a project specific page displays all properties of a specific project 
 export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+    // page and url info
     const router = useRouter();
     const pathName = usePathname();
     const queryParams = useSearchParams();
 
+    // data and loading
     const [isLoading, setIsLoading] = useState(false);
+    const [fftDataLoadingError, setFftDataLoadingError] = useState('');
     const [projectData, setProjectData] = useState<ProjectInfo>();
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
@@ -25,12 +28,33 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     const [currentFFT, setCurrentFFT] = useState<FFT>({ _id: "", fc: "", fg: "" });
 
     // filters to apply
-    const [fftStates, setFftStates] = useState<string[]>([]);
     const [fcFilter, setFcFilter] = useState("");
     const [fgFilter, setFgFilter] = useState("");
+    const [fftStates, setFftStates] = useState<string[]>([]);
     const [stateFilter, setStateFilter] = useState("");
+    const [showFFTSinceCreationFilter, setShowFFTSinceCreationFilter] = useState(false);
 
-    // load project data
+    const loadFFTData = (projectId: string, showAllEntries: boolean = true): Promise<void | ProjectDeviceDetails[]> => {
+        setIsLoading(true);
+        setFftDataLoadingError('');
+        return Fetch.get<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/?showallentries=${showAllEntries}`)
+            .then((data) => {
+                // TODO: missing device number field is set to "" (empty string):
+                // we should turn it into an null to avoid having problems when formatting it later
+                let devices = Object.values(data);
+                setFftData(devices);
+                return devices;
+            }).catch((e) => {
+                console.error("Failed to load device data:", e);
+                let err = e as JsonErrorMsg;
+                let msg = `Failed to load device data: ${err.error}`;
+                setFftDataLoadingError(msg);
+            }).finally(() => {
+                setIsLoading(false);
+            });
+    }
+
+    // load project data on load
     useEffect(() => {
         setIsLoading(true);
         {
@@ -47,18 +71,8 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                 console.error("Failed to make a project request");
             });
 
-        Fetch.get<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/?showallentries=true`)
-            .then((data) => {
-                let devices = Object.values(data);
-                // TODO: missing device number field is set to "" (empty string):
-                // we should turn it into an null to avoid having problems when formatting it later
-                setFftData(devices);
-            }).catch((e) => {
-                console.error(e);
-                console.error("Error while fetching data: ", e);
-            }).finally(() => {
-                setIsLoading(false);
-            });
+        let showAllEntries = true;
+        loadFFTData(projectId, showAllEntries);
     }, []);
 
     // get unique fft states for filter dialog
@@ -123,14 +137,16 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
 
     const isProjectSubmitted = projectData?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" || showFFTSinceCreationFilter;
 
     return (
         <HtmlPage>
+            {fftDataLoadingError ? <NonIdealState className="mb-4 mt-4" icon="error" title="Error" description={fftDataLoadingError} /> : null}
+
             <table className="table table-bordered table-sm table-sticky table-striped table-sticky">
                 <thead>
                     <tr>
-                        <th colSpan={6}>
+                        <th colSpan={5}>
                             {!projectData ? <></> :
                                 <ButtonGroup vertical={false}>
 
@@ -156,13 +172,27 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                                                 setFcFilter('')
                                                 setFgFilter('');
                                                 setStateFilter('');
+                                                setShowFFTSinceCreationFilter(false);
                                                 updateQueryParams('', '', '');
                                             }}
                                         />
                                     </Tooltip>
 
                                     <Tooltip content="Show only FCs with changes after the project was created" position="bottom">
-                                        <Button icon="filter-open" minimal={true} small={true}></Button>
+                                        <Button icon="filter-open" minimal={true} small={true} intent={showFFTSinceCreationFilter ? "warning" : "none"}
+                                            onClick={(e) => {
+                                                if (showFFTSinceCreationFilter) {
+                                                    // filter is applied, therefore we have to toggle it off and show all entries
+                                                    loadFFTData(projectId, true);
+                                                } else {
+                                                    // filter is not applied, therefore we have to display changes after project was created
+                                                    loadFFTData(projectId, false);
+                                                }
+
+                                                // toggle the filter flag 
+                                                setShowFFTSinceCreationFilter(show => !show);
+                                            }}
+                                        ></Button>
                                     </Tooltip>
 
                                     <Divider />
@@ -191,9 +221,9 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                             }
                         </th>
 
-                        <th colSpan={3}>Nominal Location (meters in LCLS coordinates)</th>
-                        <th colSpan={3}>Nominal Dimension (meters)</th>
-                        <th colSpan={3}>Nominal Angle (radians)</th>
+                        <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
+                        <th colSpan={3} className="text-center">Nominal Dimension (meters)</th>
+                        <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
                         <th></th>
                     </tr>
                     <tr>
