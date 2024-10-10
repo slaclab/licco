@@ -2,16 +2,18 @@ import { HtmlPage } from "@/app/components/html_page";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Button, ButtonGroup, Checkbox, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Tooltip } from "@blueprintjs/core";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ProjectApprovalDialog } from "../project_approval_dialog";
 import { FFT, FFTDiff, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
 
 // a project specific page displays all properties of a specific project 
 export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+    const router = useRouter();
+    const pathName = usePathname();
     const queryParams = useSearchParams();
-    const [isLoading, setIsLoading] = useState(false);
 
+    const [isLoading, setIsLoading] = useState(false);
     const [projectData, setProjectData] = useState<ProjectInfo>();
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
@@ -30,8 +32,13 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
     // load project data
     useEffect(() => {
-        console.log(queryParams);
         setIsLoading(true);
+        {
+            // set filters based on query params
+            setFcFilter(queryParams.get("fc") ?? "");
+            setFgFilter(queryParams.get("fg") ?? "");
+            setStateFilter(queryParams.get("state") ?? "");
+        }
 
         Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
             .then(data => {
@@ -100,6 +107,20 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         return <Icon icon="filter" color={Colors.RED2} className="ms-1" />
     }
 
+    const updateQueryParams = (fcFilter: string, fgFilter: string, stateFilter: string) => {
+        const params = new URLSearchParams();
+        if (fcFilter) {
+            params.set("fc", fcFilter);
+        }
+        if (fgFilter) {
+            params.set("fg", fgFilter);
+        }
+        if (stateFilter) {
+            params.set("state", stateFilter);
+        }
+        router.replace(`${pathName}?${params.toString()}`)
+    }
+
 
     const isProjectSubmitted = projectData?.status === "submitted";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
@@ -135,6 +156,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                                                 setFcFilter('')
                                                 setFgFilter('');
                                                 setStateFilter('');
+                                                updateQueryParams('', '', '');
                                             }}
                                         />
                                     </Tooltip>
@@ -251,9 +273,15 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                     setFgFilter(newFgFilter);
                     newStateFilter = newStateFilter.startsWith("---") ? "" : newStateFilter;
                     setStateFilter(newStateFilter);
+                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter);
                     setIsFilterDialogOpen(false);
                 }}
             />
+
+            {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
+                <NonIdealState icon="filter" title="No FFTs Found" description="Try changing your filters"></NonIdealState>
+                : null
+            }
 
             {projectData ? 
                 <ProjectApprovalDialog

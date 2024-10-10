@@ -1,6 +1,7 @@
 import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Tooltip } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
+import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { ProjectApprovalDialog } from "./project_approval_dialog";
@@ -36,7 +37,11 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
 
     if (err) {
-        return <p>{err}</p>
+        return (
+            <Container className="mt-4">
+                <NonIdealState icon="error" title="Error" description={err} />
+            </Container>
+        )
     }
 
     const showAddProjectDialog = () => {
@@ -126,7 +131,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
             </table>
             </div>
 
-            {!projectDataLoading && err != "" && projectData.length == 0 ?
+            {!projectDataLoading && projectData.length == 0 ?
                 <NonIdealState icon="search" title="No Projects Found" description="There are no projects to display. Try adding a new project by clicking on the button below">
                     <Button icon="plus" onClick={(e) => showAddProjectDialog()}>Add Project</Button>
                 </NonIdealState>
