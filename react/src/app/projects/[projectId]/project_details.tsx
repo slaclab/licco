@@ -1,11 +1,11 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
-import { Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput, Tooltip } from "@blueprintjs/core";
+import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
 import { ProjectApprovalDialog } from "../project_approval_dialog";
-import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
 import { CopyFFTToProjectDialog, FilterFFTDialog } from "./project_dialogs";
 
 
@@ -163,71 +163,51 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
                                         <span className="me-3">{projectData?.name}</span>
 
-                                        <Tooltip content="Download data to this project" position="bottom">
-                                            <Button icon="import" minimal={true} small={true}></Button>
-                                        </Tooltip>
-
-                                        <Tooltip content="Upload data to this project" position="bottom">
-                                            <Button icon="export" minimal={true} small={true}></Button>
-                                        </Tooltip>
+                                        <Button icon="import" title="Download data to this project" minimal={true} small={true} />
+                                        <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
 
                                         <Divider />
 
-                                        <Tooltip content="Filter FFTs" position="bottom">
-                                            <Button icon="filter" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)}></Button>
-                                        </Tooltip>
+                                        <Button icon="filter" title="Filter FFTs" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)} />
 
-                                        <Tooltip content={"Clear filters to show all FFTs"} position="bottom" disabled={!isFilterApplied}>
-                                            <Button icon="filter-remove" minimal={true} small={true} disabled={!isFilterApplied}
-                                                onClick={(e) => {
-                                                    setFcFilter('')
-                                                    setFgFilter('');
-                                                    setStateFilter('');
-                                                    setShowFftSinceCreationFilter(false);
-                                                    updateQueryParams('', '', '');
-                                                }}
-                                            />
-                                        </Tooltip>
+                                        <Button icon="filter-remove" title="Clear filters to show all FFTs" minimal={true} small={true} disabled={!isFilterApplied}
+                                            onClick={(e) => {
+                                                setFcFilter('')
+                                                setFgFilter('');
+                                                setStateFilter('');
+                                                setShowFftSinceCreationFilter(false);
+                                                updateQueryParams('', '', '');
+                                            }}
+                                        />
 
-                                        <Tooltip content="Show only FCs with changes after the project was created" position="bottom">
-                                            <Button icon="filter-open" minimal={true} small={true} intent={showFftSinceCreationFilter ? "warning" : "none"}
-                                                onClick={(e) => {
-                                                    if (showFftSinceCreationFilter) {
-                                                        // filter is applied, therefore we have to toggle it off and show all entries
-                                                        loadFFTData(projectId, true);
-                                                    } else {
-                                                        // filter is not applied, therefore we have to display changes after project was created
-                                                        loadFFTData(projectId, false);
-                                                    }
+                                        <Button icon="filter-open" minimal={true} small={true} intent={showFftSinceCreationFilter ? "warning" : "none"}
+                                            title="Show only FCs with changes after the project was created"
+                                            onClick={(e) => {
+                                                if (showFftSinceCreationFilter) {
+                                                    // filter is applied, therefore we have to toggle it off and show all entries
+                                                    loadFFTData(projectId, true);
+                                                } else {
+                                                    // filter is not applied, therefore we have to display changes after project was created
+                                                    loadFFTData(projectId, false);
+                                                }
 
-                                                    // toggle the filter flag 
-                                                    setShowFftSinceCreationFilter(show => !show);
-                                                }}
-                                            ></Button>
-                                        </Tooltip>
+                                                // toggle the filter flag 
+                                                setShowFftSinceCreationFilter(show => !show);
+                                            }}
+                                        />
 
                                         <Divider />
 
-                                        <Tooltip content="Create a tag" position="bottom">
-                                            <Button icon="tag-add" minimal={true} small={true}></Button>
-                                        </Tooltip>
-
-                                        <Tooltip content="Show assigned tags" position="bottom">
-                                            <Button icon="tags" minimal={true} small={true}></Button>
-                                        </Tooltip>
+                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true} />
+                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true} />
 
                                         <Divider />
 
-                                        <Tooltip content="Show the history of changes" position="bottom">
-                                            <Button icon="history" minimal={true} small={true}></Button>
-                                        </Tooltip>
-
-                                        <Tooltip content={"Submit this project for approval"} position="bottom" disabled={isProjectSubmitted}>
-                                            <Button icon="user" minimal={true} small={true}
-                                                disabled={isProjectSubmitted}
-                                                onClick={(e) => setIsApprovalDialogOpen(true)}
-                                            />
-                                        </Tooltip>
+                                        <Button icon="history" title="Show the history of changes" minimal={true} small={true} />
+                                        <Button icon="user" title="Submit this project for approval" minimal={true} small={true}
+                                            disabled={isProjectSubmitted}
+                                            onClick={(e) => setIsApprovalDialogOpen(true)}
+                                        />
                                     </ButtonGroup>
                                 }
                             </th>
@@ -281,8 +261,16 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                                         return;
                                     }
 
-                                    // Do something with the updated device data, trigger an update
-                                    console.log("==== UPDATED DEVICE DATA: ", updatedDeviceData);
+                                    // update existing fft data
+                                    let newDeviceData = [];
+                                    for (let d of fftData) {
+                                        if (d.fft._id != updatedDeviceData.fft._id) {
+                                            newDeviceData.push(d);
+                                            continue
+                                        }
+                                        newDeviceData.push(updatedDeviceData);
+                                    }
+                                    setFftData(newDeviceData);
                                     setEditedDevice(undefined);
                                 }}
                             />
@@ -361,16 +349,12 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
             <tr className={disabled ? 'table-disabled' : ''}>
                 {isProjectSubmitted(project) ? null :
                     <td className="text-nowrap">
-                        <Tooltip content={"Edit this FFT"} position="bottom">
-                            <Button icon="edit" minimal={true} small={true}
-                                onClick={(e) => onEdit(device)}
-                            />
-                        </Tooltip>
-                        <Tooltip content={"Copy over the value from the currently approved project"} position="bottom">
-                            <Button icon="refresh" minimal={true} small={true}
-                                onClick={(e) => onCopyFft(device)}
-                            />
-                        </Tooltip>
+                        <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
+                            onClick={(e) => onEdit(device)}
+                        />
+                        <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
+                            onClick={(e) => onCopyFft(device)}
+                        />
                     </td>
                 }
 
@@ -400,6 +384,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
 }
 
 
+
 const DeviceDataEditTableRow: React.FC<{
     project?: ProjectInfo,
     device: ProjectDeviceDetails,
@@ -419,6 +404,9 @@ const DeviceDataEditTableRow: React.FC<{
     const [editAngX, setEditAngX] = useState<string>();
     const [editAngY, setEditAngY] = useState<string>();
     const [editMustRayTrace, setEditMustRayTrace] = useState<number>();
+
+    const [editError, setEditError] = useState('');
+    const [isSubmitting, setSubmitting] = useState<boolean>(false);
 
     useEffect(() => {
         setEditTcPartNo(device.tc_part_no);
@@ -453,10 +441,12 @@ const DeviceDataEditTableRow: React.FC<{
         return num;
     }
 
-    const constructDevice = (): ProjectDeviceDetails => {
+    const createDeviceWithChanges = (): ProjectDeviceDetails => {
         let copyDevice = structuredClone(device);
         copyDevice.tc_part_no = editTcPartNo || '';
         copyDevice.comments = editComments;
+
+        copyDevice.state = editState;
 
         copyDevice.nom_loc_x = numberOrDefault(editLocX, undefined);
         copyDevice.nom_loc_y = numberOrDefault(editLocY, undefined);
@@ -515,17 +505,67 @@ const DeviceDataEditTableRow: React.FC<{
         return availableFftStates.map(s => s.name);
     }, [availableFftStates])
 
+    const submitChanges = () => {
+        let deviceWithChanges = createDeviceWithChanges();
+
+        // find changes that have to be synced with backend
+        // later on, we may have to add a user comment to each of those changes
+        let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
+        fieldNames = fieldNames.filter(field => field != "fft");
+        let changes: Record<string, any> = {};
+        for (let field of fieldNames) {
+            if (deviceWithChanges[field] !== device[field]) { // this field has changed
+                if (field == "state") {
+                    // we have to transform the state from what's displayed into an enum that
+                    // a backend understands, hence this transformation
+                    changes[field] = DeviceState.fromString(deviceWithChanges[field]).backendEnumName;
+                    continue;
+                }
+                changes[field] = deviceWithChanges[field];
+            }
+        }
+
+        if (changes.length == 0) {
+            // nothing to sync 
+            return;
+        }
+
+        if (!project) {
+            // this should never happen
+            let msg = "Project that we want to sync our changes to does not exist: this is a programming bug that should never happen";
+            console.error(msg);
+            setEditError(msg)
+            return;
+        }
+
+        setSubmitting(true);
+        syncDeviceUserChanges(project._id, deviceWithChanges.fft._id, changes)
+            .then((response) => {
+                // TODO: for some reason server returns data for all devices again
+                // when we don't really need it. We just update our changed device
+                onEditDone(deviceWithChanges, "ok");
+            }).catch((e) => {
+                let err = e as JsonErrorMsg;
+                let msg = `Failed to sync user device changes: ${err.error}`;
+                console.error(msg, e);
+                setEditError(msg);
+            }).finally(() => {
+                setSubmitting(false);
+            })
+    }
+
     return (
         <tr>
             {isProjectSubmitted(project) ? null :
                 <td className="text-nowrap">
-                    <Button icon="tick" minimal={true} small={true} title="Submit your edits"
+                    <Button icon="tick" minimal={true} small={true} loading={isSubmitting}
+                        title="Submit your edits"
                         disabled={!allFieldsAreValid}
-                        onClick={(e) => onEditDone(constructDevice(), "ok")}
+                        onClick={(e) => submitChanges()}
                     />
 
                     <Button icon="cross" minimal={true} small={true} title="Discard your edits"
-                        onClick={(e) => onEditDone(constructDevice(), "cancel")}
+                        onClick={(e) => onEditDone(createDeviceWithChanges(), "cancel")}
                     />
                 </td>
             }
@@ -568,11 +608,24 @@ const DeviceDataEditTableRow: React.FC<{
                                     }
                                 }
                             }
-                        }
+                            }
                         />
                     </td>
                 )
             })
+            }
+
+            {editError ?
+                <Alert
+                    className="alert-default"
+                    confirmButtonText="Ok"
+                    onConfirm={(e) => setEditError('')}
+                    intent="danger"
+                    isOpen={editError != ""}>
+                    <h5 className="alert-title"><Icon icon="error" />Error</h5>
+                    <p>{editError}</p>
+                </Alert>
+                : null
             }
         </tr>
     )

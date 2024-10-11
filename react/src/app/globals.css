@@ -160,3 +160,13 @@ label.table-checkbox {
 .error {
   color: var(--slac-red);
 }
+
+.alert-default {
+  width: 70ch;
+  max-width: 90%;
+}
+
+.alert-title {
+  display: flex;
+  align-items: center;
+}

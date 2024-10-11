@@ -105,19 +105,19 @@ export function fetchFcStateEnums(): Promise<FCState[]> {
 }
 
 export class DeviceState {
-    private constructor(public readonly name: string, public readonly sortOrder: number) {
+    private constructor(public readonly name: string, public readonly sortOrder: number, public readonly backendEnumName: string) {
     }
 
-    static readonly Conceptual = new DeviceState("Conceptual", 0);
-    static readonly Planned = new DeviceState("Planned", 1);
-    static readonly ReadyForInstallation = new DeviceState("Ready For Installation", 2);
-    static readonly Installed = new DeviceState("Installed", 3);
-    static readonly Commisioned = new DeviceState("Commisioned", 4);
-    static readonly Operational = new DeviceState("Operational", 5);
-    static readonly NonOperational = new DeviceState("Non-operational", 6);
-    static readonly Decomissioned = new DeviceState("De-commisioned", 7);
-    static readonly Removed = new DeviceState("Removed", 8);
-    static readonly UnknownState = new DeviceState("Unknown", -1);
+    static readonly Conceptual = new DeviceState("Conceptual", 0, "Conceptual");
+    static readonly Planned = new DeviceState("Planned", 1, "Planned");
+    static readonly ReadyForInstallation = new DeviceState("Ready For Installation", 2, "ReadyForInstallation");
+    static readonly Installed = new DeviceState("Installed", 3, "Installed");
+    static readonly Commisioned = new DeviceState("Commissioned", 4, "Commissioned");
+    static readonly Operational = new DeviceState("Operational", 5, "Operational");
+    static readonly NonOperational = new DeviceState("Non-operational", 6, "NonOperational");
+    static readonly Decommissioned = new DeviceState("De-commissioned", 7, "Decommissioned");
+    static readonly Removed = new DeviceState("Removed", 8, "Removed");
+    static readonly UnknownState = new DeviceState("Unknown", -1, "Unknown");
 
     static readonly allStates = [
         DeviceState.Conceptual,
@@ -127,16 +127,20 @@ export class DeviceState {
         DeviceState.Commisioned,
         DeviceState.Operational,
         DeviceState.NonOperational,
-        DeviceState.Decomissioned,
+        DeviceState.Decommissioned,
         DeviceState.Removed,
     ]
 
-    public static fromString(state: string) {
+    public static fromString(state: string): DeviceState {
         for (let s of DeviceState.allStates) {
-            if (s.name == state) {
+            if (s.name == state || s.backendEnumName == state) {
                 return s;
             }
         }
         return DeviceState.UnknownState;
     }
+}
+
+export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetails>> {
+    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/fcs/${fftId}`, { body: JSON.stringify(changes) });
 }
