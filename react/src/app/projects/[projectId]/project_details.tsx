@@ -1,11 +1,23 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
-import { Button, ButtonGroup, Checkbox, Colors, Dialog, DialogBody, DialogFooter, Divider, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput, Tooltip } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
 import { ProjectApprovalDialog } from "../project_approval_dialog";
-import { FFT, FFTDiff, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
+import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted } from "../project_model";
+import { CopyFFTToProjectDialog, FilterFFTDialog } from "./project_dialogs";
+
+
+const formatDevicePositionNumber = (value?: number | string): string => {
+    if (value === undefined) {
+        return '';
+    }
+    if (typeof value === "string") {
+        return value;
+    }
+    return value.toFixed(7);
+}
 
 // a project specific page displays all properties of a specific project 
 export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -30,9 +42,14 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     // filters to apply
     const [fcFilter, setFcFilter] = useState("");
     const [fgFilter, setFgFilter] = useState("");
-    const [fftStates, setFftStates] = useState<string[]>([]);
+    const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
-    const [showFFTSinceCreationFilter, setShowFFTSinceCreationFilter] = useState(false);
+    const [showFftSinceCreationFilter, setShowFftSinceCreationFilter] = useState(false);
+
+    // state suitable for row updates
+    const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
+
+
 
     const loadFFTData = (projectId: string, showAllEntries: boolean = true): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
@@ -48,6 +65,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                 console.error("Failed to load device data:", e);
                 let err = e as JsonErrorMsg;
                 let msg = `Failed to load device data: ${err.error}`;
+                setFftData([]);
                 setFftDataLoadingError(msg);
             }).finally(() => {
                 setIsLoading(false);
@@ -76,10 +94,10 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     }, []);
 
     // get unique fft states for filter dialog
-    useEffect(() => {
-        let uniqueStates = Array.from(new Set(fftData.map((e) => e.state).filter(state => state)));
-        setFftStates(["---- Any ----", ...uniqueStates]);
-    }, [fftData])
+    // useEffect(() => {
+    //     let uniqueStates = Array.from(new Set(fftData.map((e) => e.state).filter(state => state)));
+    //     setAvailableFftStates(uniqueStates);
+    // }, [fftData])
 
     // apply table filters, when any filter or original data changes
     useEffect(() => {
@@ -104,15 +122,6 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         setFftDataDisplay(filteredFftData);
     }, [fftData, fcFilter, fgFilter, stateFilter]);
 
-    const formatDevicePositionNumber = (value?: number | string): string => {
-        if (value === undefined) {
-            return '';
-        }
-        if (typeof value === "string") {
-            return value;
-        }
-        return value.toFixed(7);
-    }
 
     const displayFilterIconInColumn = (filterValue: string) => {
         if (!filterValue) {
@@ -135,168 +144,166 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         router.replace(`${pathName}?${params.toString()}`)
     }
 
-
     const isProjectSubmitted = projectData?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" || showFFTSinceCreationFilter;
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" || showFftSinceCreationFilter;
+    const isEditedTable = editedDevice != undefined;
 
     return (
         <HtmlPage>
             {fftDataLoadingError ? <NonIdealState className="mb-4 mt-4" icon="error" title="Error" description={fftDataLoadingError} /> : null}
 
-            <table className="table table-bordered table-sm table-sticky table-striped table-sticky">
-                <thead>
-                    <tr>
-                        <th colSpan={6}>
-                            {!projectData ? <></> :
-                                <ButtonGroup vertical={false}>
+            {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
+            <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
+                <table className="table table-bordered table-sm table-sticky table-striped">
+                    <thead>
+                        <tr>
+                            <th colSpan={6}>
+                                {!projectData ? <></> :
+                                    <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
-                                    <span className="me-3">{projectData?.name}</span>
+                                        <span className="me-3">{projectData?.name}</span>
 
-                                    <Tooltip content="Download data to this project" position="bottom">
-                                        <Button icon="import" minimal={true} small={true}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Download data to this project" position="bottom">
+                                            <Button icon="import" minimal={true} small={true}></Button>
+                                        </Tooltip>
 
-                                    <Tooltip content="Upload data to this project" position="bottom">
-                                        <Button icon="export" minimal={true} small={true}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Upload data to this project" position="bottom">
+                                            <Button icon="export" minimal={true} small={true}></Button>
+                                        </Tooltip>
 
-                                    <Divider />
+                                        <Divider />
 
-                                    <Tooltip content="Filter FFTs" position="bottom">
-                                        <Button icon="filter" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Filter FFTs" position="bottom">
+                                            <Button icon="filter" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)}></Button>
+                                        </Tooltip>
 
-                                    <Tooltip content={"Clear filters to show all FFTs"} position="bottom" disabled={!isFilterApplied}>
-                                        <Button icon="filter-remove" minimal={true} small={true} disabled={!isFilterApplied}
-                                            onClick={(e) => {
-                                                setFcFilter('')
-                                                setFgFilter('');
-                                                setStateFilter('');
-                                                setShowFFTSinceCreationFilter(false);
-                                                updateQueryParams('', '', '');
-                                            }}
-                                        />
-                                    </Tooltip>
+                                        <Tooltip content={"Clear filters to show all FFTs"} position="bottom" disabled={!isFilterApplied}>
+                                            <Button icon="filter-remove" minimal={true} small={true} disabled={!isFilterApplied}
+                                                onClick={(e) => {
+                                                    setFcFilter('')
+                                                    setFgFilter('');
+                                                    setStateFilter('');
+                                                    setShowFftSinceCreationFilter(false);
+                                                    updateQueryParams('', '', '');
+                                                }}
+                                            />
+                                        </Tooltip>
 
-                                    <Tooltip content="Show only FCs with changes after the project was created" position="bottom">
-                                        <Button icon="filter-open" minimal={true} small={true} intent={showFFTSinceCreationFilter ? "warning" : "none"}
-                                            onClick={(e) => {
-                                                if (showFFTSinceCreationFilter) {
-                                                    // filter is applied, therefore we have to toggle it off and show all entries
-                                                    loadFFTData(projectId, true);
-                                                } else {
-                                                    // filter is not applied, therefore we have to display changes after project was created
-                                                    loadFFTData(projectId, false);
-                                                }
+                                        <Tooltip content="Show only FCs with changes after the project was created" position="bottom">
+                                            <Button icon="filter-open" minimal={true} small={true} intent={showFftSinceCreationFilter ? "warning" : "none"}
+                                                onClick={(e) => {
+                                                    if (showFftSinceCreationFilter) {
+                                                        // filter is applied, therefore we have to toggle it off and show all entries
+                                                        loadFFTData(projectId, true);
+                                                    } else {
+                                                        // filter is not applied, therefore we have to display changes after project was created
+                                                        loadFFTData(projectId, false);
+                                                    }
 
-                                                // toggle the filter flag 
-                                                setShowFFTSinceCreationFilter(show => !show);
-                                            }}
-                                        ></Button>
-                                    </Tooltip>
+                                                    // toggle the filter flag 
+                                                    setShowFftSinceCreationFilter(show => !show);
+                                                }}
+                                            ></Button>
+                                        </Tooltip>
 
-                                    <Divider />
+                                        <Divider />
 
-                                    <Tooltip content="Create a tag" position="bottom">
-                                        <Button icon="tag-add" minimal={true} small={true}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Create a tag" position="bottom">
+                                            <Button icon="tag-add" minimal={true} small={true}></Button>
+                                        </Tooltip>
 
-                                    <Tooltip content="Show assigned tags" position="bottom">
-                                        <Button icon="tags" minimal={true} small={true}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Show assigned tags" position="bottom">
+                                            <Button icon="tags" minimal={true} small={true}></Button>
+                                        </Tooltip>
 
-                                    <Divider />
+                                        <Divider />
 
-                                    <Tooltip content="Show the history of changes" position="bottom">
-                                        <Button icon="history" minimal={true} small={true}></Button>
-                                    </Tooltip>
+                                        <Tooltip content="Show the history of changes" position="bottom">
+                                            <Button icon="history" minimal={true} small={true}></Button>
+                                        </Tooltip>
 
-                                    <Tooltip content={"Submit this project for approval"} position="bottom" disabled={isProjectSubmitted}>
-                                        <Button icon="user" minimal={true} small={true}
-                                            disabled={isProjectSubmitted}
-                                            onClick={(e) => setIsApprovalDialogOpen(true)}
-                                        />
-                                    </Tooltip>
-                                </ButtonGroup>
-                            }
-                        </th>
-
-                        <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
-                        <th colSpan={3} className="text-center">Nominal Dimension (meters)</th>
-                        <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
-                        <th></th>
-                    </tr>
-                    <tr>
-                        {isProjectSubmitted ? null : <th></th>}
-                        <th>FC  {displayFilterIconInColumn(fcFilter)}</th>
-                        <th>Fungible {displayFilterIconInColumn(fgFilter)}</th>
-                        <th>TC Part No.</th>
-                        <th>State {displayFilterIconInColumn(stateFilter)}</th>
-                        <th>Comments</th>
-
-                        <th className="text-number">Z</th>
-                        <th className="text-number">X</th>
-                        <th className="text-number">Y</th>
-
-                        <th className="text-number">Z</th>
-                        <th className="text-number">X</th>
-                        <th className="text-number">Y</th>
-
-                        <th className="text-number">Z</th>
-                        <th className="text-number">X</th>
-                        <th className="text-number">Y</th>
-                        <th>Must Ray Trace</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {fftDataDisplay.map(device => {
-                        return (
-                            <tr key={device.fft._id}>
-                                {isProjectSubmitted ? null : 
-                                <td className="text-nowrap">
-                                    <Tooltip content={"Edit this FFT"} position="bottom">
-                                        <Button minimal={true} small={true} icon={"edit"} />
-                                    </Tooltip>
-                                    <Tooltip content={"Copy over the value from the currently approved project"} position="bottom">
-                                        <Button minimal={true} small={true} icon={"refresh"}
-                                            onClick={(e) => {
-                                                setCurrentFFT(device.fft);
-                                                setIsCopyFFTDialogOpen(true);
-                                            }
-                                            }
-                                        />
-                                    </Tooltip>
-                                </td>
+                                        <Tooltip content={"Submit this project for approval"} position="bottom" disabled={isProjectSubmitted}>
+                                            <Button icon="user" minimal={true} small={true}
+                                                disabled={isProjectSubmitted}
+                                                onClick={(e) => setIsApprovalDialogOpen(true)}
+                                            />
+                                        </Tooltip>
+                                    </ButtonGroup>
                                 }
-                                <td>{device.fft.fc}</td>
-                                <td>{device.fft.fg}</td>
-                                <td>{device.tc_part_no}</td>
-                                <td>{device.state}</td>
-                                <td>{device.comments}</td>
+                            </th>
 
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_y)}</td>
+                            <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
+                            <th colSpan={3} className="text-center">Nominal Dimension (meters)</th>
+                            <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
+                            <th></th>
+                        </tr>
+                        <tr>
+                            {isProjectSubmitted ? null : <th></th>}
+                            <th>FC  {displayFilterIconInColumn(fcFilter)}</th>
+                            <th>Fungible {displayFilterIconInColumn(fgFilter)}</th>
+                            <th>TC Part No.</th>
+                            <th>State {displayFilterIconInColumn(stateFilter)}</th>
+                            <th>Comments</th>
 
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_z)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_x)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_y)}</td>
+                            <th className="text-center">Z</th>
+                            <th className="text-center">X</th>
+                            <th className="text-center">Y</th>
 
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_z)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_x)}</td>
-                                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_y)}</td>
+                            <th className="text-center">Z</th>
+                            <th className="text-center">X</th>
+                            <th className="text-center">Y</th>
 
-                                <td>{device.ray_trace ?? null}</td>
-                            </tr>
-                        )
-                    })
-                    }
-                </tbody>
-            </table>
+                            <th className="text-center">Z</th>
+                            <th className="text-center">X</th>
+                            <th className="text-center">Y</th>
+                            <th>Must Ray Trace</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {fftDataDisplay.map(device => {
+                            const isEditedDevice = editedDevice == device;
+                            const disableRow = isEditedTable && !isEditedDevice;
+                            if (!isEditedDevice) {
+                                return <DeviceDataTableRow key={device.fft._id} project={projectData} device={device} disabled={disableRow}
+                                    onEdit={(device) => setEditedDevice(device)}
+                                    onCopyFft={(device) => {
+                                        setCurrentFFT(device.fft);
+                                        setIsCopyFFTDialogOpen(true);
+                                    }
+                                    }
+                                />
+                            }
+
+                            return <DeviceDataEditTableRow key={device.fft._id} project={projectData} device={device} availableFftStates={availableFftStates}
+                                onEditDone={(updatedDeviceData, action) => {
+                                    if (action == "cancel") {
+                                        setEditedDevice(undefined);
+                                        return;
+                                    }
+
+                                    // Do something with the updated device data, trigger an update
+                                    console.log("==== UPDATED DEVICE DATA: ", updatedDeviceData);
+                                    setEditedDevice(undefined);
+                                }}
+                            />
+                        })
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            {!isLoading && !fftDataLoadingError && !isFilterApplied && fftDataDisplay.length == 0 ?
+                <NonIdealState icon="search" title="No FFTs Found" description={<>Project {projectData?.name} does not have any FFTs</>} />
+                : null}
+
+            {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
+                <NonIdealState icon="filter" title="No FFTs Found" description="Try changing your filters"></NonIdealState>
+                : null
+            }
 
             <FilterFFTDialog
                 isOpen={isFilterDialogOpen}
-                possibleStates={fftStates}
+                possibleStates={availableFftStates}
                 onClose={() => setIsFilterDialogOpen(false)}
                 onSubmit={(newFcFilter, newFgFilter, newStateFilter) => {
                     setFcFilter(newFcFilter);
@@ -308,12 +315,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                 }}
             />
 
-            {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
-                <NonIdealState icon="filter" title="No FFTs Found" description="Try changing your filters"></NonIdealState>
-                : null
-            }
-
-            {projectData ? 
+            {projectData ?
                 <ProjectApprovalDialog
                     isOpen={isApprovalDialogOpen}
                     projectTitle={projectData.name}
@@ -351,319 +353,227 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 }
 
 
-// this dialog is used for filtering the table (fc, fg, and based on state)
-const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: string[], onClose: () => void, onSubmit: (newFcFilter: string, newFgFilter: string, newStateFilter: string) => void }> = ({ isOpen, possibleStates, onClose, onSubmit }) => {
-    const [fcFilter, setFcFilter] = useState('');
-    const [fgFilter, setFgFilter] = useState('');
-    const [stateFilter, setStateFilter] = useState('');
-
-    const submitSearchForm = () => {
-        onSubmit(fcFilter, fgFilter, stateFilter);
-    }
-
-    const submitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            submitSearchForm();
-        }
-    }
-
-    return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Apply Filter to Table" autoFocus={true}>
-            <DialogBody useOverflowScrollContainer>
-                <FormGroup label="FC:" labelFor="fc-filter">
-                    <InputGroup id="fc-filter"
-                        placeholder="Use GLOB pattern to filter on FC name"
-                        value={fcFilter}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setFcFilter(val)} />
-                </FormGroup>
-
-                <FormGroup label="FG:" labelFor="fg-filter">
-                    <InputGroup id="fg-filter"
-                        placeholder="Use GLOB pattern to filter on FG name"
-                        value={fgFilter}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setFgFilter(val)} />
-                </FormGroup>
-
-                <FormGroup label="State:" labelFor="state-filter">
-                    <HTMLSelect id="state-filter"
-                        value={stateFilter} options={possibleStates}
-                        onChange={(e) => setStateFilter(e.currentTarget.value)}
-                        fill={true} iconName="caret-down" />
-                </FormGroup>
-            </DialogBody>
-            <DialogFooter actions={
-                <>
-                    <Button onClick={onClose}>Cancel</Button>
-                    <Button onClick={(e) => submitSearchForm()} intent="primary">Search</Button>
-                </>
-            }>
-            </DialogFooter>
-        </Dialog>
-    )
-}
-
-// this dialog is used to copy the fft setting to a different project
-const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: FFT, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
-    const DEFAULT_PROJECT = "Please select a project"
-    const [availableProjects, setAvailableProjects] = useState<ProjectInfo[]>([]);
-    const [projectNames, setProjectNames] = useState<string[]>([DEFAULT_PROJECT]);
-    const [selectedProject, setSelectedProject] = useState<string>(DEFAULT_PROJECT);
-
-    const [dialogErr, setDialogErr] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-
-    const [missingFFTOnOtherProject, setMissingFFTOnOtherProject] = useState(false);
-    const [changedFFTs, setChangedFFTs] = useState<FFTDiff[]>([]);
-    const [fetchingProjectDiff, setFetchingProjectDiff] = useState(false);
-    const [fftDiffSelection, setFftDiffSelection] = useState<boolean[]>([]);
-
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
-
-        fetchAllProjects()
-            .then((projects) => {
-                let allProjects = projects.filter(p => isProjectSubmitted(p)).filter(p => p.name !== currentProject.name);
-                setAvailableProjects(allProjects);
-                setProjectNames([DEFAULT_PROJECT, ...allProjects.map(p => p.name)]);
-                setDialogErr("");
-            }).catch((err) => {
-                console.error("failed to fetch project data:", err);
-                let e = err as JsonErrorMsg;
-                let msg = `Failed to fetch project data: ${e.error}`;
-                setDialogErr(msg);
-            })
-    }, [isOpen]);
-
-
-    // query for fft changes between chosen from/to projects
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
-
-        if (selectedProject === DEFAULT_PROJECT) {
-            setChangedFFTs([]);
-            return;
-        }
-
-        let newProject = availableProjects.filter(p => p.name === selectedProject)[0];
-        // query if there is any change between fft of selected project 
-        // and fft of a new project 
-        // 
-        // We should be able to abort the query if necessary 
-        setFetchingProjectDiff(true);
-        fetchProjectDiff(currentProject._id, newProject._id)
-            .then(diff => {
-                let diffsToShow = diff.filter(d => d.diff === true && parseFftIdFromFftDiff(d) === FFT._id);
-
-                // it's possible that the other project does not have this fftid; the backend does not
-                // throw an error in this case, and we have to handle this case manually. 
-                // It only happens if one of the names of fft field starts with "fft.<_id>|<fc>|<fg>"
-                let otherProjectDoesNotHaveFFT = diffsToShow.some(obj => parseFftFieldNameFromFftDiff(obj).startsWith("fft."))
-                if (otherProjectDoesNotHaveFFT) {
-                    setMissingFFTOnOtherProject(true);
-                    setChangedFFTs([]);
-                    setDialogErr("");
-                    return;
+const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft }) => {
+    // we have to cache each table row, as once we have lots of rows in a table editing text fields within
+    // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    const row = useMemo(() => {
+        return (
+            <tr className={disabled ? 'table-disabled' : ''}>
+                {isProjectSubmitted(project) ? null :
+                    <td className="text-nowrap">
+                        <Tooltip content={"Edit this FFT"} position="bottom">
+                            <Button icon="edit" minimal={true} small={true}
+                                onClick={(e) => onEdit(device)}
+                            />
+                        </Tooltip>
+                        <Tooltip content={"Copy over the value from the currently approved project"} position="bottom">
+                            <Button icon="refresh" minimal={true} small={true}
+                                onClick={(e) => onCopyFft(device)}
+                            />
+                        </Tooltip>
+                    </td>
                 }
 
-                setMissingFFTOnOtherProject(false);
-                setChangedFFTs(diffsToShow);
-                setDialogErr("");
-            }).catch(err => {
-                console.error("Failed to fetch project diff: ", err);
-                let e = err as JsonErrorMsg;
-                setDialogErr("Failed to fetch project diff: " + e.error);
-            }).finally(() => {
-                setFetchingProjectDiff(false);
-            })
-    }, [selectedProject, FFT, isOpen])
+                <td>{device.fft.fc}</td>
+                <td>{device.fft.fg}</td>
+                <td> {device.tc_part_no}</td>
+                <td>{device.state}</td>
+                <td>{device.comments}</td>
 
-    // clear the checkboxes whenever fft diff changes
-    useEffect(() => {
-        let changed = changedFFTs.map(f => false);
-        setFftDiffSelection(changed);
-    }, [changedFFTs])
+                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_y)}</td>
 
-    const numOfFFTChanges = useMemo(() => {
-        let count = 0;
-        for (let selected of fftDiffSelection) {
-            if (selected) {
-                count++;
-            }
-        }
-        return count
-    }, [fftDiffSelection]);
+                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_z)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_x)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_y)}</td>
 
+                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_z)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_x)}</td>
+                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_y)}</td>
 
-    // button submit action
-    const submit = () => {
-        if (selectedProject === DEFAULT_PROJECT) {
-            setDialogErr("Invalid project selected");
-            return;
-        }
-
-        if (changedFFTs.length == 0) {
-            // this should never happen
-            setDialogErr("Can't copy from unknown changed ffts: this is a programming bug");
-            return;
-        }
-
-        setSubmitting(true);
-
-        const project = availableProjects.filter(p => p.name == selectedProject)[0];
-        const projectIdToCopyFrom = project._id;
-        const attributeNames = changedFFTs.filter((f, i) => {
-            if (fftDiffSelection[i]) {
-                // this field/value was selected for copying by the end user via a checkbox
-                return true;
-            }
-            return false;
-        }).map(diff => parseFftFieldNameFromFftDiff(diff));
-        let data = { 'other_id': projectIdToCopyFrom, 'attrnames': attributeNames }
-
-        const projectIdToCopyTo = currentProject._id;
-        const fftIdToCopyTo = FFT._id;
-        Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
-            { body: JSON.stringify(data) }
-        ).then(updatedDeviceData => {
-            onSubmit(updatedDeviceData);
-        }).catch((err) => {
-            let e = err as JsonErrorMsg;
-            let msg = `Failed to copy fft changes of ${FFT.fc}-${FFT.fg}: ${e.error}`;
-            console.error(msg, err);
-            setDialogErr(msg);
-        }).finally(() => {
-            setSubmitting(false);
-        })
-    }
-
-    const allChangesAreSelected = numOfFFTChanges == fftDiffSelection.length;
-
-    // render fft diff table
-    const renderDiffTable = () => {
-        if (selectedProject === DEFAULT_PROJECT) {
-            return <NonIdealState icon={"search"} title="No Project Selected" description={"Please select a project"} />
-        }
-
-        if (fetchingProjectDiff) {
-            return <NonIdealState icon={<Spinner />} title="Loading" description={'Please Wait'} />
-        }
-
-        if (missingFFTOnOtherProject) {
-            return <NonIdealState icon={'warning-sign'} title="Missing FFT" description={`${FFT.fc}-${FFT.fg} does not exist on selected project ${selectedProject}`} />
-        }
-
-        if (changedFFTs.length == 0) {
-            // there is no fft difference between projects
-            return <NonIdealState icon={"clean"} title="No Changes" description={"All FFT values are equal between compared projects"} />
-        }
-
-        return (
-            <>
-                <h6>FFT Value Changes:</h6>
-                <table className="table table-bordered table-striped table-sm">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Current Value</th>
-                            <th></th>
-                            <th>New Value</th>
-                            <th>
-                                <Checkbox className="table-checkbox"
-                                    checked={allChangesAreSelected}
-                                    onChange={(e) => {
-                                        if (allChangesAreSelected) {
-                                            let unselectAll = fftDiffSelection.map(_ => false);
-                                            setFftDiffSelection(unselectAll);
-                                        } else {
-                                            let selectAll = fftDiffSelection.map(_ => true);
-                                            setFftDiffSelection(selectAll);
-                                        }
-                                    }
-                                    } />
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {changedFFTs.map((change, i) => {
-                            return (<tr key={change.key}>
-                                <td>{parseFftFieldNameFromFftDiff(change)}</td>
-                                <td>{change.my}</td>
-                                <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
-                                <td>{change.ot}</td>
-                                <td>
-                                    {/* note: leave the comparison === true, otherwise the React will complain about controlled
-                                and uncontrolled components. I think this is a bug in the library and not the issue with our code,
-                                since our usage of controlled component is correct here */}
-                                    <Checkbox className="table-checkbox"
-                                        checked={fftDiffSelection[i] === true} value={''}
-                                        onChange={(e) => {
-                                            let newSelection = [...fftDiffSelection];
-                                            newSelection[i] = !fftDiffSelection[i];
-                                            setFftDiffSelection(newSelection);
-                                        }
-                                        } />
-                                </td>
-                            </tr>)
-                        })
-                        }
-                    </tbody>
-                </table>
-            </>
+                <td>{device.ray_trace ?? null}</td>
+            </tr>
         )
+    }, [project, device, disabled])
+    return row;
+}
+
+
+const DeviceDataEditTableRow: React.FC<{
+    project?: ProjectInfo,
+    device: ProjectDeviceDetails,
+    availableFftStates: DeviceState[],
+    onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void
+}> = ({ project, device, availableFftStates, onEditDone }) => {
+    const [editTcPartNo, setEditTcPartNo] = useState<string>();
+    const [editState, setEditState] = useState("");
+    const [editComments, setEditComments] = useState('');
+    const [editLocZ, setEditLocZ] = useState<string>();
+    const [editLocX, setEditLocX] = useState<string>();
+    const [editLocY, setEditLocY] = useState<string>();
+    const [editDimZ, setEditDimZ] = useState<string>();
+    const [editDimX, setEditDimX] = useState<string>();
+    const [editDimY, setEditDimY] = useState<string>();
+    const [editAngZ, setEditAngZ] = useState<string>();
+    const [editAngX, setEditAngX] = useState<string>();
+    const [editAngY, setEditAngY] = useState<string>();
+    const [editMustRayTrace, setEditMustRayTrace] = useState<number>();
+
+    useEffect(() => {
+        setEditTcPartNo(device.tc_part_no);
+        setEditState(device.state);
+        setEditComments(device.comments);
+
+        setEditLocX(device.nom_loc_x?.toString());
+        setEditLocY(device.nom_loc_y?.toString());
+        setEditLocZ(device.nom_loc_z?.toString());
+
+        setEditDimX(device.nom_dim_x?.toString());
+        setEditDimY(device.nom_dim_y?.toString());
+        setEditDimZ(device.nom_dim_z?.toString());
+
+        setEditAngX(device.nom_ang_x?.toString());
+        setEditAngY(device.nom_ang_y?.toString());
+        setEditAngZ(device.nom_ang_z?.toString());
+        setEditMustRayTrace(device.ray_trace)
+    }, [])
+
+    const numberOrDefault = (value: string | undefined, defaultVal: number | undefined): number | undefined => {
+        if (value == "" || value == undefined) {
+            return undefined;
+        }
+
+        let num = Number.parseFloat(value);
+        if (isNaN(num)) {
+            // this should never happen since we verify the fields before the user 
+            // is able to submit them. 
+            return defaultVal;
+        }
+        return num;
     }
+
+    const constructDevice = (): ProjectDeviceDetails => {
+        let copyDevice = structuredClone(device);
+        copyDevice.tc_part_no = editTcPartNo || '';
+        copyDevice.comments = editComments;
+
+        copyDevice.nom_loc_x = numberOrDefault(editLocX, undefined);
+        copyDevice.nom_loc_y = numberOrDefault(editLocY, undefined);
+        copyDevice.nom_loc_z = numberOrDefault(editLocZ, undefined);
+
+        copyDevice.nom_dim_x = numberOrDefault(editDimX, undefined);
+        copyDevice.nom_dim_y = numberOrDefault(editDimY, undefined);
+        copyDevice.nom_dim_z = numberOrDefault(editDimZ, undefined);
+
+        copyDevice.nom_ang_x = numberOrDefault(editAngX, undefined);
+        copyDevice.nom_ang_y = numberOrDefault(editAngY, undefined);
+        copyDevice.nom_ang_z = numberOrDefault(editAngZ, undefined);
+
+        copyDevice.ray_trace = editMustRayTrace;
+        return copyDevice;
+    }
+
+    interface NumericField {
+        key: string;
+        value: string | number | undefined;
+        setter: any;
+        err: [boolean, Dispatch<SetStateAction<boolean>>];
+        min?: number;
+        max?: number;
+    }
+
+    const numericFields: NumericField[] = [
+        { key: 'nom_loc_z', value: editLocZ, setter: setEditLocZ, err: useState(false) },
+        { key: 'nom_loc_x', value: editLocX, setter: setEditLocX, err: useState(false) },
+        { key: 'nom_loc_y', value: editLocY, setter: setEditLocY, err: useState(false) },
+
+        { key: 'nom_dim_z', value: editDimZ, setter: setEditDimZ, err: useState(false) },
+        { key: 'nom_dim_x', value: editDimX, setter: setEditDimX, err: useState(false) },
+        { key: 'nom_dim_y', value: editDimY, setter: setEditDimY, err: useState(false) },
+
+        { key: 'nom_ang_z', value: editAngZ, setter: setEditAngZ, err: useState(false) },
+        { key: 'nom_ang_x', value: editAngX, setter: setEditAngX, err: useState(false) },
+        { key: 'nom_ang_y', value: editAngY, setter: setEditAngY, err: useState(false) },
+
+        { key: 'ray_trace', value: editMustRayTrace, setter: setEditMustRayTrace, err: useState(false), max: 1, min: 0 }
+    ]
+
+    let errStates = numericFields.map(f => f.err[0]);
+    const allFieldsAreValid = useMemo(() => {
+        for (let f of numericFields) {
+            if (f.err[0] === true) {
+                return false;
+            }
+        }
+
+        // all fields are valid, we can submit this change
+        return true;
+    }, [...errStates])
+
+    let fftStates = useMemo(() => {
+        return availableFftStates.map(s => s.name);
+    }, [availableFftStates])
 
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title={`Copy FFT Changes to "${currentProject.name}"`} autoFocus={true} style={{ width: "45rem" }}>
-            <DialogBody useOverflowScrollContainer>
-                <table className="table table-sm table-borderless table-nohead table-nobg m-0 mb-2">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th className="w-100"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><Label className="text-end mb-1">FFT:</Label></td>
-                            <td>{FFT.fc}-{FFT.fg}</td>
-                        </tr>
-                        <tr>
-                            <td><Label className="text-nowrap text-end mb-1" htmlFor="project-select">Copy From Project:</Label></td>
-                            <td>
-                                <HTMLSelect id="project-select"
-                                    value={selectedProject}
-                                    options={projectNames}
-                                    onChange={(e) => setSelectedProject(e.currentTarget.value)}
-                                    disabled={fetchingProjectDiff}
-                                    fill={false} iconName="caret-down" />
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><Label className="text-end mb-1">Copy To Project:</Label></td>
-                            <td>{currentProject.name}</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <tr>
+            {isProjectSubmitted(project) ? null :
+                <td className="text-nowrap">
+                    <Button icon="tick" minimal={true} small={true} title="Submit your edits"
+                        disabled={!allFieldsAreValid}
+                        onClick={(e) => onEditDone(constructDevice(), "ok")}
+                    />
 
-                <hr />
+                    <Button icon="cross" minimal={true} small={true} title="Discard your edits"
+                        onClick={(e) => onEditDone(constructDevice(), "cancel")}
+                    />
+                </td>
+            }
 
-                {renderDiffTable()}
+            <td>{device.fft.fc}</td>
+            <td>{device.fft.fg}</td>
 
-            </DialogBody>
-            <DialogFooter actions={
-                <>
-                    <Button onClick={onClose}>Close</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={submitting} disabled={selectedProject === DEFAULT_PROJECT || numOfFFTChanges === 0}>Copy {numOfFFTChanges} {numOfFFTChanges == 1 ? "Change" : "Changes"} to {currentProject.name}</Button>
-                </>
-            }>
-                {dialogErr ? <span className="error">ERROR: {dialogErr}</span> : null}
-            </DialogFooter>
-        </Dialog >
+            <td><InputGroup value={editTcPartNo || ''} onValueChange={(val) => setEditTcPartNo(val)} style={{ width: "auto", maxWidth: "12ch" }} /></td>
+            <td> <HTMLSelect value={editState} options={fftStates} onChange={(e) => setEditState(e.target.value)} style={{ width: "auto" }} iconName="caret-down" /></td>
+            <td><InputGroup value={editComments || ''} onValueChange={(val) => setEditComments(val)} style={{ width: "auto" }} /></td>
+
+            {numericFields.map((field) => {
+                return (
+                    <td key={field.key}>
+                        <NumericInput
+                            buttonPosition="none"
+                            allowNumericCharactersOnly={false}
+                            intent={field.err[0] ? "danger" : "none"}
+                            style={{ width: "auto", maxWidth: "15ch" }}
+                            value={field.value?.toString() ?? ''}
+                            onValueChange={(num, v) => {
+                                field.setter(v);
+                                if (isNaN(num)) {
+                                    field.err[1](true);
+                                    return;
+                                }
+
+                                // we have a valid number
+                                field.err[1](false);
+
+                                // check ranges if any 
+                                if (field.min != undefined) {
+                                    if (num < field.min) {
+                                        field.err[1](true);
+                                    }
+                                }
+                                if (field.max != undefined) {
+                                    if (num > field.max) {
+                                        field.err[1](true);
+                                    }
+                                }
+                            }
+                        }
+                        />
+                    </td>
+                )
+            })
+            }
+        </tr>
     )
 }

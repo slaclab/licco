@@ -91,3 +91,52 @@ export function parseFftFieldNameFromFftDiff(diff: FFTDiff): string {
 export function fetchProjectDiff(currentProjectId: string, otherProjectId: string): Promise<FFTDiff[]> {
     return Fetch.get<FFTDiff[]>(`/ws/projects/${currentProjectId}/diff_with?other_id=${otherProjectId}`)
 }
+
+
+export interface FCState {
+    sortorder: number;
+    label: string;
+    description: "";
+}
+
+export function fetchFcStateEnums(): Promise<FCState[]> {
+    return Fetch.get<Record<string, FCState>>("/ws/enums/FCState")
+        .then(data => Object.values(data));
+}
+
+export class DeviceState {
+    private constructor(public readonly name: string, public readonly sortOrder: number) {
+    }
+
+    static readonly Conceptual = new DeviceState("Conceptual", 0);
+    static readonly Planned = new DeviceState("Planned", 1);
+    static readonly ReadyForInstallation = new DeviceState("Ready For Installation", 2);
+    static readonly Installed = new DeviceState("Installed", 3);
+    static readonly Commisioned = new DeviceState("Commisioned", 4);
+    static readonly Operational = new DeviceState("Operational", 5);
+    static readonly NonOperational = new DeviceState("Non-operational", 6);
+    static readonly Decomissioned = new DeviceState("De-commisioned", 7);
+    static readonly Removed = new DeviceState("Removed", 8);
+    static readonly UnknownState = new DeviceState("Unknown", -1);
+
+    static readonly allStates = [
+        DeviceState.Conceptual,
+        DeviceState.Planned,
+        DeviceState.ReadyForInstallation,
+        DeviceState.Installed,
+        DeviceState.Commisioned,
+        DeviceState.Operational,
+        DeviceState.NonOperational,
+        DeviceState.Decomissioned,
+        DeviceState.Removed,
+    ]
+
+    public static fromString(state: string) {
+        for (let s of DeviceState.allStates) {
+            if (s.name == state) {
+                return s;
+            }
+        }
+        return DeviceState.UnknownState;
+    }
+}

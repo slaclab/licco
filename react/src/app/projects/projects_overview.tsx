@@ -49,9 +49,9 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     return (
-        <>
-        <div className="table-responsive">
-            <table className="table table-striped table-bordered table-sm">
+        <> 
+            <div>
+                <table className="table table-striped table-bordered table-sm table-sticky">
                 <thead>
                     <tr>
                             <th scope="col">
