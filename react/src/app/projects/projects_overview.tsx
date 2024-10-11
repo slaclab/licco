@@ -1,4 +1,4 @@
-import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { Container } from "react-bootstrap";
@@ -49,86 +49,69 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     return (
-        <> 
+        <>
             <div>
                 <table className="table table-striped table-bordered table-sm table-sticky">
-                <thead>
-                    <tr>
+                    <thead>
+                        <tr>
                             <th scope="col">
-                                <Tooltip content="Add new Project" position="bottom">
-                                    <Button icon="add" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
-                                </Tooltip>
-                                <Tooltip content="Show the history of project approvals" position="bottom">
-                                    <Button icon="history" minimal={true} small={true} />
-                                </Tooltip>
+                                <Button icon="add" title="Add new Project" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
+                                <Button icon="history" title="Show the history of project approvals" minimal={true} small={true} />
                                 {projectDataLoading ?
                                     <Button minimal={true} small={true} disabled={true} loading={projectDataLoading} />
                                     : null
                                 }
                             </th>
-                        <th>Name</th>
-                        <th>Owner</th>
-                        <th>Created</th>
-                        <th>Last Edit</th>
-                        <th>Description</th>
-                        <th>Notes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {projectData.map((project) => {
-                        return (
-                            <tr key={project._id}>
-                                <td>
-                                    <ButtonGroup minimal={true}>
-                                        <Tooltip content="Compare (diff) with another project" position="bottom">
-                                            <Button icon="comparison" small={true} />
-                                        </Tooltip>
+                            <th>Name</th>
+                            <th>Owner</th>
+                            <th>Created</th>
+                            <th>Last Edit</th>
+                            <th>Description</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {projectData.map((project) => {
+                            return (
+                                <tr key={project._id}>
+                                    <td>
+                                        <ButtonGroup minimal={true}>
+                                            <Button icon="comparison" title="Compare (diff) with another project" small={true} />
+                                            <Button icon="duplicate" title="Clone this project" small={true} />
 
-                                        <Tooltip content="Clone this project" position="bottom">
-                                            <Button icon="duplicate" small={true} />
-                                        </Tooltip>
+                                            {!isProjectSubmitted(project) ?
+                                                <>
+                                                    <Button icon="edit" title="Edit this project" minimal={true} small={true} />
 
-                                        {!isProjectSubmitted(project) ?
-                                            <>
-                                                <Tooltip content="Edit this project" position="bottom">
-                                                    <Button icon="edit" minimal={true} small={true} />
-                                                </Tooltip>
-
-                                                <Tooltip content="Submit this project for approval" position="bottom">
-                                                    <Button icon="user"
+                                                    <Button icon="user" title="Submit this project for approval"
                                                         minimal={true} small={true}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsApprovalDialogOpen(true);
                                                         }}
                                                     />
-                                                </Tooltip>
 
-                                                <Tooltip content="Upload data to this project" position="bottom">
-                                                    <Button icon="export" minimal={true} small={true} />
-                                                </Tooltip>
-                                            </>
-                                            : null
-                                        }
+                                                    <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
+                                                </>
+                                                : null
+                                            }
 
-                                        <Tooltip content="Download this project" position="bottom">
-                                            <Button icon="import" minimal={true} small={true} />
-                                        </Tooltip>
+                                            <Button icon="import" title="Download this project" minimal={true} small={true} />
 
-                                    </ButtonGroup>
-                                </td>
-                                <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
-                                <td>{project.owner}</td>
-                                <td>{formatToLiccoDateTime(project.creation_time)}</td>
-                                <td>{formatToLiccoDateTime(project.edit_time)}</td>
-                                <td>{project.description}</td>
-                                <td></td>
-                            </tr>
-                        )
-                    })
-                    }
-                </tbody>
-            </table>
+                                        </ButtonGroup>
+                                    </td>
+                                    <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
+                                    <td>{project.owner}</td>
+                                    <td>{formatToLiccoDateTime(project.creation_time)}</td>
+                                    <td>{formatToLiccoDateTime(project.edit_time)}</td>
+                                    <td>{project.description}</td>
+                                    <td></td>
+                                </tr>
+                            )
+                        })
+                        }
+                    </tbody>
+                </table>
             </div>
 
             {!projectDataLoading && projectData.length == 0 ?

@@ -93,11 +93,6 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         loadFFTData(projectId, showAllEntries);
     }, []);
 
-    // get unique fft states for filter dialog
-    // useEffect(() => {
-    //     let uniqueStates = Array.from(new Set(fftData.map((e) => e.state).filter(state => state)));
-    //     setAvailableFftStates(uniqueStates);
-    // }, [fftData])
 
     // apply table filters, when any filter or original data changes
     useEffect(() => {
@@ -515,7 +510,7 @@ const DeviceDataEditTableRow: React.FC<{
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             if (deviceWithChanges[field] !== device[field]) { // this field has changed
-                if (field == "state") {
+                if (field === "state") {
                     // we have to transform the state from what's displayed into an enum that
                     // a backend understands, hence this transformation
                     changes[field] = DeviceState.fromString(deviceWithChanges[field]).backendEnumName;
