@@ -4,8 +4,8 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
-import { ProjectApprovalDialog } from "../project_approval_dialog";
 import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog } from "./project_dialogs";
 
 
@@ -420,7 +420,7 @@ const DeviceDataEditTableRow: React.FC<{
         setEditAngY(device.nom_ang_y?.toString());
         setEditAngZ(device.nom_ang_z?.toString());
         setEditMustRayTrace(device.ray_trace)
-    }, [])
+    }, [device])
 
     const numberOrDefault = (value: string | undefined, defaultVal: number | undefined): number | undefined => {
         if (value == "" || value == undefined) {
@@ -572,6 +572,7 @@ const DeviceDataEditTableRow: React.FC<{
             <td> <HTMLSelect value={editState} options={fftStates} onChange={(e) => setEditState(e.target.value)} style={{ width: "auto" }} iconName="caret-down" /></td>
             <td><InputGroup value={editComments || ''} onValueChange={(val) => setEditComments(val)} style={{ width: "auto" }} /></td>
 
+            {/* TODO: this is a bit inneficient as the row keeps getting rerendered; find a better way of rendering numeric components */}
             {numericFields.map((field) => {
                 return (
                     <td key={field.key}>
@@ -580,7 +581,10 @@ const DeviceDataEditTableRow: React.FC<{
                             allowNumericCharactersOnly={false}
                             intent={field.err[0] ? "danger" : "none"}
                             style={{ width: "auto", maxWidth: "15ch" }}
-                            value={field.value?.toString() ?? ''}
+                            value={field.value}
+                            asyncControl={true}
+                            stepSize={1}
+                            minorStepSize={0.01}
                             onValueChange={(num, v) => {
                                 field.setter(v);
                                 if (isNaN(num)) {

@@ -22,3 +22,7 @@ export function formatToLiccoDate(date: Date): string {
     const year = date.getFullYear();
     return `${month}/${day}/${year}`;
 }
+
+export function toUnixSeconds(date: Date): number {
+    return Math.round(date.getTime() / 1000);
+}

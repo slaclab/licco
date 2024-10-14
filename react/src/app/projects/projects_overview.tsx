@@ -1,11 +1,26 @@
-import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState } from "@blueprintjs/core";
+import { Button, ButtonGroup, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { formatToLiccoDateTime } from "../utils/date_utils";
-import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { ProjectApprovalDialog } from "./project_approval_dialog";
+import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
+import { JsonErrorMsg } from "../utils/fetching";
 import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
+
+function sortByCreationDateDesc(a: ProjectInfo, b: ProjectInfo) {
+    return toUnixSeconds(b.creation_time) - toUnixSeconds(a.creation_time);
+}
+
+function sortByLastEditTimeDesc(a: ProjectInfo, b: ProjectInfo) {
+    let timeA = a.edit_time ? toUnixSeconds(a.edit_time) : 0;
+    let timeB = b.edit_time ? toUnixSeconds(b.edit_time) : 0;
+
+    let diff = timeB - timeA;
+    if (diff == 0) { // same edit time
+        return sortByCreationDateDesc(a, b)
+    }
+    return diff;
+}
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
@@ -15,6 +30,8 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     const fetchProjectData = () => {
@@ -35,6 +52,14 @@ export const ProjectsOverview: React.FC = ({ }) => {
         fetchProjectData();
     }, []);
 
+    const projectDataDisplayed = useMemo(() => {
+        let displayedData = [...projectData];
+        displayedData.sort((a, b) => {
+            // TODO: apply any other filters 
+            return sortByCreationDateDesc(a, b);
+        });
+        return displayedData;
+    }, [projectData]);
 
     if (err) {
         return (
@@ -71,17 +96,27 @@ export const ProjectsOverview: React.FC = ({ }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {projectData.map((project) => {
+                        {projectDataDisplayed.map((project) => {
                             return (
                                 <tr key={project._id}>
                                     <td>
                                         <ButtonGroup minimal={true}>
-                                            <Button icon="comparison" title="Compare (diff) with another project" small={true} />
-                                            <Button icon="duplicate" title="Clone this project" small={true} />
+                                            <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true} />
+                                            <Button icon="duplicate" title="Clone this project" minimal={true} small={true}
+                                                onClick={(e) => {
+                                                    setSelectedProject(project);
+                                                    setIsCloneDialogOpen(true);
+                                                }}
+                                            />
 
                                             {!isProjectSubmitted(project) ?
                                                 <>
-                                                    <Button icon="edit" title="Edit this project" minimal={true} small={true} />
+                                                    <Button icon="edit" title="Edit this project" minimal={true} small={true}
+                                                        onClick={(e) => {
+                                                            setSelectedProject(project);
+                                                            setIsEditDialogOpen(true);
+                                                        }}
+                                                    />
 
                                                     <Button icon="user" title="Submit this project for approval"
                                                         minimal={true} small={true}
@@ -132,115 +167,72 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 }}
             />
 
-            <ProjectApprovalDialog
-                isOpen={isApprovalDialogOpen}
-                projectTitle={selectedProject?.name ?? ''}
-                projectId={selectedProject?._id ?? ''}
-                onClose={() => setIsApprovalDialogOpen(false)}
-                onSubmit={(approvedProject) => {
-                    // replace an existing project with a new one
-                    projectTransformTimeIntoDates(approvedProject);
-                    let updatedProjects = [];
-                    for (let p of projectData) {
-                        if (p._id !== approvedProject._id) {
-                            updatedProjects.push(p);
-                            continue;
+            {selectedProject && isApprovalDialogOpen ?
+                <ProjectApprovalDialog
+                    isOpen={isApprovalDialogOpen}
+                    projectTitle={selectedProject.name}
+                    projectId={selectedProject._id}
+                    onClose={() => setIsApprovalDialogOpen(false)}
+                    onSubmit={(approvedProject) => {
+                        // replace an existing project with a new one
+                        projectTransformTimeIntoDates(approvedProject);
+                        let updatedProjects = [];
+                        for (let p of projectData) {
+                            if (p._id !== approvedProject._id) {
+                                updatedProjects.push(p);
+                                continue;
+                            }
+                            updatedProjects.push(approvedProject);
                         }
-                        updatedProjects.push(approvedProject);
-                    }
-                    setProjectData(updatedProjects);
-                    setIsApprovalDialogOpen(false);
-                }}
-            />
+                        setProjectData(updatedProjects);
+                        setIsApprovalDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+
+            {selectedProject && isCloneDialogOpen ?
+                <CloneProjectDialog
+                    isOpen={isCloneDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsCloneDialogOpen(false);
+                    }}
+                    onSubmit={(clonedProject) => {
+                        let data = [...projectData];
+                        data.push(clonedProject);
+                        setProjectData(data);
+                        setIsCloneDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+
+            {selectedProject && isEditDialogOpen ?
+                <EditProjectDialog
+                    isOpen={isEditDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsEditDialogOpen(false);
+                    }}
+                    onSubmit={(updatedProject) => {
+                        let updatedData = [];
+                        for (let p of projectData) {
+                            if (p._id != updatedProject._id) {
+                                updatedData.push(p);
+                                continue;
+                            }
+
+                            updatedData.push(updatedProject);
+                        }
+                        // update project info 
+                        setIsEditDialogOpen(false);
+                        setProjectData(updatedData);
+                    }}
+                />
+                : null
+            }
+
         </>
-    )
-}
-
-// dialog for adding new projects
-const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, onClose, onSubmit }) => {
-    const DEFAULT_TEMPLATE = "Blank Project";
-
-    const [projectTemplates, setProjectTemplates] = useState<string[]>([DEFAULT_TEMPLATE]);
-    const [selectedTemplate, setSelectedTemplate] = useState<string>(DEFAULT_TEMPLATE);
-    const [projectName, setProjectName] = useState('');
-    const [description, setDescription] = useState('');
-
-    const [dialogError, setDialogError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            // TODO: load project templates if necessary, we don't seem to have them right now...
-        }
-    }, [isOpen])
-
-    const submit = () => {
-        if (!projectName) {
-            setDialogError("Project name should not be empty");
-            return;
-        }
-        setDialogError("");
-
-        let projectUrl = ""
-        if (selectedTemplate == DEFAULT_TEMPLATE) {
-            projectUrl = "/ws/projects/NewBlankProjectClone/clone/";
-        } else {
-            projectUrl = `/ws/projects/${selectedTemplate}/clone/`;
-        }
-
-        setIsSubmitting(true);
-        let body = { "name": projectName, "description": description }
-        Fetch.post<ProjectInfo>(projectUrl, { body: JSON.stringify(body) })
-            .then(newProjectInfo => {
-                onSubmit(newProjectInfo);
-            }).catch(err => {
-                let e = err as JsonErrorMsg;
-                setDialogError(`Failed to create a new project: ${e.error}`);
-            }).finally(() => {
-                setIsSubmitting(false);
-            });
-    }
-
-    const submitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            submit();
-        }
-    }
-
-    return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Create a New Project" autoFocus={true}>
-            <DialogBody useOverflowScrollContainer>
-                <FormGroup label="Select a Project Template:">
-                    <HTMLSelect
-                        value={selectedTemplate}
-                        options={projectTemplates}
-                        onChange={(e) => setSelectedTemplate(e.currentTarget.value)}
-                        fill={true} iconName="caret-down" />
-                </FormGroup>
-
-                <FormGroup label="Project Name:">
-                    <InputGroup id="project-name"
-                        placeholder=""
-                        value={projectName}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setProjectName(val)} />
-                </FormGroup>
-
-                <FormGroup label="Description:">
-                    <InputGroup id="project-description"
-                        placeholder=""
-                        value={description}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setDescription(val)} />
-                </FormGroup>
-                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
-            </DialogBody>
-            <DialogFooter actions={
-                <>
-                    <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting}>Create</Button>
-                </>
-            } />
-        </Dialog>
     )
 }
