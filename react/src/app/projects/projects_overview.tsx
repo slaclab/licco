@@ -1,4 +1,4 @@
-import { Button, ButtonGroup, NonIdealState } from "@blueprintjs/core";
+import { Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
@@ -7,32 +7,41 @@ import { JsonErrorMsg } from "../utils/fetching";
 import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
 
-function sortByCreationDateDesc(a: ProjectInfo, b: ProjectInfo) {
-    return toUnixSeconds(b.creation_time) - toUnixSeconds(a.creation_time);
+
+function sortString(a: string, b: string, desc: boolean = true) {
+    let diff = a.localeCompare(b);
+    return desc ? -diff : diff;
 }
 
-function sortByLastEditTimeDesc(a: ProjectInfo, b: ProjectInfo) {
+function sortByCreationDate(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
+    let diff = toUnixSeconds(b.creation_time) - toUnixSeconds(a.creation_time);
+    return desc ? diff : -diff;
+}
+
+function sortByLastEditTime(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
     let timeA = a.edit_time ? toUnixSeconds(a.edit_time) : 0;
     let timeB = b.edit_time ? toUnixSeconds(b.edit_time) : 0;
 
     let diff = timeB - timeA;
-    if (diff == 0) { // same edit time
-        return sortByCreationDateDesc(a, b)
-    }
-    return diff;
+    return desc ? diff : -diff;
 }
-
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
     const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
 
+    // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
+
+    // sorting
+    type sortColumnField = 'name' | 'created' | 'edit' | 'owner'
+    const [sortedField, setSortedField] = useState<sortColumnField>('created');
+    const [sortInDescOrder, setSortInDescOrder] = useState<boolean>(true);
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
@@ -52,14 +61,55 @@ export const ProjectsOverview: React.FC = ({ }) => {
         fetchProjectData();
     }, []);
 
+
+    const showAddProjectDialog = () => {
+        setIsAddProjectDialogOpen(true);
+    }
+
+    const sortOrderChanged = (field: sortColumnField) => {
+        let desc = true; // by default we always order in desc order first
+        if (field == sortedField) {
+            // same field was clicked, change sort order based on the previous state
+            desc = !sortInDescOrder;
+        }
+        setSortedField(field);
+        setSortInDescOrder(desc);
+    }
+
+    const renderSortButtonIfAny = (field: sortColumnField) => {
+        if (field != sortedField) {
+            // if we don't show the icon (null node) the column would change width 
+            // when we display the icon for the first time. To avoid this jump 
+            // we instead render a blank icon. 
+            return <Icon className="ms-1" icon="blank" />
+        }
+
+        return <Icon className="ms-1" icon={sortInDescOrder ? "arrow-down" : "arrow-up"} />
+    }
+
     const projectDataDisplayed = useMemo(() => {
         let displayedData = [...projectData];
-        displayedData.sort((a, b) => {
-            // TODO: apply any other filters 
-            return sortByCreationDateDesc(a, b);
-        });
+
+        // sort data according to selected filter
+        switch (sortedField) {
+            case 'created':
+                displayedData.sort((a, b) => sortByCreationDate(a, b, sortInDescOrder));
+                break;
+            case 'edit':
+                displayedData.sort((a, b) => sortByLastEditTime(a, b, sortInDescOrder));
+                break;
+            case 'name':
+                displayedData.sort((a, b) => sortString(a.name, b.name, sortInDescOrder));
+                break;
+            case 'owner':
+                displayedData.sort((a, b) => sortString(a.owner, b.owner, sortInDescOrder));
+                break;
+            default:
+                displayedData.sort((a, b) => sortByCreationDate(a, b, sortInDescOrder));
+        }
         return displayedData;
-    }, [projectData]);
+    }, [projectData, sortedField, sortInDescOrder]);
+
 
     if (err) {
         return (
@@ -67,10 +117,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 <NonIdealState icon="error" title="Error" description={err} />
             </Container>
         )
-    }
-
-    const showAddProjectDialog = () => {
-        setIsAddProjectDialogOpen(true);
     }
 
     return (
@@ -87,10 +133,10 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     : null
                                 }
                             </th>
-                            <th>Name</th>
-                            <th>Owner</th>
-                            <th>Created</th>
-                            <th>Last Edit</th>
+                            <th onClick={(e) => sortOrderChanged('name')}>Name {renderSortButtonIfAny('name')}</th>
+                            <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderSortButtonIfAny('owner')}</th>
+                            <th onClick={(e) => sortOrderChanged('created')}>Created {renderSortButtonIfAny('created')}</th>
+                            <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderSortButtonIfAny('edit')}</th>
                             <th>Description</th>
                             <th>Notes</th>
                         </tr>
