@@ -6,7 +6,7 @@ import { ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
 
 type projectApprovers = string[];
 
-export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: string, projectId: string, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, projectTitle, projectId, onClose, onSubmit }) => {
+export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: string, projectId: string, projectOwner: string, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, projectTitle, projectId, projectOwner, onClose, onSubmit }) => {
     const DEFAULT_USER = "Please select an approver";
     const [selectedApprover, setSelectedApprover] = useState(DEFAULT_USER);
     const [approvers, setApprovers] = useState<string[]>([]);
@@ -19,7 +19,7 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
         if (isOpen) {
             Fetch.get<projectApprovers>('/ws/approvers/')
                 .then(projectApprovers => {
-                    let approvers = [DEFAULT_USER, ...projectApprovers];
+                    let approvers = [DEFAULT_USER, ...projectApprovers.filter(a => a != projectOwner)];
                     setApprovers(approvers);
                 }).catch((e) => {
                     let err = e as JsonErrorMsg;
@@ -28,7 +28,7 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
                     setDialogErr(msg);
                 })
         }
-    }, [isOpen]);
+    }, [isOpen, projectOwner]);
 
     useEffect(() => {
         const userNotSelected = !selectedApprover || selectedApprover === DEFAULT_USER;

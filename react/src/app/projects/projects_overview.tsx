@@ -218,6 +218,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     isOpen={isApprovalDialogOpen}
                     projectTitle={selectedProject.name}
                     projectId={selectedProject._id}
+                    projectOwner={selectedProject.owner}
                     onClose={() => setIsApprovalDialogOpen(false)}
                     onSubmit={(approvedProject) => {
                         // replace an existing project with a new one

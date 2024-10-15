@@ -308,6 +308,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                     isOpen={isApprovalDialogOpen}
                     projectTitle={projectData.name}
                     projectId={projectData._id}
+                    projectOwner={projectData.owner}
                     onClose={() => setIsApprovalDialogOpen(false)}
                     onSubmit={(projectInfo) => {
                         setProjectData(projectInfo);
@@ -405,7 +406,7 @@ const DeviceDataEditTableRow: React.FC<{
     }
 
     let fftStates = useMemo(() => {
-        return availableFftStates.map(s => s.backendEnumName);
+        return availableFftStates.map(s => s.name);
     }, [availableFftStates])
 
     const editableDeviceFields: EditField[] = [
