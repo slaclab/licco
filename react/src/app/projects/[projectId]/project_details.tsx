@@ -3,8 +3,8 @@ import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
+import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges, transformProjectDeviceDetails } from "../project_model";
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog } from "./project_dialogs";
 
@@ -59,6 +59,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                 // TODO: missing device number field is set to "" (empty string):
                 // we should turn it into an null to avoid having problems when formatting it later
                 let devices = Object.values(data);
+                devices.forEach(d => transformProjectDeviceDetails(d));
                 setFftData(devices);
                 return devices;
             }).catch((e) => {
@@ -356,7 +357,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.fft.fc}</td>
                 <td>{device.fft.fg}</td>
                 <td> {device.tc_part_no}</td>
-                <td>{device.state}</td>
+                <td className="text-nowrap">{device.state}</td>
                 <td>{device.comments}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
@@ -384,42 +385,52 @@ const DeviceDataEditTableRow: React.FC<{
     project?: ProjectInfo,
     device: ProjectDeviceDetails,
     availableFftStates: DeviceState[],
-    onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void
+    onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
 }> = ({ project, device, availableFftStates, onEditDone }) => {
-    const [editTcPartNo, setEditTcPartNo] = useState<string>();
-    const [editState, setEditState] = useState("");
-    const [editComments, setEditComments] = useState('');
-    const [editLocZ, setEditLocZ] = useState<string>();
-    const [editLocX, setEditLocX] = useState<string>();
-    const [editLocY, setEditLocY] = useState<string>();
-    const [editDimZ, setEditDimZ] = useState<string>();
-    const [editDimX, setEditDimX] = useState<string>();
-    const [editDimY, setEditDimY] = useState<string>();
-    const [editAngZ, setEditAngZ] = useState<string>();
-    const [editAngX, setEditAngX] = useState<string>();
-    const [editAngY, setEditAngY] = useState<string>();
-    const [editMustRayTrace, setEditMustRayTrace] = useState<number>();
-
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState<boolean>(false);
 
+    interface EditField {
+        key: (keyof ProjectDeviceDetails);
+        type: "string" | "number" | "select"
+        value: [string | undefined, Dispatch<SetStateAction<string | undefined>>];
+        valueOptions?: string[]; // only used when type == "select"
+        err: [boolean, Dispatch<SetStateAction<boolean>>];
+        min?: number;
+        max?: number;
+    }
+
+    let fftStates = useMemo(() => {
+        return availableFftStates.map(s => s.backendEnumName);
+    }, [availableFftStates])
+
+    const editableDeviceFields: EditField[] = [
+        { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
+        { key: 'comments', type: "string", value: useState<string>(), err: useState(false) },
+
+        { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_loc_x', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_loc_y', type: "number", value: useState<string>(), err: useState(false) },
+
+        { key: 'nom_dim_z', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_dim_x', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_dim_y', type: "number", value: useState<string>(), err: useState(false) },
+
+        { key: 'nom_ang_z', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_ang_x', type: "number", value: useState<string>(), err: useState(false) },
+        { key: 'nom_ang_y', type: "number", value: useState<string>(), err: useState(false) },
+
+        { key: 'ray_trace', type: "number", value: useState<string>(), err: useState(false), max: 1, min: 0 }
+    ]
+
     useEffect(() => {
-        setEditTcPartNo(device.tc_part_no);
-        setEditState(device.state);
-        setEditComments(device.comments);
-
-        setEditLocX(device.nom_loc_x?.toString());
-        setEditLocY(device.nom_loc_y?.toString());
-        setEditLocZ(device.nom_loc_z?.toString());
-
-        setEditDimX(device.nom_dim_x?.toString());
-        setEditDimY(device.nom_dim_y?.toString());
-        setEditDimZ(device.nom_dim_z?.toString());
-
-        setEditAngX(device.nom_ang_x?.toString());
-        setEditAngY(device.nom_ang_y?.toString());
-        setEditAngZ(device.nom_ang_z?.toString());
-        setEditMustRayTrace(device.ray_trace)
+        for (let field of editableDeviceFields) {
+            if (field.key == 'fft') { // fft field is not editable
+                continue;
+            }
+            field.value[1](device[field.key] as any);
+        }
     }, [device])
 
     const numberOrDefault = (value: string | undefined, defaultVal: number | undefined): number | undefined => {
@@ -438,55 +449,22 @@ const DeviceDataEditTableRow: React.FC<{
 
     const createDeviceWithChanges = (): ProjectDeviceDetails => {
         let copyDevice = structuredClone(device);
-        copyDevice.tc_part_no = editTcPartNo || '';
-        copyDevice.comments = editComments;
-
-        copyDevice.state = editState;
-
-        copyDevice.nom_loc_x = numberOrDefault(editLocX, undefined);
-        copyDevice.nom_loc_y = numberOrDefault(editLocY, undefined);
-        copyDevice.nom_loc_z = numberOrDefault(editLocZ, undefined);
-
-        copyDevice.nom_dim_x = numberOrDefault(editDimX, undefined);
-        copyDevice.nom_dim_y = numberOrDefault(editDimY, undefined);
-        copyDevice.nom_dim_z = numberOrDefault(editDimZ, undefined);
-
-        copyDevice.nom_ang_x = numberOrDefault(editAngX, undefined);
-        copyDevice.nom_ang_y = numberOrDefault(editAngY, undefined);
-        copyDevice.nom_ang_z = numberOrDefault(editAngZ, undefined);
-
-        copyDevice.ray_trace = editMustRayTrace;
+        for (let editField of editableDeviceFields) {
+            let field = editField.key;
+            let device = copyDevice as any;
+            if (editField.type == "number") {
+                device[field] = numberOrDefault(editField.value[0], undefined);
+            } else {
+                device[field] = editField.value[0] || '';
+            }
+        }
         return copyDevice;
     }
 
-    interface NumericField {
-        key: string;
-        value: string | number | undefined;
-        setter: any;
-        err: [boolean, Dispatch<SetStateAction<boolean>>];
-        min?: number;
-        max?: number;
-    }
 
-    const numericFields: NumericField[] = [
-        { key: 'nom_loc_z', value: editLocZ, setter: setEditLocZ, err: useState(false) },
-        { key: 'nom_loc_x', value: editLocX, setter: setEditLocX, err: useState(false) },
-        { key: 'nom_loc_y', value: editLocY, setter: setEditLocY, err: useState(false) },
-
-        { key: 'nom_dim_z', value: editDimZ, setter: setEditDimZ, err: useState(false) },
-        { key: 'nom_dim_x', value: editDimX, setter: setEditDimX, err: useState(false) },
-        { key: 'nom_dim_y', value: editDimY, setter: setEditDimY, err: useState(false) },
-
-        { key: 'nom_ang_z', value: editAngZ, setter: setEditAngZ, err: useState(false) },
-        { key: 'nom_ang_x', value: editAngX, setter: setEditAngX, err: useState(false) },
-        { key: 'nom_ang_y', value: editAngY, setter: setEditAngY, err: useState(false) },
-
-        { key: 'ray_trace', value: editMustRayTrace, setter: setEditMustRayTrace, err: useState(false), max: 1, min: 0 }
-    ]
-
-    let errStates = numericFields.map(f => f.err[0]);
+    let errStates = editableDeviceFields.map(f => f.err[0]);
     const allFieldsAreValid = useMemo(() => {
-        for (let f of numericFields) {
+        for (let f of editableDeviceFields) {
             if (f.err[0] === true) {
                 return false;
             }
@@ -496,9 +474,6 @@ const DeviceDataEditTableRow: React.FC<{
         return true;
     }, [...errStates])
 
-    let fftStates = useMemo(() => {
-        return availableFftStates.map(s => s.name);
-    }, [availableFftStates])
 
     const submitChanges = () => {
         let deviceWithChanges = createDeviceWithChanges();
@@ -568,64 +543,93 @@ const DeviceDataEditTableRow: React.FC<{
             <td>{device.fft.fc}</td>
             <td>{device.fft.fg}</td>
 
-            <td><InputGroup value={editTcPartNo || ''} onValueChange={(val) => setEditTcPartNo(val)} style={{ width: "auto", maxWidth: "12ch" }} /></td>
-            <td> <HTMLSelect value={editState} options={fftStates} onChange={(e) => setEditState(e.target.value)} style={{ width: "auto" }} iconName="caret-down" /></td>
-            <td><InputGroup value={editComments || ''} onValueChange={(val) => setEditComments(val)} style={{ width: "auto" }} /></td>
-
-            {/* TODO: this is a bit inneficient as the row keeps getting rerendered; find a better way of rendering numeric components */}
-            {numericFields.map((field) => {
-                return (
-                    <td key={field.key}>
-                        <NumericInput
-                            buttonPosition="none"
-                            allowNumericCharactersOnly={false}
-                            intent={field.err[0] ? "danger" : "none"}
-                            style={{ width: "auto", maxWidth: "15ch" }}
-                            value={field.value}
-                            asyncControl={true}
-                            stepSize={1}
-                            minorStepSize={0.01}
-                            onValueChange={(num, v) => {
-                                field.setter(v);
-                                if (isNaN(num)) {
-                                    field.err[1](true);
-                                    return;
-                                }
-
-                                // we have a valid number
-                                field.err[1](false);
-
-                                // check ranges if any 
-                                if (field.min != undefined) {
-                                    if (num < field.min) {
-                                        field.err[1](true);
-                                    }
-                                }
-                                if (field.max != undefined) {
-                                    if (num > field.max) {
-                                        field.err[1](true);
-                                    }
-                                }
-                            }
-                            }
-                        />
-                    </td>
-                )
+            {editableDeviceFields.map((field) => {
+                // the reason why we use components instead of rendering edit fields directly is due to performance
+                // Rerendering the entire row and all its fields on every keystroke is noticably slow, therefore
+                // we cache edit fields via components.
+                let inputField: ReactNode;
+                if (field.type == "string") {
+                    inputField = <StringEditField value={field.value[0] ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
+                } else if (field.type == "number") {
+                    inputField = <NumericEditField value={field.value[0]} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} />
+                } else if (field.type == "select") {
+                    inputField = <SelectEditField value={field.value[0] ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                } else {
+                    throw new Error("Unhandled field type: ", field.type)
+                }
+                return <td key={field.key}>{inputField}</td>
             })
             }
 
-            {editError ?
-                <Alert
-                    className="alert-default"
-                    confirmButtonText="Ok"
-                    onConfirm={(e) => setEditError('')}
-                    intent="danger"
-                    isOpen={editError != ""}>
-                    <h5 className="alert-title"><Icon icon="error" />Error</h5>
-                    <p>{editError}</p>
-                </Alert>
-                : null
+                {editError ?
+                    <Alert
+                        className="alert-default"
+                        confirmButtonText="Ok"
+                        onConfirm={(e) => setEditError('')}
+                        intent="danger"
+                        isOpen={editError != ""}>
+                        <h5 className="alert-title"><Icon icon="error" />Error</h5>
+                        <p>{editError}</p>
+                    </Alert>
+                    : null
+                }
+            </tr>
+        )
+    }
+
+
+const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {
+    return useMemo(() => {
+        return <InputGroup value={value} onValueChange={(val) => setter(val)} style={{ width: 'auto', minWidth: "5ch" }} fill={true} />
+    }, [value, err])
+}
+
+const SelectEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
+    return useMemo(() => {
+        return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
+    }, [value, options, err])
+} 
+
+// performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
+const NumericEditField: React.FC<{ value: string | number | undefined, setter: any, err: boolean, errSetter: any, min?: number, max?: number }> = ({ value, setter, err, errSetter, min, max }) => {
+    const field = useMemo(() => {
+        return (<NumericInput
+            buttonPosition="none"
+            allowNumericCharactersOnly={false}
+            intent={err ? "danger" : "none"}
+            style={{ width: "auto", maxWidth: "15ch" }}
+            value={value}
+            stepSize={1}
+            minorStepSize={0.0000000001} /* this is necessary to avoid warnings: numeric input rounds number based on this precision */
+            majorStepSize={1}
+            max={undefined}
+            min={undefined}
+            fill={true}
+            onValueChange={(num, v) => {
+                setter(v);
+                if (isNaN(num)) {
+                    errSetter(true);
+                    return;
+                }
+
+                // we have a valid number
+                errSetter(false);
+
+                // check ranges if any 
+                if (min != undefined) {
+                    if (num < min) {
+                        errSetter(true);
+                    }
+                }
+                if (max != undefined) {
+                    if (num > max) {
+                        errSetter(true);
+                    }
+                }
             }
-        </tr>
-    )
+            }
+        />
+        )
+    }, [value, err])
+    return field;
 }

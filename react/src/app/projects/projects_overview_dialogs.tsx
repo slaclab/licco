@@ -67,8 +67,9 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
     return (
         <Dialog onClose={onClose} isOpen={isOpen} title={`Submit Project for Approval (${projectTitle})`}>
             <DialogBody>
-                <FormGroup>
+                <FormGroup label="Project Approver:">
                     <HTMLSelect
+                        iconName="caret-down"
                         value={selectedApprover}
                         options={approvers}
                         autoFocus={true}

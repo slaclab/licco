@@ -61,6 +61,10 @@ export interface ProjectDeviceDetails {
     ray_trace?: number;
 }
 
+export function transformProjectDeviceDetails(device: ProjectDeviceDetails) {
+    device.state = DeviceState.fromString(device.state).name;
+}
+
 export interface FFT {
     _id: string;
     fc: string;
