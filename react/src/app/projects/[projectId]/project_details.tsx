@@ -141,7 +141,8 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     }
 
     const isProjectSubmitted = projectData?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" || showFftSinceCreationFilter;
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != ""
+    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter
     const isEditedTable = editedDevice != undefined;
 
     return (
@@ -166,12 +167,15 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
                                         <Button icon="filter" title="Filter FFTs" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)} />
 
-                                        <Button icon="filter-remove" title="Clear filters to show all FFTs" minimal={true} small={true} disabled={!isFilterApplied}
+                                        <Button icon="filter-remove" title="Clear filters to show all FFTs" minimal={true} small={true} disabled={!isRemoveFilterEnabled}
                                             onClick={(e) => {
                                                 setFcFilter('')
                                                 setFgFilter('');
                                                 setStateFilter('');
-                                                setShowFftSinceCreationFilter(false);
+                                                if (showFftSinceCreationFilter) {
+                                                    setShowFftSinceCreationFilter(false);
+                                                    loadFFTData(projectData._id);
+                                                }
                                                 updateQueryParams('', '', '');
                                             }}
                                         />
@@ -356,7 +360,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
 
                 <td>{device.fft.fc}</td>
                 <td>{device.fft.fg}</td>
-                <td> {device.tc_part_no}</td>
+                <td className="text-nowrap"> {device.tc_part_no}</td>
                 <td className="text-nowrap">{device.state}</td>
                 <td>{device.comments}</td>
 
@@ -597,7 +601,7 @@ const NumericEditField: React.FC<{ value: string | number | undefined, setter: a
             buttonPosition="none"
             allowNumericCharactersOnly={false}
             intent={err ? "danger" : "none"}
-            style={{ width: "auto", maxWidth: "15ch" }}
+            style={{ width: "auto", maxWidth: "15ch", textAlign: "right" }}
             value={value}
             stepSize={1}
             minorStepSize={0.0000000001} /* this is necessary to avoid warnings: numeric input rounds number based on this precision */
