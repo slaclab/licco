@@ -8,6 +8,7 @@ import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
+import styles from './project_details.module.css';
 
 const formatDevicePositionNumber = (value?: number | string): string => {
     if (value === undefined) {
@@ -20,7 +21,7 @@ const formatDevicePositionNumber = (value?: number | string): string => {
 }
 
 // a project specific page displays all properties of a specific project 
-export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) => {
     // page and url info
     const router = useRouter();
     const pathName = usePathname();
@@ -163,7 +164,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
             {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
             <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
-                <table className="table table-bordered table-sm table-sticky table-striped">
+                <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable}`}>
                     <thead>
                         <tr>
                             <th colSpan={6}>
@@ -386,7 +387,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
                 {isProjectSubmitted(project) ? null :
-                    <td className="text-nowrap">
+                    <td>
                         <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
                             onClick={(e) => onEdit(device)}
                         />
@@ -398,8 +399,8 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
 
                 <td>{device.fft.fc}</td>
                 <td>{device.fft.fg}</td>
-                <td className="text-nowrap"> {device.tc_part_no}</td>
-                <td className="text-nowrap">{device.state}</td>
+                <td>{device.tc_part_no}</td>
+                <td>{device.state}</td>
                 <td>{device.comments}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
@@ -569,7 +570,7 @@ const DeviceDataEditTableRow: React.FC<{
     return (
         <tr>
             {isProjectSubmitted(project) ? null :
-                <td className="text-nowrap">
+                <td>
                     <Button icon="tick" minimal={true} small={true} loading={isSubmitting}
                         title="Submit your edits"
                         disabled={!allFieldsAreValid}

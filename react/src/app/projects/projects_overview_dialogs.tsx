@@ -355,7 +355,7 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
         }
 
         if (projectHistory.length == 0) {
-            return <NonIdealState icon="clean" title="No Project Approvals Found" description={"There are no project approvals at this moment"}></NonIdealState>
+            return <NonIdealState icon="search" title="No Project Approvals Found" description={"There are no project approvals at this moment"}></NonIdealState>
         }
 
         return (
