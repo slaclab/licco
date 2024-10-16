@@ -61,9 +61,40 @@ export interface ProjectDeviceDetails {
     ray_trace?: number;
 }
 
+export const ProjectDeviceDetailsNumericKeys: (keyof ProjectDeviceDetails)[] = [
+    'nom_ang_x', 'nom_ang_y', 'nom_ang_z',
+    'nom_dim_x', 'nom_dim_y', 'nom_dim_z',
+    'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
+    'ray_trace'
+]
+
+function numberOrDefault(input: number | string | undefined, defaultVal: number | undefined): number | undefined {
+    if (input == undefined) {
+        return defaultVal;
+    }
+
+    if (typeof input == "string") {
+        if (input == "") {
+            return defaultVal;
+        }
+        return Number.parseFloat(input);
+    }
+
+    return input;
+}
+
+
 export function transformProjectDeviceDetails(device: ProjectDeviceDetails) {
     device.state = DeviceState.fromString(device.state).name;
+
+    // empty numeric fields are sent through as strings
+    // this transformation ensures we convert empty strings to undefined 
+    let d = device as any;
+    for (let k of ProjectDeviceDetailsNumericKeys) {
+        d[k] = numberOrDefault(d[k], undefined);
+    }
 }
+
 
 export interface FFT {
     _id: string;

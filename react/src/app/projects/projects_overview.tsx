@@ -4,14 +4,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
+import { sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
 
 
-function sortString(a: string, b: string, desc: boolean = true) {
-    let diff = a.localeCompare(b);
-    return desc ? -diff : diff;
-}
+
 
 function sortByCreationDate(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
     let diff = toUnixSeconds(b.creation_time) - toUnixSeconds(a.creation_time);
@@ -77,7 +75,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
         setSortInDescOrder(desc);
     }
 
-    const renderSortButtonIfAny = (field: sortColumnField) => {
+    const renderTableSortButtonIfAny = (field: sortColumnField) => {
         if (field != sortedField) {
             // if we don't show the icon (null node) the column would change width 
             // when we display the icon for the first time. To avoid this jump 
@@ -134,10 +132,10 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     : null
                                 }
                             </th>
-                            <th onClick={(e) => sortOrderChanged('name')}>Name {renderSortButtonIfAny('name')}</th>
-                            <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderSortButtonIfAny('owner')}</th>
-                            <th onClick={(e) => sortOrderChanged('created')}>Created {renderSortButtonIfAny('created')}</th>
-                            <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderSortButtonIfAny('edit')}</th>
+                            <th onClick={(e) => sortOrderChanged('name')}>Name {renderTableSortButtonIfAny('name')}</th>
+                            <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderTableSortButtonIfAny('owner')}</th>
+                            <th onClick={(e) => sortOrderChanged('created')}>Created {renderTableSortButtonIfAny('created')}</th>
+                            <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderTableSortButtonIfAny('edit')}</th>
                             <th>Description</th>
                             <th>Notes</th>
                         </tr>
