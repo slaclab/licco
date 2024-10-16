@@ -8,17 +8,61 @@ import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
+import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import styles from './project_details.module.css';
 
-const formatDevicePositionNumber = (value?: number | string): string => {
-    if (value === undefined) {
-        return '';
+type deviceDetailsColumn = (keyof (Omit<ProjectDeviceDetails, "fft" | "comments"> & { fc: string, fg: string }));
+
+/**
+ * Helper function for sorting device details based on the clicked table column header
+ */
+export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: deviceDetailsColumn, desc: boolean) {
+    if (data.length == 0) {
+        return; // nothing to sort
     }
-    if (typeof value === "string") {
-        return value;
+
+    switch (col) {
+        case "fc":
+            data.sort((a, b) => {
+                let diff = sortString(a.fft.fc, b.fft.fc, desc);
+                if (diff != 0) {
+                    return diff;
+                }
+                return sortString(a.fft.fg, b.fft.fg, false); // asc 
+            });
+            break;
+        case "fg":
+            data.sort((a, b) => {
+                let diff = sortString(a.fft.fg, b.fft.fg, desc);
+                if (diff != 0) {
+                    return diff;
+                }
+                return sortString(a.fft.fc, b.fft.fc, false); // asc
+            });
+            break;
+        default:
+            let dataType = typeof data[0][col];
+            if (dataType == "number") {
+                data.sort((a, b) => {
+                    let diff = sortNumber(a[col] as any, b[col] as any, desc);
+                    if (diff != 0) {
+                        return diff;
+                    }
+                    return sortString(a.fft.fc, b.fft.fc, false); // asc
+                });
+            } else if (dataType == "string") {
+                data.sort((a, b) => {
+                    let diff = sortString(a[col] as any ?? '', b[col] as any ?? '', desc);
+                    if (diff != 0) {
+                        return diff
+                    }
+                    return sortString(a.fft.fc, b.fft.fc, false); // asc
+                })
+            }
+            break;
     }
-    return value.toFixed(7);
 }
+
 
 // a project specific page displays all properties of a specific project 
 export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -52,7 +96,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
 
+    const [sortedByColumn, setSortedByColumn] = useState<SortState<deviceDetailsColumn>>(new SortState('fc', false));
 
+
+    const changeSortOrder = (columnClicked: deviceDetailsColumn) => {
+        let newSortOrder = sortedByColumn.fieldClicked(columnClicked);
+        setSortedByColumn(newSortOrder);
+    }
 
     const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
@@ -125,15 +175,24 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             }
             return true;
         })
+
+        sortDeviceDataByColumn(filteredFftData, sortedByColumn.sortField, sortedByColumn.sortDesc);
         setFftDataDisplay(filteredFftData);
-    }, [fftData, fcFilter, fgFilter, stateFilter]);
+    }, [fftData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
 
 
     const displayFilterIconInColumn = (filterValue: string) => {
         if (!filterValue) {
-            return null
+            return null;
         }
         return <Icon icon="filter" color={Colors.RED2} className="ms-1" />
+    }
+
+    const displaySortOrderIconInColumn = (col: deviceDetailsColumn) => {
+        if (col != sortedByColumn.sortField) {
+            return null;
+        }
+        return <Icon icon={sortedByColumn.sortDesc ? "arrow-down" : "arrow-up"} className="ms-1" />
     }
 
     const updateQueryParams = (fcFilter: string, fgFilter: string, stateFilter: string, asOfTimestampFilter: string) => {
@@ -241,24 +300,24 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         </tr>
                         <tr>
                             {isProjectSubmitted ? null : <th></th>}
-                            <th>FC  {displayFilterIconInColumn(fcFilter)}</th>
-                            <th>Fungible {displayFilterIconInColumn(fgFilter)}</th>
-                            <th>TC Part No.</th>
-                            <th>State {displayFilterIconInColumn(stateFilter)}</th>
+                            <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
+                            <th onClick={e => changeSortOrder('fg')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg')}</th>
+                            <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
+                            <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
                             <th>Comments</th>
 
-                            <th className="text-center">Z</th>
-                            <th className="text-center">X</th>
-                            <th className="text-center">Y</th>
+                            <th onClick={e => changeSortOrder('nom_loc_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_loc_z')}</th>
+                            <th onClick={e => changeSortOrder('nom_loc_x')} className="text-center">X {displaySortOrderIconInColumn('nom_loc_x')}</th>
+                            <th onClick={e => changeSortOrder('nom_loc_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_loc_y')}</th>
 
-                            <th className="text-center">Z</th>
-                            <th className="text-center">X</th>
-                            <th className="text-center">Y</th>
+                            <th onClick={e => changeSortOrder('nom_dim_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_dim_z')}</th>
+                            <th onClick={e => changeSortOrder('nom_dim_x')} className="text-center">X {displaySortOrderIconInColumn('nom_dim_x')}</th>
+                            <th onClick={e => changeSortOrder('nom_dim_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_dim_y')}</th>
 
-                            <th className="text-center">Z</th>
-                            <th className="text-center">X</th>
-                            <th className="text-center">Y</th>
-                            <th>Must Ray Trace</th>
+                            <th onClick={e => changeSortOrder('nom_ang_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_ang_z')}</th>
+                            <th onClick={e => changeSortOrder('nom_ang_x')} className="text-center">X {displaySortOrderIconInColumn('nom_ang_x')}</th>
+                            <th onClick={e => changeSortOrder('nom_ang_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_ang_y')}</th>
+                            <th onClick={e => changeSortOrder('ray_trace')}>Must Ray Trace {displaySortOrderIconInColumn('ray_trace')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -383,6 +442,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    const formatDevicePositionNumber = (value?: number | string): string => {
+        if (value === undefined) {
+            return '';
+        }
+        if (typeof value === "string") {
+            return value;
+        }
+        return value.toFixed(7);
+    }
+
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
