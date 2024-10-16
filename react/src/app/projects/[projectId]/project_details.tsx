@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges, transformProjectDeviceDetails } from "../project_model";
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FilterFFTDialog } from "./project_dialogs";
+import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
 
 const formatDevicePositionNumber = (value?: number | string): string => {
@@ -37,6 +37,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
+    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [currentFFT, setCurrentFFT] = useState<FFT>({ _id: "", fc: "", fg: "" });
 
     // filters to apply
@@ -45,16 +46,21 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
     const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
     const [showFftSinceCreationFilter, setShowFftSinceCreationFilter] = useState(false);
+    const [asOfTimestampFilter, setAsOfTimestampFilter] = useState("");
 
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
 
 
 
-    const loadFFTData = (projectId: string, showAllEntries: boolean = true): Promise<void | ProjectDeviceDetails[]> => {
+    const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
         setFftDataLoadingError('');
-        return Fetch.get<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/?showallentries=${showAllEntries}`)
+        let url = `/ws/projects/${projectId}/ffts/?showallentries=${showAllEntries}`;
+        if (sinceTime) {
+            url += `&asoftimestamp=${sinceTime.toISOString()}`
+        }
+        return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
             .then((data) => {
                 // TODO: missing device number field is set to "" (empty string):
                 // we should turn it into an null to avoid having problems when formatting it later
@@ -81,6 +87,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
             setFcFilter(queryParams.get("fc") ?? "");
             setFgFilter(queryParams.get("fg") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
+            setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
         }
 
         Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
@@ -91,7 +98,9 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
             });
 
         let showAllEntries = true;
-        loadFFTData(projectId, showAllEntries);
+        let timestampFilter = queryParams.get("asoftimestamp") ?? '';
+        let asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
+        loadFFTData(projectId, showAllEntries, asOfTimestamp);
     }, []);
 
 
@@ -126,7 +135,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         return <Icon icon="filter" color={Colors.RED2} className="ms-1" />
     }
 
-    const updateQueryParams = (fcFilter: string, fgFilter: string, stateFilter: string) => {
+    const updateQueryParams = (fcFilter: string, fgFilter: string, stateFilter: string, asOfTimestampFilter: string) => {
         const params = new URLSearchParams();
         if (fcFilter) {
             params.set("fc", fcFilter);
@@ -137,12 +146,15 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
         if (stateFilter) {
             params.set("state", stateFilter);
         }
+        if (asOfTimestampFilter) {
+            params.set("asoftimestamp", asOfTimestampFilter)
+        }
         router.replace(`${pathName}?${params.toString()}`)
     }
 
     const isProjectSubmitted = projectData?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != ""
-    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" 
+    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter
     const isEditedTable = editedDevice != undefined;
 
     return (
@@ -172,11 +184,17 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                                                 setFcFilter('')
                                                 setFgFilter('');
                                                 setStateFilter('');
+                                                let timestampFilter = asOfTimestampFilter;
+                                                setAsOfTimestampFilter('');
+
                                                 if (showFftSinceCreationFilter) {
                                                     setShowFftSinceCreationFilter(false);
-                                                    loadFFTData(projectData._id);
+                                                    loadFFTData(projectData._id, true);
+                                                } else if (timestampFilter) {
+                                                    // timestamp filter was applied and now we have to load original data
+                                                    loadFFTData(projectData._id, true);
                                                 }
-                                                updateQueryParams('', '', '');
+                                                updateQueryParams('', '', '', '');
                                             }}
                                         />
 
@@ -203,7 +221,10 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
 
                                         <Divider />
 
-                                        <Button icon="history" title="Show the history of changes" minimal={true} small={true} />
+                                        <Button icon="history" title="Show the history of changes" minimal={true} small={true}
+                                            intent={asOfTimestampFilter ? "danger" : "none"}
+                                            onClick={(e) => setIsProjectHistoryDialogOpen(true)}
+                                        />
                                         <Button icon="user" title="Submit this project for approval" minimal={true} small={true}
                                             disabled={isProjectSubmitted}
                                             onClick={(e) => setIsApprovalDialogOpen(true)}
@@ -298,7 +319,7 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                     setFgFilter(newFgFilter);
                     newStateFilter = newStateFilter.startsWith("---") ? "" : newStateFilter;
                     setStateFilter(newStateFilter);
-                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter);
+                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter, asOfTimestampFilter);
                     setIsFilterDialogOpen(false);
                 }}
             />
@@ -337,6 +358,22 @@ export const ProjectSpecificPage: React.FC<{ projectId: string }> = ({ projectId
                         setIsCopyFFTDialogOpen(false);
                     }}
                 /> : null}
+
+            {projectData ?
+                <ProjectHistoryDialog
+                    currentProject={projectData}
+                    isOpen={isProjectHistoryDialogOpen}
+                    onClose={() => setIsProjectHistoryDialogOpen(false)}
+                    displayProjectSince={(time) => {
+                        loadFFTData(projectData._id, true, time);
+                        setIsProjectHistoryDialogOpen(false);
+
+                        let timestampFilter = time.toISOString();
+                        updateQueryParams(fcFilter, fgFilter, stateFilter, timestampFilter);
+                        setAsOfTimestampFilter(timestampFilter);
+                    }}
+                />
+                : null}
         </HtmlPage >
     )
 }

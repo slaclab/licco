@@ -146,6 +146,8 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, 
         }
     }
 
+    const disableSubmit = projectName.trim() == "" || description.trim() == ""
+
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Create a New Project" autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
@@ -179,7 +181,7 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, 
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting}>Create Project</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={disableSubmit}>Create Project</Button>
                 </>
             } />
         </Dialog>
@@ -222,7 +224,7 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`Clone Project (${project.name})`} autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
-                <FormGroup label="Cloned Project Name:">
+                <FormGroup label="Cloned Project Name:" labelInfo="(required)">
                     <InputGroup id="project-name"
                         placeholder=""
                         value={projectName}
@@ -231,7 +233,7 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
                     />
                 </FormGroup>
 
-                <FormGroup label="Cloned Project Description:">
+                <FormGroup label="Cloned Project Description:" labelInfo="(required)">
                     <InputGroup id="project-description"
                         placeholder=""
                         value={projectDescription}
@@ -288,7 +290,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`Edit Project (${project.name})`} autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
-                <FormGroup label="Project Name:">
+                <FormGroup label="Project Name:" labelInfo="(required)">
                     <InputGroup id="project-name"
                         placeholder=""
                         value={projectName}
@@ -297,7 +299,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
                     />
                 </FormGroup>
 
-                <FormGroup label="Project Description:">
+                <FormGroup label="Project Description:" labelInfo="(required)">
                     <InputGroup id="project-description"
                         placeholder=""
                         value={projectDescription}

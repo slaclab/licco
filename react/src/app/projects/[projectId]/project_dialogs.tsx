@@ -1,7 +1,8 @@
+import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectInfo, fetchAllProjects, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
+import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjects, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -323,6 +324,101 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                 </>
             }>
                 {dialogErr ? <span className="error">ERROR: {dialogErr}</span> : null}
+            </DialogFooter>
+        </Dialog >
+    )
+}
+
+
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, currentProject, onClose, displayProjectSince }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [dialogErr, setDialogErr] = useState('');
+    const [data, setData] = useState<ProjectHistoryChange[]>([])
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        setIsLoading(true);
+        fetchHistoryOfChanges(currentProject._id)
+            .then((data) => {
+                setData(data);
+                setDialogErr('');
+            }).catch((e) => {
+                console.error(e);
+                let err = e as JsonErrorMsg;
+                let msg = "Failed to fetch project diff history: " + err.error;
+                setDialogErr(msg);
+            }).finally(() => {
+                setIsLoading(false);
+            })
+    }, [isOpen]);
+
+
+    const projectHistoryTable = useMemo(() => {
+        if (isLoading) {
+            return <NonIdealState icon={<Spinner />} title="Loading Project History" description="Please wait..." />
+        }
+
+        if (dialogErr) {
+            return <NonIdealState icon="error" title="Error" description={dialogErr} />
+        }
+
+        if (data.length == 0) {
+            return <NonIdealState icon="clean" title="No Project History Exists" description={`Project ${currentProject.name} does not have any changes since creation`} />
+        }
+
+        let currentTime = toUnixMilliseconds(data[0].time);
+
+        return (
+            <table className="table table-sm table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>FFT</th>
+                        <th>Attribute</th>
+                        <th>Value</th>
+                        <th className="text-nowrap">Changed By</th>
+                        <th className="text-nowrap">At time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.map(change => {
+                        let time = toUnixMilliseconds(change.time);
+                        let timeHasChanged = currentTime != time;
+                        currentTime = time;
+                        return (
+                            <tr key={change._id}>
+                                <td>{timeHasChanged ?
+                                    <Button icon="history"
+                                        title="View the project as of this point in time"
+                                        onClick={(e) => displayProjectSince(change.time)}
+                                    /> : null}
+                                </td>
+                                <td>{change.fc}-{change.fg}</td>
+                                <td>{change.key}</td>
+                                <td>{change.val}</td>
+                                <td>{change.user}</td>
+                                <td>{formatToLiccoDateTime(change.time)}</td>
+                            </tr>
+                        )
+                    })}
+                </tbody>
+            </table>
+        )
+    }, [data, dialogErr, isLoading])
+
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "70rem", maxWidth: "95%" }}>
+            <DialogBody useOverflowScrollContainer>
+                {projectHistoryTable}
+            </DialogBody>
+            <DialogFooter actions={
+                <>
+                    <Button onClick={onClose}>Close</Button>
+                </>
+            }>
             </DialogFooter>
         </Dialog >
     )

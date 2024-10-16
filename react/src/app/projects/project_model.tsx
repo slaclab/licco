@@ -96,18 +96,6 @@ export function fetchProjectDiff(currentProjectId: string, otherProjectId: strin
     return Fetch.get<FFTDiff[]>(`/ws/projects/${currentProjectId}/diff_with?other_id=${otherProjectId}`)
 }
 
-
-export interface FCState {
-    sortorder: number;
-    label: string;
-    description: "";
-}
-
-export function fetchFcStateEnums(): Promise<FCState[]> {
-    return Fetch.get<Record<string, FCState>>("/ws/enums/FCState")
-        .then(data => Object.values(data));
-}
-
 export class DeviceState {
     private constructor(public readonly name: string, public readonly sortOrder: number, public readonly backendEnumName: string) {
     }
@@ -147,4 +135,25 @@ export class DeviceState {
 
 export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetails>> {
     return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/fcs/${fftId}`, { body: JSON.stringify(changes) });
+}
+
+
+export interface ProjectHistoryChange {
+    _id: string;
+    prj: string;
+    fc: string;
+    fg: string;
+    key: string; // field name (attribute name)
+    val: string | number;
+    user: string; // user who made this change
+    time: Date;
+}
+
+export function fetchHistoryOfChanges(projectId: string): Promise<ProjectHistoryChange[]> {
+    return Fetch.get<ProjectHistoryChange[]>(`/ws/projects/${projectId}/changes/`)
+        .then((data) => {
+            // create date objects from given date
+            data.forEach(d => d.time = new Date(d.time));
+            return data;
+        });
 }
