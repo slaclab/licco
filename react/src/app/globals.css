@@ -148,6 +148,10 @@ of its container should be set.
   pointer-events: none;
 }
 
+.table-nowrap td {
+  white-space: nowrap !important;
+}
+
 label.table-checkbox {
   margin: 0 !important;
 }

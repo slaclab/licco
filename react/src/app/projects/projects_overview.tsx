@@ -5,7 +5,7 @@ import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
 
 
 function sortString(a: string, b: string, desc: boolean = true) {
@@ -33,6 +33,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
+    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
@@ -127,7 +128,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                         <tr>
                             <th scope="col">
                                 <Button icon="add" title="Add new Project" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
-                                <Button icon="history" title="Show the history of project approvals" minimal={true} small={true} />
+                                <Button icon="history" title="Show the history of project approvals" onClick={(e) => setIsProjectHistoryDialogOpen(true)} minimal={true} small={true} />
                                 {projectDataLoading ?
                                     <Button minimal={true} small={true} disabled={true} loading={projectDataLoading} />
                                     : null
@@ -211,6 +212,11 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     setProjectData(newData);
                     setIsAddProjectDialogOpen(false)
                 }}
+            />
+
+            <HistoryOfProjectApprovalsDialog
+                isOpen={isProjectHistoryDialogOpen}
+                onClose={() => setIsProjectHistoryDialogOpen(false)}
             />
 
             {selectedProject && isApprovalDialogOpen ?

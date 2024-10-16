@@ -157,3 +157,12 @@ export function fetchHistoryOfChanges(projectId: string): Promise<ProjectHistory
             return data;
         });
 }
+
+export interface ProjectApprovalHistory {
+    _id: string;
+    switch_time: Date;
+    requestor_uid: string;
+    prj: string; // project name
+    description: string;
+    owner: string;
+}

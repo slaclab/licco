@@ -1,7 +1,8 @@
-import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup } from "@blueprintjs/core";
-import { useEffect, useState } from "react";
+import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
+import { useEffect, useMemo, useState } from "react";
+import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
 
 
 type projectApprovers = string[];
@@ -312,6 +313,88 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
                     <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={projectName == "" || projectDescription == ""}>Update Project</Button>
+                </>
+            } />
+        </Dialog>
+    )
+}
+
+export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ isOpen, onClose }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [dialogError, setDialogError] = useState('');
+    const [projectHistory, setProjectHistory] = useState<ProjectApprovalHistory[]>([]);
+
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        setIsLoading(true);
+        Fetch.get<ProjectApprovalHistory[]>(`/ws/history/project_approvals`)
+            .then((data) => {
+                data.forEach(d => d.switch_time = new Date(d.switch_time));
+                setProjectHistory(data);
+                setDialogError('');
+            }).catch((e) => {
+                console.error("Failed to fetch project approvals", e);
+                let err = e as JsonErrorMsg;
+                setDialogError(`Failed to fetch history of project approvals: ${err.error}`);
+            }).finally(() => {
+                setIsLoading(false);
+            })
+    }, [isOpen])
+
+    const projectHistoryTable = useMemo(() => {
+        if (isLoading) {
+            return <NonIdealState icon={<Spinner />} title="Loading" description={"Fetching data..."} />
+        }
+
+        if (dialogError) {
+            return <NonIdealState icon="error" title="Error" description={dialogError} />
+        }
+
+        if (projectHistory.length == 0) {
+            return <NonIdealState icon="clean" title="No Project Approvals Found" description={"There are no project approvals at this moment"}></NonIdealState>
+        }
+
+        return (
+            <table className="table table-sm table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Project Name</th>
+                        <th>Switched at</th>
+                        <th>Switched by</th>
+                        <th>Project description</th>
+                        <th>Project owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {projectHistory.map(history => {
+                        return (
+                            <tr key={history._id}>
+                                <td className="text-nowrap">{history.prj}</td>
+                                <td className="text-nowrap">{formatToLiccoDateTime(history.switch_time)}</td>
+                                <td className="text-nowrap">{history.requestor_uid}</td>
+                                <td>{history.description}</td>
+                                <td className="text-nowrap">{history.owner}</td>
+                            </tr>
+                        )
+                    })}
+                </tbody>
+            </table>
+        )
+
+    }, [projectHistory])
+
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`History of Project Approvals`} style={{ width: "60rem", maxWidth: "90%" }}>
+            <DialogBody useOverflowScrollContainer>
+                {projectHistoryTable}
+            </DialogBody>
+            <DialogFooter actions={
+                <>
+                    <Button onClick={(e) => onClose()}>Close</Button>
                 </>
             } />
         </Dialog>
