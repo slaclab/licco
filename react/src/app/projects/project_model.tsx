@@ -8,10 +8,25 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: string; // TODO: state all the possible project statuses
+    status: string;
     approver?: string;
     submitted_time?: Date;
     submitter?: string;
+}
+
+// fetch data about all projects
+export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
+    const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
+    projects.forEach(p => projectTransformTimeIntoDates(p))
+    return projects;
+}
+
+export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> {
+    return Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
+        .then(data => {
+            projectTransformTimeIntoDates(data);
+            return data;
+        });
 }
 
 export function projectTransformTimeIntoDates(project: ProjectInfo) {
@@ -24,29 +39,19 @@ export function projectTransformTimeIntoDates(project: ProjectInfo) {
     }
 }
 
-// fetch data about all projects
-export async function fetchAllProjects(): Promise<ProjectInfo[]> {
-    const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
-    for (let p of projects) {
-        projectTransformTimeIntoDates(p);
-    }
-    return projects;
+export function isProjectSubmitted(project?: ProjectInfo): boolean {
+    return project?.status === "submitted";
 }
 
-export function isProjectSubmitted(project?: ProjectInfo): boolean {
-    if (!project) {
-        return false;
-    }
-    return project.status === "submitted";
-}
 export function isProjectApproved(project?: ProjectInfo): boolean {
     return project?.status === "approved";
 }
 
-
 export interface ProjectDeviceDetails {
     fft: FFT;
+    tc_part_no: string;
     comments: string;
+    state: string;
     nom_ang_x?: number;
     nom_ang_y?: number;
     nom_ang_z?: number;
@@ -56,8 +61,6 @@ export interface ProjectDeviceDetails {
     nom_loc_x?: number;
     nom_loc_y?: number;
     nom_loc_z?: number;
-    state: string; // Conceptual | XX | YY | TODO:
-    tc_part_no: string;
     ray_trace?: number;
 }
 
@@ -67,6 +70,28 @@ export const ProjectDeviceDetailsNumericKeys: (keyof ProjectDeviceDetails)[] = [
     'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
     'ray_trace'
 ]
+
+export async function fetchProjectFfts(projectId: string, showAllEntries?: boolean, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
+    const queryParams = new URLSearchParams();
+    if (showAllEntries != undefined) {
+        queryParams.set('showallentries', showAllEntries.toString());
+    }
+    if (sinceTime != undefined) {
+        queryParams.set("asoftimestamp", sinceTime.toISOString());
+    }
+
+    let url = `/ws/projects/${projectId}/ffts/`;
+    if (queryParams.size > 0) {
+        url += `?${queryParams.toString()}`;
+    }
+
+    return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
+        .then(data => {
+            let devices = Object.values(data);
+            devices.forEach(d => transformProjectDeviceDetails(d));
+            return devices;
+        });
+}
 
 function numberOrDefault(input: number | string | undefined, defaultVal: number | undefined): number | undefined {
     if (input == undefined) {
@@ -95,19 +120,12 @@ export function transformProjectDeviceDetails(device: ProjectDeviceDetails) {
     }
 }
 
-
 export interface FFT {
     _id: string;
     fc: string;
     fg: string;
 }
 
-interface FFTDiffBackend {
-    diff: boolean;
-    key: string;          // <fft_id>.<field_name>
-    my: string | number;  // our project value
-    ot: string | number;  // other's project value
-}
 
 export interface FFTDiff {
     diff: boolean;      // true if there is difference between same fft of 2 projects
@@ -117,25 +135,18 @@ export interface FFTDiff {
     other: string | number;
 }
 
-function parseFftFieldsFromDiff(diff: FFTDiffBackend): { id: string, field: string } {
-    let [id, ...rest] = diff.key.split(".",);
-    let nameOfField = rest.join(".");
-    if (!nameOfField) { // this should never happen
-        throw new Error(`Invalid diff key ${diff.key}: diff key should consist of "<fft_id>.<key>"`);
-    }
-    return { id: id, field: nameOfField }
-}
-
 export function fetchProjectDiff(currentProjectId: string, otherProjectId: string, approved?: boolean): Promise<FFTDiff[]> {
     let params = new URLSearchParams();
     params.set("other_id", otherProjectId);
     if (approved != undefined) {
+        // TODO: inconsistent backend behavior: here backend expects 1/0, 
+        // on some other endpoints it expects true/false
         let approvedValue = approved ? "1" : "0";
         params.set("approved", approvedValue);
     }
 
     let url = `/ws/projects/${currentProjectId}/diff_with?` + params.toString();
-    return Fetch.get<FFTDiffBackend[]>(url)
+    return Fetch.get<fftDiffBackend[]>(url)
         .then(data => {
             return data.map(d => {
                 let { id, field } = parseFftFieldsFromDiff(d);
@@ -151,6 +162,23 @@ export function fetchProjectDiff(currentProjectId: string, otherProjectId: strin
         });
 }
 
+interface fftDiffBackend {
+    diff: boolean;
+    key: string;          // <fft_id>.<field_name>
+    my: string | number;  // our project value
+    ot: string | number;  // other's project value
+}
+
+function parseFftFieldsFromDiff(diff: fftDiffBackend): { id: string, field: string } {
+    let [id, ...rest] = diff.key.split(".",);
+    let nameOfField = rest.join(".");
+    if (!nameOfField) { // this should never happen
+        throw new Error(`Invalid diff key ${diff.key}: diff key should consist of "<fft_id>.<key>"`);
+    }
+    return { id: id, field: nameOfField }
+}
+
+// helper class for transforming status strings into enums and back
 export class DeviceState {
     private constructor(public readonly name: string, public readonly sortOrder: number, public readonly backendEnumName: string) {
     }

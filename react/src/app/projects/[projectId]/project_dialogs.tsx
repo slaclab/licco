@@ -2,7 +2,7 @@ import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_util
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjects, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -85,7 +85,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
             return;
         }
 
-        fetchAllProjects()
+        fetchAllProjectsInfo()
             .then((projects) => {
                 let allProjects = projects.filter(p => isProjectSubmitted(p)).filter(p => p.name !== currentProject.name);
                 setAvailableProjects(allProjects);

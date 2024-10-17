@@ -1,10 +1,10 @@
 import { HtmlPage } from "@/app/components/html_page";
-import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
+import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, isProjectSubmitted, syncDeviceUserChanges, transformProjectDeviceDetails } from "../project_model";
+import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
@@ -107,16 +107,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
         setFftDataLoadingError('');
-        let url = `/ws/projects/${projectId}/ffts/?showallentries=${showAllEntries}`;
-        if (sinceTime) {
-            url += `&asoftimestamp=${sinceTime.toISOString()}`
-        }
-        return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
-            .then((data) => {
-                // TODO: missing device number field is set to "" (empty string):
-                // we should turn it into an null to avoid having problems when formatting it later
-                let devices = Object.values(data);
-                devices.forEach(d => transformProjectDeviceDetails(d));
+        return fetchProjectFfts(projectId, showAllEntries, sinceTime)
+            .then(devices => {
                 setFftData(devices);
                 return devices;
             }).catch((e) => {
@@ -141,11 +133,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
         }
 
-        Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
-            .then(data => {
-                setProjectData(data);
-            }).catch((e) => {
+        fetchProjectInfo(projectId)
+            .then(data => setProjectData(data))
+            .catch(e => {
                 console.error("Failed to make a project request");
+                // TODO: display this error in the UI...
             });
 
         let showAllEntries = true;

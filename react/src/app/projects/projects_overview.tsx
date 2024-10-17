@@ -5,7 +5,7 @@ import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
 
 
@@ -42,7 +42,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
-        fetchAllProjects()
+        fetchAllProjectsInfo()
             .then((projects) => {
                 setProjectData(projects);
             }).catch((e) => {
