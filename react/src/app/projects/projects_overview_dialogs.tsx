@@ -1,7 +1,8 @@
-import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
+import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
+import { sortString } from "../utils/sort_utils";
 import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
 
 
@@ -395,6 +396,64 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Close</Button>
+                </>
+            } />
+        </Dialog>
+    )
+}
+
+
+// dialog for chosing with with other project we want to compare our project with
+export const ProjectComparisonDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, availableProjects: ProjectInfo[], onClose: () => void, onSubmit?: (updatedProject: ProjectInfo) => void }> = ({ isOpen, project, availableProjects, onClose, onSubmit }) => {
+    const DEFAULT_PROJECT = "Please select a project";
+    const [selectedProjectName, setSelectedProjectName] = useState<string>(DEFAULT_PROJECT);
+
+    const projects = useMemo(() => {
+        let p = availableProjects.filter(p => p.name != project.name).map(p => p.name);
+        p.sort((a, b) => sortString(a, b, false));
+        return [DEFAULT_PROJECT, ...p];
+    }, [availableProjects]);
+
+    const selectedProject = useMemo(() => {
+        if (selectedProjectName == DEFAULT_PROJECT) {
+            // we just return the same project we are comparing with to get around typesystem
+            // the button is disabled in case of a default project, so this should never be a problem
+            return project;
+        }
+
+        for (let p of availableProjects) {
+            if (p.name == selectedProjectName) {
+                return p;
+            }
+        }
+        return project;
+    }, [selectedProjectName])
+
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Compare Projects`} autoFocus={true}>
+            <DialogBody useOverflowScrollContainer>
+                <FormGroup label="Selected Project:" inline={true}>
+                    <Label>{project.name}</Label>
+                </FormGroup>
+
+                <FormGroup label="Compare With:" inline={true}>
+                    <HTMLSelect
+                        value={selectedProjectName}
+                        options={projects}
+                        onChange={e => setSelectedProjectName(e.target.value)}
+                        iconName="caret-down"
+                        autoFocus={true}
+                    />
+                </FormGroup>
+            </DialogBody>
+            <DialogFooter actions={
+                <>
+                    <Button onClick={(e) => onClose()}>Close</Button>
+                    <AnchorButton
+                        href={`/projects/${project._id}/diff?with=${selectedProject._id}`}
+                        intent="primary"
+                        disabled={selectedProjectName == DEFAULT_PROJECT || selectedProjectName == project.name}
+                    >Compare Projects</AnchorButton>
                 </>
             } />
         </Dialog>

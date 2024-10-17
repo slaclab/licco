@@ -100,7 +100,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
 
     const changeSortOrder = (columnClicked: deviceDetailsColumn) => {
-        let newSortOrder = sortedByColumn.fieldClicked(columnClicked);
+        let newSortOrder = sortedByColumn.changed(columnClicked);
         setSortedByColumn(newSortOrder);
     }
 
@@ -176,7 +176,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             return true;
         })
 
-        sortDeviceDataByColumn(filteredFftData, sortedByColumn.sortField, sortedByColumn.sortDesc);
+        sortDeviceDataByColumn(filteredFftData, sortedByColumn.column, sortedByColumn.sortDesc);
         setFftDataDisplay(filteredFftData);
     }, [fftData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
 
@@ -189,7 +189,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     }
 
     const displaySortOrderIconInColumn = (col: deviceDetailsColumn) => {
-        if (col != sortedByColumn.sortField) {
+        if (col != sortedByColumn.column) {
             return null;
         }
         return <Icon icon={sortedByColumn.sortDesc ? "arrow-down" : "arrow-up"} className="ms-1" />

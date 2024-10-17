@@ -2,7 +2,7 @@ import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_util
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjects, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted, parseFftFieldNameFromFftDiff, parseFftIdFromFftDiff } from "../project_model";
+import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjects, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -119,12 +119,12 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
         setFetchingProjectDiff(true);
         fetchProjectDiff(currentProject._id, newProject._id)
             .then(diff => {
-                let diffsToShow = diff.filter(d => d.diff === true && parseFftIdFromFftDiff(d) === FFT._id);
+                let diffsToShow = diff.filter(d => d.diff === true && d.fftId === FFT._id);
 
                 // it's possible that the other project does not have this fftid; the backend does not
                 // throw an error in this case, and we have to handle this case manually. 
                 // It only happens if one of the names of fft field starts with "fft.<_id>|<fc>|<fg>"
-                let otherProjectDoesNotHaveFFT = diffsToShow.some(obj => parseFftFieldNameFromFftDiff(obj).startsWith("fft."))
+                let otherProjectDoesNotHaveFFT = diffsToShow.some(obj => obj.fieldName.startsWith("fft."))
                 if (otherProjectDoesNotHaveFFT) {
                     setMissingFFTOnOtherProject(true);
                     setChangedFFTs([]);
@@ -184,7 +184,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                 return true;
             }
             return false;
-        }).map(diff => parseFftFieldNameFromFftDiff(diff));
+        }).map(diff => diff.fieldName);
         let data = { 'other_id': projectIdToCopyFrom, 'attrnames': attributeNames }
 
         const projectIdToCopyTo = currentProject._id;
@@ -252,11 +252,11 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                     </thead>
                     <tbody>
                         {changedFFTs.map((change, i) => {
-                            return (<tr key={change.key}>
-                                <td>{parseFftFieldNameFromFftDiff(change)}</td>
+                            return (<tr key={`${change.fftId}-${change.fieldName}`}>
+                                <td>{change.fieldName}</td>
                                 <td>{change.my}</td>
                                 <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
-                                <td>{change.ot}</td>
+                                <td>{change.other}</td>
                                 <td>
                                     {/* note: leave the comparison === true, otherwise the React will complain about controlled
                                 and uncontrolled components. I think this is a bug in the library and not the issue with our code,

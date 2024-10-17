@@ -1,17 +1,17 @@
 
 // helper for changing sort order of clicked table columns
 export class SortState<T> {
-    constructor(public sortField: T, public sortDesc: boolean = true) { }
+    constructor(public column: T, public sortDesc: boolean = true) { }
 
-    public fieldClicked(clickedField: T): SortState<T> {
-        if (clickedField == this.sortField) {
+    public changed(clickedColumn: T): SortState<T> {
+        if (clickedColumn == this.column) {
             // same field was clicked, change the sort order
             let newSortOrder = !this.sortDesc;
-            return new SortState(clickedField, newSortOrder);
+            return new SortState(clickedColumn, newSortOrder);
         }
 
         // different field was clicked, use the default sort order
-        return new SortState(clickedField);
+        return new SortState(clickedColumn);
     }
 }
 
@@ -23,7 +23,11 @@ export function sortString(a?: string, b?: string, desc: boolean = true) {
         return desc ? -diff : diff;
     }
 
-    // ensures that empty fields are always at the bottom
+    // ensures that empty fields are always at the bottom 
+    // regardless of asc or desc sorting order
+    if (a == "" && b == "") {
+        return 0;
+    }
     if (a == "") {
         return 1;
     }
@@ -41,19 +45,15 @@ export function sortNumber(a?: number, b?: number, desc: boolean = true) {
     }
 
     // ensures that empty fields are always at the bottom 
-    // either a or b is undefined
-    // number that don't exist should be demoted to the bottom (when desc order is used)
+    // regardless of asc or desc sorting order
     if (a === undefined && b === undefined) {
         return 0;
     }
-
     if (a === undefined) {
         return 1;
     }
-
     if (b === undefined) {
         return -1;
     }
-
     return 0;
 }

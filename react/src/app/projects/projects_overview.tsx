@@ -4,11 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
-import { sortString } from "../utils/sort_utils";
+import { SortState, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog } from "./projects_overview_dialogs";
-
-
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
 
 
 function sortByCreationDate(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
@@ -32,15 +30,15 @@ export const ProjectsOverview: React.FC = ({ }) => {
     // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
+    const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     // sorting
-    type sortColumnField = 'name' | 'created' | 'edit' | 'owner'
-    const [sortedField, setSortedField] = useState<sortColumnField>('created');
-    const [sortInDescOrder, setSortInDescOrder] = useState<boolean>(true);
+    type sortColumnField = 'name' | 'created' | 'edit' | 'owner';
+    const [sortByColumn, setSortByColumn] = useState<SortState<sortColumnField>>(new SortState('created'));
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
@@ -66,48 +64,43 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     const sortOrderChanged = (field: sortColumnField) => {
-        let desc = true; // by default we always order in desc order first
-        if (field == sortedField) {
-            // same field was clicked, change sort order based on the previous state
-            desc = !sortInDescOrder;
-        }
-        setSortedField(field);
-        setSortInDescOrder(desc);
+        let newSortOrder = sortByColumn.changed(field)
+        setSortByColumn(newSortOrder);
     }
 
     const renderTableSortButtonIfAny = (field: sortColumnField) => {
-        if (field != sortedField) {
+        if (field != sortByColumn.column) {
             // if we don't show the icon (null node) the column would change width 
             // when we display the icon for the first time. To avoid this jump 
             // we instead render a blank icon. 
             return <Icon className="ms-1" icon="blank" />
         }
 
-        return <Icon className="ms-1" icon={sortInDescOrder ? "arrow-down" : "arrow-up"} />
+        return <Icon className="ms-1" icon={sortByColumn.sortDesc ? "arrow-down" : "arrow-up"} />
     }
 
     const projectDataDisplayed = useMemo(() => {
         let displayedData = [...projectData];
 
         // sort data according to selected filter
-        switch (sortedField) {
+        switch (sortByColumn.column) {
             case 'created':
-                displayedData.sort((a, b) => sortByCreationDate(a, b, sortInDescOrder));
+                displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
                 break;
             case 'edit':
-                displayedData.sort((a, b) => sortByLastEditTime(a, b, sortInDescOrder));
+                displayedData.sort((a, b) => sortByLastEditTime(a, b, sortByColumn.sortDesc));
                 break;
             case 'name':
-                displayedData.sort((a, b) => sortString(a.name, b.name, sortInDescOrder));
+                displayedData.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 break;
             case 'owner':
-                displayedData.sort((a, b) => sortString(a.owner, b.owner, sortInDescOrder));
+                displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 break;
             default:
-                displayedData.sort((a, b) => sortByCreationDate(a, b, sortInDescOrder));
+                displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
         }
         return displayedData;
-    }, [projectData, sortedField, sortInDescOrder]);
+    }, [projectData, sortByColumn]);
 
 
     if (err) {
@@ -146,7 +139,12 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <tr key={project._id}>
                                     <td>
                                         <ButtonGroup minimal={true}>
-                                            <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true} />
+                                            <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
+                                                onClick={e => {
+                                                    setSelectedProject(project);
+                                                    setIsComparisonDialogOpen(true);
+                                                }}
+                                            />
                                             <Button icon="duplicate" title="Clone this project" minimal={true} small={true}
                                                 onClick={(e) => {
                                                     setSelectedProject(project);
@@ -216,6 +214,16 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 isOpen={isProjectHistoryDialogOpen}
                 onClose={() => setIsProjectHistoryDialogOpen(false)}
             />
+
+            {selectedProject && isComparisonDialogOpen ?
+                <ProjectComparisonDialog
+                    isOpen={isComparisonDialogOpen}
+                    project={selectedProject}
+                    availableProjects={projectData}
+                    onClose={() => setIsComparisonDialogOpen(false)}
+                />
+                : null
+            }
 
             {selectedProject && isApprovalDialogOpen ?
                 <ProjectApprovalDialog

@@ -102,29 +102,53 @@ export interface FFT {
     fg: string;
 }
 
-export interface FFTDiff {
+interface FFTDiffBackend {
     diff: boolean;
     key: string;          // <fft_id>.<field_name>
     my: string | number;  // our project value
     ot: string | number;  // other's project value
 }
 
-export function parseFftIdFromFftDiff(diff: FFTDiff): string {
-    let id = diff.key.split(".")[0];
-    return id;
+export interface FFTDiff {
+    diff: boolean;      // true if there is difference between same fft of 2 projects
+    fftId: string;      // fft id (e.g, e321ads321d)
+    fieldName: string;  // name of the field (e.g., nom_loc_x)
+    my: string | number;
+    other: string | number;
 }
 
-export function parseFftFieldNameFromFftDiff(diff: FFTDiff): string {
+function parseFftFieldsFromDiff(diff: FFTDiffBackend): { id: string, field: string } {
     let [id, ...rest] = diff.key.split(".",);
     let nameOfField = rest.join(".");
-    if (!nameOfField) {
+    if (!nameOfField) { // this should never happen
         throw new Error(`Invalid diff key ${diff.key}: diff key should consist of "<fft_id>.<key>"`);
     }
-    return nameOfField;
+    return { id: id, field: nameOfField }
 }
 
-export function fetchProjectDiff(currentProjectId: string, otherProjectId: string): Promise<FFTDiff[]> {
-    return Fetch.get<FFTDiff[]>(`/ws/projects/${currentProjectId}/diff_with?other_id=${otherProjectId}`)
+export function fetchProjectDiff(currentProjectId: string, otherProjectId: string, approved?: boolean): Promise<FFTDiff[]> {
+    let params = new URLSearchParams();
+    params.set("other_id", otherProjectId);
+    if (approved != undefined) {
+        let approvedValue = approved ? "1" : "0";
+        params.set("approved", approvedValue);
+    }
+
+    let url = `/ws/projects/${currentProjectId}/diff_with?` + params.toString();
+    return Fetch.get<FFTDiffBackend[]>(url)
+        .then(data => {
+            return data.map(d => {
+                let { id, field } = parseFftFieldsFromDiff(d);
+                let fftDiff: FFTDiff = {
+                    diff: d.diff,
+                    fftId: id,
+                    fieldName: field,
+                    my: d.my,
+                    other: d.ot,
+                }
+                return fftDiff;
+            })
+        });
 }
 
 export class DeviceState {
