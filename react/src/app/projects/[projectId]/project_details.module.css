@@ -1,0 +1,20 @@
+.detailsTable th {
+    /* table headers shouldn't wrap as that causes vertical jumps of the row
+    when the user starts editing the table */
+    white-space: nowrap;
+}
+
+/* text in columns should not wrap, except for the comment column */
+.detailsTable td {
+    white-space: nowrap;
+}
+
+/* comment column should wrap for longer text: the comment could be long and
+we don't want to push the rest of the columns so far to the right side, just
+because of one long comment field; hence we wrap the text
+*/
+.detailsTable td:nth-child(6) {
+    min-width: 20ch;
+    max-width: 30ch;
+    white-space: wrap;
+}

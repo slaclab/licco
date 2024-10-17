@@ -1,6 +1,6 @@
 "use client";
 
-import { Alignment, AnchorButton, Navbar, Tooltip } from '@blueprintjs/core';
+import { Alignment, AnchorButton, Navbar } from '@blueprintjs/core';
 import { usePathname } from 'next/navigation';
 import { Anchor } from 'react-bootstrap';
 import styles from './navbar.module.css';
@@ -36,10 +36,9 @@ export function Navigation() {
                 })}
             </Navbar.Group>
             <Navbar.Group align={Alignment.RIGHT}>
-                <Tooltip content="Machine Configuration Database Help (on Confluence)" position="bottom">
-                    <AnchorButton className={`${styles.btn} bp5-minimal`} href="https://confluence.slac.stanford.edu/display/PCDS/Machine+Configuration+Database+Guide">?</AnchorButton>
-                </Tooltip>
+                <AnchorButton title="Machine Configuration Database Help (on Confluence)"
+                    className={`${styles.btn} bp5-minimal`} href="https://confluence.slac.stanford.edu/display/PCDS/Machine+Configuration+Database+Guide">?</AnchorButton>
             </Navbar.Group>
-        </Navbar>
+        </Navbar >
     );
 }
