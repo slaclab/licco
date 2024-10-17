@@ -1,0 +1,26 @@
+.navbar {
+    background-color: var(--slac-red);
+    color: #fff !important;
+    display: block;
+    /* position: sticky;
+    top: 0;
+    left: 0; */
+}
+
+.navbar a {
+    color: #fff !important;
+}
+
+.logo {
+    max-height: 2rem;
+}
+
+.btn {
+    font-weight: 700;
+}
+.btn:hover {
+    background-color: #960108 !important;
+}
+.btnActive {
+    background-color: #800107 !important;
+}
