@@ -11,7 +11,7 @@ import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from ".
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import styles from './project_details.module.css';
 
-type deviceDetailsColumn = (keyof (Omit<ProjectDeviceDetails, "fft" | "comments"> & { fc: string, fg: string }));
+type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments">);
 
 /**
  * Helper function for sorting device details based on the clicked table column header
@@ -24,20 +24,20 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
     switch (col) {
         case "fc":
             data.sort((a, b) => {
-                let diff = sortString(a.fft.fc, b.fft.fc, desc);
+                let diff = sortString(a.fc, b.fc, desc);
                 if (diff != 0) {
                     return diff;
                 }
-                return sortString(a.fft.fg, b.fft.fg, false); // asc 
+                return sortString(a.fg, b.fg, false); // asc 
             });
             break;
         case "fg":
             data.sort((a, b) => {
-                let diff = sortString(a.fft.fg, b.fft.fg, desc);
+                let diff = sortString(a.fg, b.fg, desc);
                 if (diff != 0) {
                     return diff;
                 }
-                return sortString(a.fft.fc, b.fft.fc, false); // asc
+                return sortString(a.fc, b.fc, false); // asc
             });
             break;
         default:
@@ -48,7 +48,7 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                     if (diff != 0) {
                         return diff;
                     }
-                    return sortString(a.fft.fc, b.fft.fc, false); // asc
+                    return sortString(a.fc, b.fc, false); // asc
                 });
             } else if (dataType == "string") {
                 data.sort((a, b) => {
@@ -56,7 +56,7 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                     if (diff != 0) {
                         return diff
                     }
-                    return sortString(a.fft.fc, b.fft.fc, false); // asc
+                    return sortString(a.fc, b.fc, false); // asc
                 })
             }
             break;
@@ -153,12 +153,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         let fgGlobMatcher = createGlobMatchRegex(fgFilter);
         let filteredFftData = fftData.filter(d => {
             if (fcFilter) {
-                return fcGlobMatcher.test(d.fft.fc);
+                return fcGlobMatcher.test(d.fc);
             }
             return true;
         }).filter(d => {
             if (fgFilter) {
-                return fgGlobMatcher.test(d.fft.fg);
+                return fgGlobMatcher.test(d.fg);
             }
             return true;
         }).filter(d => {
@@ -317,17 +317,17 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.fft._id} project={projectData} device={device} disabled={disableRow}
+                                return <DeviceDataTableRow key={device.id} project={projectData} device={device} disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
-                                        setCurrentFFT(device.fft);
+                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
                                         setIsCopyFFTDialogOpen(true);
                                     }
                                     }
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.fft._id} project={projectData} device={device} availableFftStates={availableFftStates}
+                            return <DeviceDataEditTableRow key={device.id} project={projectData} device={device} availableFftStates={availableFftStates}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -337,7 +337,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     // update existing fft data
                                     let newDeviceData = [];
                                     for (let d of fftData) {
-                                        if (d.fft._id != updatedDeviceData.fft._id) {
+                                        if (d.id != updatedDeviceData.id) {
                                             newDeviceData.push(d);
                                             continue
                                         }
@@ -400,7 +400,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // find current fft and update device details
                         let updatedData = [];
                         for (let d of fftData) {
-                            if (d.fft._id != newDeviceDetails.fft._id) {
+                            if (d.id != newDeviceDetails.id) {
                                 updatedData.push(d);
                                 continue;
                             }
@@ -458,8 +458,8 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                     </td>
                 }
 
-                <td>{device.fft.fc}</td>
-                <td>{device.fft.fg}</td>
+                <td>{device.fc}</td>
+                <td>{device.fg}</td>
                 <td>{device.tc_part_no}</td>
                 <td>{device.state}</td>
                 <td>{device.comments}</td>
@@ -530,7 +530,7 @@ const DeviceDataEditTableRow: React.FC<{
 
     useEffect(() => {
         for (let field of editableDeviceFields) {
-            if (field.key == 'fft') { // fft field is not editable
+            if (field.key == 'id' || field.key == 'fg' || field.key == 'fc') { // fft field is not editable
                 continue;
             }
             field.value[1](device[field.key] as any);
@@ -585,7 +585,7 @@ const DeviceDataEditTableRow: React.FC<{
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
         let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
-        fieldNames = fieldNames.filter(field => field != "fft");
+        fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             if (deviceWithChanges[field] !== device[field]) { // this field has changed
@@ -613,7 +613,7 @@ const DeviceDataEditTableRow: React.FC<{
         }
 
         setSubmitting(true);
-        syncDeviceUserChanges(project._id, deviceWithChanges.fft._id, changes)
+        syncDeviceUserChanges(project._id, deviceWithChanges.id, changes)
             .then((response) => {
                 // TODO: for some reason server returns data for all devices again
                 // when we don't really need it. We just update our changed device
@@ -644,8 +644,8 @@ const DeviceDataEditTableRow: React.FC<{
                 </td>
             }
 
-            <td>{device.fft.fc}</td>
-            <td>{device.fft.fg}</td>
+            <td>{device.fc}</td>
+            <td>{device.fg}</td>
 
             {editableDeviceFields.map((field) => {
                 // the reason why we use components instead of rendering edit fields directly is due to performance

@@ -47,8 +47,30 @@ export function isProjectApproved(project?: ProjectInfo): boolean {
     return project?.status === "approved";
 }
 
-export interface ProjectDeviceDetails {
+// device details used for frontend code; the reason why we don't use 
+// the backend one is due to its nested fft fields; frontend code 
+// and rendering data doesn't like nesting.
+export interface ProjectDeviceDetails extends deviceDetailFields {
+    id: string; // fft id
+    fc: string; // fc id
+    fg: string; // fg id
+    // + the rest of device fields 
+}
+
+export interface ProjectDeviceDetailsBackend extends deviceDetailFields {
     fft: FFT;
+}
+
+export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBackend): ProjectDeviceDetails {
+    return {
+        ...details,
+        id: details.fft._id,
+        fc: details.fft.fc,
+        fg: details.fft.fg,
+    }
+}
+
+interface deviceDetailFields {
     tc_part_no: string;
     comments: string;
     state: string;
@@ -64,18 +86,16 @@ export interface ProjectDeviceDetails {
     ray_trace?: number;
 }
 
-export const ProjectDeviceDetailsNumericKeys: (keyof ProjectDeviceDetails)[] = [
+export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
     'nom_ang_x', 'nom_ang_y', 'nom_ang_z',
     'nom_dim_x', 'nom_dim_y', 'nom_dim_z',
     'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
     'ray_trace'
 ]
 
-export async function fetchProjectFfts(projectId: string, showAllEntries?: boolean, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
+export async function fetchProjectFfts(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
-    if (showAllEntries != undefined) {
-        queryParams.set('showallentries', showAllEntries.toString());
-    }
+    queryParams.set('showallentries', showAllEntries.toString());
     if (sinceTime != undefined) {
         queryParams.set("asoftimestamp", sinceTime.toISOString());
     }
@@ -85,11 +105,12 @@ export async function fetchProjectFfts(projectId: string, showAllEntries?: boole
         url += `?${queryParams.toString()}`;
     }
 
-    return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
+
+    return Fetch.get<Record<string, ProjectDeviceDetailsBackend>>(url)
         .then(data => {
             let devices = Object.values(data);
             devices.forEach(d => transformProjectDeviceDetails(d));
-            return devices;
+            return devices.map(d => deviceDetailsBackendToFrontend(d));
         });
 }
 
@@ -109,7 +130,7 @@ function numberOrDefault(input: number | string | undefined, defaultVal: number 
 }
 
 
-export function transformProjectDeviceDetails(device: ProjectDeviceDetails) {
+export function transformProjectDeviceDetails(device: deviceDetailFields) {
     device.state = DeviceState.fromString(device.state).name;
 
     // empty numeric fields are sent through as strings
@@ -125,7 +146,6 @@ export interface FFT {
     fc: string;
     fg: string;
 }
-
 
 export interface FFTDiff {
     diff: boolean;      // true if there is difference between same fft of 2 projects
@@ -216,8 +236,8 @@ export class DeviceState {
     }
 }
 
-export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetails>> {
-    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/fcs/${fftId}`, { body: JSON.stringify(changes) });
+export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetailsBackend>> {
+    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, { body: JSON.stringify(changes) });
 }
 
 

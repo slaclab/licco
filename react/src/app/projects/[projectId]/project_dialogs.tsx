@@ -2,7 +2,7 @@ import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_util
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -189,10 +189,10 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
 
         const projectIdToCopyTo = currentProject._id;
         const fftIdToCopyTo = FFT._id;
-        Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
+        Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
             { body: JSON.stringify(data) }
         ).then(updatedDeviceData => {
-            onSubmit(updatedDeviceData);
+            onSubmit(deviceDetailsBackendToFrontend(updatedDeviceData));
         }).catch((err) => {
             let e = err as JsonErrorMsg;
             let msg = `Failed to copy fft changes of ${FFT.fc}-${FFT.fg}: ${e.error}`;
