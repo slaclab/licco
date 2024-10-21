@@ -4,7 +4,7 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, ProjectDeviceDetails, ProjectInfo, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, FFT, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectInfo, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
@@ -41,24 +41,25 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
             });
             break;
         default:
-            let dataType = typeof data[0][col];
-            if (dataType == "number") {
+            let isNumericField = ProjectDeviceDetailsNumericKeys.indexOf(col) >= 0;
+            if (isNumericField) {
                 data.sort((a, b) => {
                     let diff = sortNumber(a[col] as any, b[col] as any, desc);
                     if (diff != 0) {
                         return diff;
                     }
                     return sortString(a.fc, b.fc, false); // asc
-                });
-            } else if (dataType == "string") {
+                })
+            } else {
                 data.sort((a, b) => {
                     let diff = sortString(a[col] as any ?? '', b[col] as any ?? '', desc);
                     if (diff != 0) {
                         return diff
                     }
                     return sortString(a.fc, b.fc, false); // asc
-                })
+                });
             }
+
             break;
     }
 }
