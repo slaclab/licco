@@ -206,11 +206,12 @@ export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: ()
     }
 
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Add a new FFT" autoFocus={true}>
+        <Dialog isOpen={isOpen} onClose={onClose} title="Add a new FFT" autoFocus={true} style={{ width: "70ch" }}>
             <DialogBody useOverflowScrollContainer>
-                <p>Please choose/enter a functional component name and fungible token.</p>
-                <p>The UI should offer suggestions as you type. You can choose one of the existing entities or you can type in a brand new functional component name or fungible token.</p>
-                <p>If either entity does not exist in the system, description boxes are displayed. Please enter a valid description; and these will be automatically created in the system for you as part of creating the new FFT</p>
+                <p>Please choose/enter a functional component name and fungible token.
+                    You can choose one of the existing entities or you can type in a brand new functional component name or fungible token.
+                </p>
+                <p>If either entity does not exist in the system, description inputs will be enabled. Please enter a valid description; and these will be automatically created in the system for you as part of creating the new FFT.</p>
 
                 <datalist id="fc-names-list">
                     {Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
