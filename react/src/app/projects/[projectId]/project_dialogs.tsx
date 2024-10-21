@@ -95,9 +95,8 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                 setAvailableProjects(allProjects);
                 setProjectNames([DEFAULT_PROJECT, ...allProjects.map(p => p.name)]);
                 setDialogErr("");
-            }).catch((err) => {
-                console.error("failed to fetch project data:", err);
-                let e = err as JsonErrorMsg;
+            }).catch((e: JsonErrorMsg) => {
+                console.error("failed to fetch project data:", e);
                 let msg = `Failed to fetch project data: ${e.error}`;
                 setDialogErr(msg);
             })
@@ -139,10 +138,10 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                 setMissingFFTOnOtherProject(false);
                 setChangedFFTs(diffsToShow);
                 setDialogErr("");
-            }).catch(err => {
-                console.error("Failed to fetch project diff: ", err);
-                let e = err as JsonErrorMsg;
-                setDialogErr("Failed to fetch project diff: " + e.error);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to fetch project diff: " + e.error;
+                setDialogErr(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setFetchingProjectDiff(false);
             })
@@ -197,11 +196,10 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
             { body: JSON.stringify(data) }
         ).then(updatedDeviceData => {
             onSubmit(deviceDetailsBackendToFrontend(updatedDeviceData));
-        }).catch((err) => {
-            let e = err as JsonErrorMsg;
+        }).catch((e: JsonErrorMsg) => {
             let msg = `Failed to copy fft changes of ${FFT.fc}-${FFT.fg}: ${e.error}`;
-            console.error(msg, err);
             setDialogErr(msg);
+            console.error(msg, e);
         }).finally(() => {
             setSubmitting(false);
         })
@@ -349,10 +347,9 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
             .then((data) => {
                 setData(data);
                 setDialogErr('');
-            }).catch((e) => {
+            }).catch((e: JsonErrorMsg) => {
                 console.error(e);
-                let err = e as JsonErrorMsg;
-                let msg = "Failed to fetch project diff history: " + err.error;
+                let msg = "Failed to fetch project diff history: " + e.error;
                 setDialogErr(msg);
             }).finally(() => {
                 setIsLoading(false);

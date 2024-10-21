@@ -23,9 +23,8 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
                 .then(projectApprovers => {
                     let approvers = [DEFAULT_USER, ...projectApprovers.filter(a => a != projectOwner)];
                     setApprovers(approvers);
-                }).catch((e) => {
-                    let err = e as JsonErrorMsg;
-                    let msg = `Failed to fetch project approvers: ${err.error}`;
+                }).catch((e: JsonErrorMsg) => {
+                    let msg = `Failed to fetch project approvers: ${e.error}`;
                     console.error(msg, e);
                     setDialogErr(msg);
                 })
@@ -56,9 +55,8 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
             .then((newProject) => {
                 onSubmit(newProject);
                 setDialogErr('');
-            }).catch((e) => {
-                let err = e as JsonErrorMsg;
-                let msg = `Failed to submit the '${selectedApprover}' for approver: ${err.error}`;
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to submit the '${selectedApprover}' for approver: ${e.error}`;
                 setDialogErr(msg);
                 console.error(msg, e);
             }).finally(() => {
@@ -134,8 +132,7 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, 
         Fetch.post<ProjectInfo>(projectUrl, { body: JSON.stringify(body) })
             .then(newProjectInfo => {
                 onSubmit(newProjectInfo);
-            }).catch(err => {
-                let e = err as JsonErrorMsg;
+            }).catch((e: JsonErrorMsg) => {
                 setDialogError(`Failed to create a new project: ${e.error}`);
             }).finally(() => {
                 setIsSubmitting(false);
@@ -214,9 +211,8 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
             .then((clonedProject) => {
                 projectTransformTimeIntoDates(clonedProject);
                 onSubmit(clonedProject);
-            }).catch((e) => {
-                let err = e as JsonErrorMsg;
-                let msg = `Failed to clone project '${project.name}': ${err.error}`;
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to clone project '${project.name}': ${e.error}`;
                 setDialogError(msg);
             }).finally(() => {
                 setIsSubmitting(false);
@@ -280,9 +276,8 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
             .then((clonedProject) => {
                 projectTransformTimeIntoDates(clonedProject);
                 onSubmit(clonedProject);
-            }).catch((e) => {
-                let err = e as JsonErrorMsg;
-                let msg = `Failed to update project ${project.name} data: ${err.error}`;
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to update project ${project.name} data: ${e.error}`;
                 setDialogError(msg);
             }).finally(() => {
                 setIsSubmitting(false);
@@ -337,10 +332,10 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
                 data.forEach(d => d.switch_time = new Date(d.switch_time));
                 setProjectHistory(data);
                 setDialogError('');
-            }).catch((e) => {
-                console.error("Failed to fetch project approvals", e);
-                let err = e as JsonErrorMsg;
-                setDialogError(`Failed to fetch history of project approvals: ${err.error}`);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to fetch history of project approvals: ${e.error}`;
+                setDialogError(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setIsLoading(false);
             })

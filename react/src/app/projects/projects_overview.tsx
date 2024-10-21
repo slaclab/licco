@@ -45,10 +45,10 @@ export const ProjectsOverview: React.FC = ({ }) => {
         fetchAllProjectsInfo()
             .then((projects) => {
                 setProjectData(projects);
-            }).catch((e) => {
-                console.error(e);
-                let err = e as JsonErrorMsg;
-                setError("Failed to load projects data: " + err.error);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to load projects data: " + e.error;
+                setError(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setProjectDataLoading(false);
             });

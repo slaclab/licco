@@ -112,12 +112,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             .then(devices => {
                 setFftData(devices);
                 return devices;
-            }).catch((e) => {
-                console.error("Failed to load device data:", e);
-                let err = e as JsonErrorMsg;
-                let msg = `Failed to load device data: ${err.error}`;
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to load device data: ${e.error}`;
                 setFftData([]);
                 setFftDataLoadingError(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setIsLoading(false);
             });
@@ -620,9 +619,8 @@ const DeviceDataEditTableRow: React.FC<{
                 // TODO: for some reason server returns data for all devices again
                 // when we don't really need it. We just update our changed device
                 onEditDone(deviceWithChanges, "ok");
-            }).catch((e) => {
-                let err = e as JsonErrorMsg;
-                let msg = `Failed to sync user device changes: ${err.error}`;
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to sync user device changes: ${e.error}`;
                 console.error(msg, e);
                 setEditError(msg);
             }).finally(() => {
