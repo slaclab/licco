@@ -503,6 +503,7 @@ const DeviceDataEditTableRow: React.FC<{
         err: [boolean, Dispatch<SetStateAction<boolean>>];
         min?: number;
         max?: number;
+        allowNumbersOnly?: boolean;
     }
 
     let fftStates = useMemo(() => {
@@ -526,7 +527,7 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'nom_ang_x', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_ang_y', type: "number", value: useState<string>(), err: useState(false) },
 
-        { key: 'ray_trace', type: "number", value: useState<string>(), err: useState(false), max: 1, min: 0 }
+        { key: 'ray_trace', type: "number", value: useState<string>(), err: useState(false), max: 1, min: 0, allowNumbersOnly: true }
     ]
 
     useEffect(() => {
@@ -656,7 +657,7 @@ const DeviceDataEditTableRow: React.FC<{
                 if (field.type == "string") {
                     inputField = <StringEditField value={field.value[0] ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
                 } else if (field.type == "number") {
-                    inputField = <NumericEditField value={field.value[0]} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} />
+                    inputField = <NumericEditField value={field.value[0]} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} allowNumbersOnly={field.allowNumbersOnly} />
                 } else if (field.type == "select") {
                     inputField = <SelectEditField value={field.value[0] ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
                 } else {
@@ -696,7 +697,10 @@ const SelectEditField: React.FC<{ value: string, setter: any, options: string[],
 } 
 
 // performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
-const NumericEditField: React.FC<{ value: string | number | undefined, setter: any, err: boolean, errSetter: any, min?: number, max?: number }> = ({ value, setter, err, errSetter, min, max }) => {
+const NumericEditField: React.FC<{ value: string | number | undefined, setter: any, err: boolean, errSetter: any, min?: number, max?: number, allowNumbersOnly?: boolean }> = ({ value, setter, err, errSetter, min, max, allowNumbersOnly: allowNumericCharsOnly }) => {
+    const isNumeric = (v: string) => {
+        return /^\d+$/.test(v);
+    }
     const field = useMemo(() => {
         return (<NumericInput
             buttonPosition="none"
@@ -719,6 +723,12 @@ const NumericEditField: React.FC<{ value: string | number | undefined, setter: a
 
                 // we have a valid number
                 errSetter(false);
+
+                // check special behavior
+                if (allowNumericCharsOnly && v != "") {
+                    let numeric = isNumeric(v);
+                    errSetter(!numeric);
+                }
 
                 // check ranges if any 
                 if (min != undefined) {
