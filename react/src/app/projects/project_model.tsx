@@ -47,6 +47,10 @@ export function isProjectApproved(project?: ProjectInfo): boolean {
     return project?.status === "approved";
 }
 
+export function isProjectInDevelopment(project?: ProjectInfo): boolean {
+    return project?.status === "development";
+}
+
 // device details used for frontend code; the reason why we don't use 
 // the backend one is due to its nested fft fields; frontend code 
 // and rendering data doesn't like nesting.

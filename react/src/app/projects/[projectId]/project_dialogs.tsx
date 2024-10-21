@@ -1,8 +1,9 @@
 import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
+import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -87,7 +88,10 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
 
         fetchAllProjectsInfo()
             .then((projects) => {
-                let allProjects = projects.filter(p => isProjectSubmitted(p)).filter(p => p.name !== currentProject.name);
+                let allProjects = projects.filter(p => {
+                    return isProjectSubmitted(p) || isProjectApproved(p) || isProjectInDevelopment(p);
+                }).filter(p => p.name !== currentProject.name);
+                allProjects.sort((a, b) => sortString(a.name, b.name, false));
                 setAvailableProjects(allProjects);
                 setProjectNames([DEFAULT_PROJECT, ...allProjects.map(p => p.name)]);
                 setDialogErr("");
