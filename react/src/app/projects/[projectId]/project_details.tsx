@@ -223,7 +223,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 {!projectData ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
-                                        <span className="me-3">{projectData?.name}</span>
+                                        <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{projectData?.name}</h5>
 
                                         <Button icon="import" title="Download data to this project" minimal={true} small={true} />
                                         <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
