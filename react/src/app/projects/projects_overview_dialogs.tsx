@@ -96,10 +96,9 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
 
 
 // dialog for adding new projects
-export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, onClose, onSubmit }) => {
+export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: ProjectInfo[], onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, approvedProjects, onClose, onSubmit }) => {
     const DEFAULT_TEMPLATE = "Blank Project";
 
-    const [projectTemplates, setProjectTemplates] = useState<string[]>([DEFAULT_TEMPLATE]);
     const [selectedTemplate, setSelectedTemplate] = useState<string>(DEFAULT_TEMPLATE);
     const [projectName, setProjectName] = useState('');
     const [description, setDescription] = useState('');
@@ -107,11 +106,10 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, 
     const [dialogError, setDialogError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
-        if (isOpen) {
-            // TODO: load project templates if necessary, we don't seem to have them right now...
-        }
-    }, [isOpen])
+    const projectTemplates = useMemo(() => {
+        return [DEFAULT_TEMPLATE, ...approvedProjects.map(p => p.name)];
+    }, [approvedProjects])
+
 
     const submit = () => {
         if (!projectName) {
@@ -124,7 +122,9 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, 
         if (selectedTemplate == DEFAULT_TEMPLATE) {
             projectUrl = "/ws/projects/NewBlankProjectClone/clone/";
         } else {
-            projectUrl = `/ws/projects/${selectedTemplate}/clone/`;
+            let selectedProject = approvedProjects.filter(p => p.name === selectedTemplate)[0];
+            let projectId = selectedProject._id;
+            projectUrl = `/ws/projects/${projectId}/clone/`;
         }
 
         setIsSubmitting(true);

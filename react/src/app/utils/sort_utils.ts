@@ -57,3 +57,14 @@ export function sortNumber(a?: number, b?: number, desc: boolean = true) {
     }
     return 0;
 }
+
+function toUnixMs(a: Date): number {
+    return a.getTime();
+}
+
+export function sortDate(a?: Date, b?: Date, desc: boolean = true) {
+    let timeA = a ? toUnixMs(a) : 0;
+    let timeB = b ? toUnixMs(b) : 0;
+    let diff = timeB - timeA;
+    return desc ? diff : -diff;
+}

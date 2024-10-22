@@ -2,25 +2,12 @@ import { Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
+import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
-import { SortState, sortString } from "../utils/sort_utils";
+import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
 
-
-function sortByCreationDate(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
-    let diff = toUnixSeconds(b.creation_time) - toUnixSeconds(a.creation_time);
-    return desc ? diff : -diff;
-}
-
-function sortByLastEditTime(a: ProjectInfo, b: ProjectInfo, desc: boolean = true) {
-    let timeA = a.edit_time ? toUnixSeconds(a.edit_time) : 0;
-    let timeB = b.edit_time ? toUnixSeconds(b.edit_time) : 0;
-
-    let diff = timeB - timeA;
-    return desc ? diff : -diff;
-}
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
@@ -80,19 +67,19 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     const projectDataDisplayed = useMemo(() => {
-        // approved projects should always be pinned on top of the table 
+        // approved projects should always be pinned to the top of the table 
         let approvedProjects = projectData.filter(p => isProjectApproved(p));
         let displayedData = projectData.filter(p => !isProjectApproved(p));
 
         // sort data according to selected filter
         switch (sortByColumn.column) {
             case 'created':
-                approvedProjects.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
-                displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
+                approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 break;
             case 'edit':
-                approvedProjects.sort((a, b) => sortByLastEditTime(a, b, sortByColumn.sortDesc));
-                displayedData.sort((a, b) => sortByLastEditTime(a, b, sortByColumn.sortDesc));
+                approvedProjects.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
                 break;
             case 'name':
                 approvedProjects.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
@@ -103,11 +90,12 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 break;
             default:
-                approvedProjects.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
-                displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
+                approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
         }
 
-        return [...approvedProjects, ...displayedData];
+        let projects: ProjectInfo[] = [...approvedProjects, ...displayedData];
+        return projects;
     }, [projectData, sortByColumn]);
 
 
@@ -208,6 +196,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
             }
 
             <AddProjectDialog
+                approvedProjects={projectDataDisplayed.filter(p => isProjectApproved(p))}
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
