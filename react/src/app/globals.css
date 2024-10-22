@@ -123,12 +123,15 @@ ul {
   list-style-position: inside;
 }
 
-
+/* 
+NOTE: for sticky scrollable header to work, the maximum height
+of its container should be set.
+*/
 .table-sticky thead {
   position: sticky;
-  /* If the navigation bar is also sticky, we need to adjust for that */
-  /* top: 3rem; */
   top: 0;
+  inset-block-start: 0;
+  z-index: 5;
 }
 
 .table-nohead thead th {
@@ -138,6 +141,15 @@ ul {
 .table-nobg th,
 .table-nobg td {
   background-color: transparent;
+}
+
+.table-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.table-nowrap td {
+  white-space: nowrap !important;
 }
 
 label.table-checkbox {
@@ -151,4 +163,18 @@ label.table-checkbox {
 
 .error {
   color: var(--slac-red);
+}
+
+.alert-default {
+  width: 70ch;
+  max-width: 90%;
+}
+
+.alert-title {
+  display: flex;
+  align-items: center;
+}
+
+.approved-table-row td {
+  background-color: #EC9A3C;
 }

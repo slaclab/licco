@@ -1,30 +1,41 @@
-import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, NonIdealState, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime } from "../utils/date_utils";
-import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { ProjectApprovalDialog } from "./project_approval_dialog";
-import { ProjectInfo, fetchAllProjects, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { JsonErrorMsg } from "../utils/fetching";
+import { SortState, sortDate, sortString } from "../utils/sort_utils";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
-    const [projectDataLoading, setProjectDataLoading] = useState(false);
+    const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
 
+    // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
+    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
+    const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
+
+    // sorting
+    type sortColumnField = 'name' | 'created' | 'edit' | 'owner';
+    const [sortByColumn, setSortByColumn] = useState<SortState<sortColumnField>>(new SortState('created'));
 
     const fetchProjectData = () => {
         setProjectDataLoading(true);
-        fetchAllProjects()
+        fetchAllProjectsInfo()
             .then((projects) => {
                 setProjectData(projects);
-            }).catch((e) => {
-                console.error(e);
-                let err = e as JsonErrorMsg;
-                setError("Failed to load projects data: " + err.error);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to load projects data: " + e.error;
+                setError(msg);
+                console.error(msg, e);
             }).finally(() => {
                 setProjectDataLoading(false);
             });
@@ -35,98 +46,149 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }, []);
 
 
-    if (err) {
-        return <p>{err}</p>
-    }
-
     const showAddProjectDialog = () => {
         setIsAddProjectDialogOpen(true);
     }
 
+    const sortOrderChanged = (field: sortColumnField) => {
+        let newSortOrder = sortByColumn.changed(field)
+        setSortByColumn(newSortOrder);
+    }
+
+    const renderTableSortButtonIfAny = (field: sortColumnField) => {
+        if (field != sortByColumn.column) {
+            // if we don't show the icon (null node) the column would change width 
+            // when we display the icon for the first time. To avoid this jump 
+            // we instead render a blank icon. 
+            return <Icon className="ms-1" icon="blank" />
+        }
+
+        return <Icon className="ms-1" icon={sortByColumn.sortDesc ? "arrow-down" : "arrow-up"} />
+    }
+
+    const projectDataDisplayed = useMemo(() => {
+        // approved projects should always be pinned to the top of the table 
+        let approvedProjects = projectData.filter(p => isProjectApproved(p));
+        let displayedData = projectData.filter(p => !isProjectApproved(p));
+
+        // sort data according to selected filter
+        switch (sortByColumn.column) {
+            case 'created':
+                approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                break;
+            case 'edit':
+                approvedProjects.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
+                break;
+            case 'name':
+                approvedProjects.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
+                break;
+            case 'owner':
+                approvedProjects.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
+                break;
+            default:
+                approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+        }
+
+        let projects: ProjectInfo[] = [...approvedProjects, ...displayedData];
+        return projects;
+    }, [projectData, sortByColumn]);
+
+
+    if (err) {
+        return (
+            <Container className="mt-4">
+                <NonIdealState icon="error" title="Error" description={err} />
+            </Container>
+        )
+    }
+
     return (
         <>
-        <div className="table-responsive">
-            <table className="table table-striped table-bordered table-sm">
-                <thead>
-                    <tr>
+            <div>
+                <table className="table table-striped table-bordered table-sm table-sticky">
+                    <thead>
+                        <tr>
                             <th scope="col">
-                                <Tooltip content="Add new Project" position="bottom">
-                                    <Button icon="add" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
-                                </Tooltip>
-                                <Tooltip content="Show the history of project approvals" position="bottom">
-                                    <Button icon="history" minimal={true} small={true} />
-                                </Tooltip>
+                                <Button icon="add" title="Add new Project" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
+                                <Button icon="history" title="Show the history of project approvals" onClick={(e) => setIsProjectHistoryDialogOpen(true)} minimal={true} small={true} />
                                 {projectDataLoading ?
                                     <Button minimal={true} small={true} disabled={true} loading={projectDataLoading} />
                                     : null
                                 }
                             </th>
-                        <th>Name</th>
-                        <th>Owner</th>
-                        <th>Created</th>
-                        <th>Last Edit</th>
-                        <th>Description</th>
-                        <th>Notes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {projectData.map((project) => {
-                        return (
-                            <tr key={project._id}>
-                                <td>
-                                    <ButtonGroup minimal={true}>
-                                        <Tooltip content="Compare (diff) with another project" position="bottom">
-                                            <Button icon="comparison" small={true} />
-                                        </Tooltip>
+                            <th onClick={(e) => sortOrderChanged('name')}>Name {renderTableSortButtonIfAny('name')}</th>
+                            <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderTableSortButtonIfAny('owner')}</th>
+                            <th onClick={(e) => sortOrderChanged('created')}>Created {renderTableSortButtonIfAny('created')}</th>
+                            <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderTableSortButtonIfAny('edit')}</th>
+                            <th>Description</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {projectDataDisplayed.map((project) => {
+                            return (
+                                <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
+                                    <td>
+                                        <ButtonGroup minimal={true}>
+                                            <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
+                                                onClick={e => {
+                                                    setSelectedProject(project);
+                                                    setIsComparisonDialogOpen(true);
+                                                }}
+                                            />
+                                            <Button icon="duplicate" title="Clone this project" minimal={true} small={true}
+                                                onClick={(e) => {
+                                                    setSelectedProject(project);
+                                                    setIsCloneDialogOpen(true);
+                                                }}
+                                            />
 
-                                        <Tooltip content="Clone this project" position="bottom">
-                                            <Button icon="duplicate" small={true} />
-                                        </Tooltip>
+                                            {!isProjectSubmitted(project) && !isProjectApproved(project) ?
+                                                <>
+                                                    <Button icon="edit" title="Edit this project" minimal={true} small={true}
+                                                        onClick={(e) => {
+                                                            setSelectedProject(project);
+                                                            setIsEditDialogOpen(true);
+                                                        }}
+                                                    />
 
-                                        {!isProjectSubmitted(project) ?
-                                            <>
-                                                <Tooltip content="Edit this project" position="bottom">
-                                                    <Button icon="edit" minimal={true} small={true} />
-                                                </Tooltip>
-
-                                                <Tooltip content="Submit this project for approval" position="bottom">
-                                                    <Button icon="user"
+                                                    <Button icon="user" title="Submit this project for approval"
                                                         minimal={true} small={true}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsApprovalDialogOpen(true);
                                                         }}
                                                     />
-                                                </Tooltip>
 
-                                                <Tooltip content="Upload data to this project" position="bottom">
-                                                    <Button icon="export" minimal={true} small={true} />
-                                                </Tooltip>
-                                            </>
-                                            : null
-                                        }
+                                                    <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
+                                                </>
+                                                : null
+                                            }
 
-                                        <Tooltip content="Download this project" position="bottom">
-                                            <Button icon="import" minimal={true} small={true} />
-                                        </Tooltip>
+                                            <Button icon="import" title="Download this project" minimal={true} small={true} />
 
-                                    </ButtonGroup>
-                                </td>
-                                <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
-                                <td>{project.owner}</td>
-                                <td>{formatToLiccoDateTime(project.creation_time)}</td>
-                                <td>{formatToLiccoDateTime(project.edit_time)}</td>
-                                <td>{project.description}</td>
-                                <td></td>
-                            </tr>
-                        )
-                    })
-                    }
-                </tbody>
-            </table>
+                                        </ButtonGroup>
+                                    </td>
+                                    <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
+                                    <td>{project.owner}</td>
+                                    <td>{formatToLiccoDateTime(project.creation_time)}</td>
+                                    <td>{formatToLiccoDateTime(project.edit_time)}</td>
+                                    <td>{project.description}</td>
+                                    <td></td>
+                                </tr>
+                            )
+                        })
+                        }
+                    </tbody>
+                </table>
             </div>
 
-            {!projectDataLoading && err != "" && projectData.length == 0 ?
+            {!projectDataLoading && projectData.length == 0 ?
                 <NonIdealState icon="search" title="No Projects Found" description="There are no projects to display. Try adding a new project by clicking on the button below">
                     <Button icon="plus" onClick={(e) => showAddProjectDialog()}>Add Project</Button>
                 </NonIdealState>
@@ -134,6 +196,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
             }
 
             <AddProjectDialog
+                approvedProjects={projectDataDisplayed.filter(p => isProjectApproved(p))}
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
@@ -144,115 +207,88 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 }}
             />
 
-            <ProjectApprovalDialog
-                isOpen={isApprovalDialogOpen}
-                projectTitle={selectedProject?.name ?? ''}
-                projectId={selectedProject?._id ?? ''}
-                onClose={() => setIsApprovalDialogOpen(false)}
-                onSubmit={(approvedProject) => {
-                    // replace an existing project with a new one
-                    projectTransformTimeIntoDates(approvedProject);
-                    let updatedProjects = [];
-                    for (let p of projectData) {
-                        if (p._id !== approvedProject._id) {
-                            updatedProjects.push(p);
-                            continue;
-                        }
-                        updatedProjects.push(approvedProject);
-                    }
-                    setProjectData(updatedProjects);
-                    setIsApprovalDialogOpen(false);
-                }}
+            <HistoryOfProjectApprovalsDialog
+                isOpen={isProjectHistoryDialogOpen}
+                onClose={() => setIsProjectHistoryDialogOpen(false)}
             />
+
+            {selectedProject && isComparisonDialogOpen ?
+                <ProjectComparisonDialog
+                    isOpen={isComparisonDialogOpen}
+                    project={selectedProject}
+                    availableProjects={projectData}
+                    onClose={() => setIsComparisonDialogOpen(false)}
+                />
+                : null
+            }
+
+            {selectedProject && isApprovalDialogOpen ?
+                <ProjectApprovalDialog
+                    isOpen={isApprovalDialogOpen}
+                    projectTitle={selectedProject.name}
+                    projectId={selectedProject._id}
+                    projectOwner={selectedProject.owner}
+                    onClose={() => setIsApprovalDialogOpen(false)}
+                    onSubmit={(approvedProject) => {
+                        // replace an existing project with a new one
+                        projectTransformTimeIntoDates(approvedProject);
+                        let updatedProjects = [];
+                        for (let p of projectData) {
+                            if (p._id !== approvedProject._id) {
+                                updatedProjects.push(p);
+                                continue;
+                            }
+                            updatedProjects.push(approvedProject);
+                        }
+                        setProjectData(updatedProjects);
+                        setIsApprovalDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+
+            {selectedProject && isCloneDialogOpen ?
+                <CloneProjectDialog
+                    isOpen={isCloneDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsCloneDialogOpen(false);
+                    }}
+                    onSubmit={(clonedProject) => {
+                        let data = [...projectData];
+                        data.push(clonedProject);
+                        setProjectData(data);
+                        setIsCloneDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+
+            {selectedProject && isEditDialogOpen ?
+                <EditProjectDialog
+                    isOpen={isEditDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsEditDialogOpen(false);
+                    }}
+                    onSubmit={(updatedProject) => {
+                        let updatedData = [];
+                        for (let p of projectData) {
+                            if (p._id != updatedProject._id) {
+                                updatedData.push(p);
+                                continue;
+                            }
+
+                            updatedData.push(updatedProject);
+                        }
+                        // update project info 
+                        setIsEditDialogOpen(false);
+                        setProjectData(updatedData);
+                    }}
+                />
+                : null
+            }
+
         </>
-    )
-}
-
-// dialog for adding new projects
-const AddProjectDialog: React.FC<{ isOpen: boolean, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, onClose, onSubmit }) => {
-    const DEFAULT_TEMPLATE = "Blank Project";
-
-    const [projectTemplates, setProjectTemplates] = useState<string[]>([DEFAULT_TEMPLATE]);
-    const [selectedTemplate, setSelectedTemplate] = useState<string>(DEFAULT_TEMPLATE);
-    const [projectName, setProjectName] = useState('');
-    const [description, setDescription] = useState('');
-
-    const [dialogError, setDialogError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            // TODO: load project templates if necessary, we don't seem to have them right now...
-        }
-    }, [isOpen])
-
-    const submit = () => {
-        if (!projectName) {
-            setDialogError("Project name should not be empty");
-            return;
-        }
-        setDialogError("");
-
-        let projectUrl = ""
-        if (selectedTemplate == DEFAULT_TEMPLATE) {
-            projectUrl = "/ws/projects/NewBlankProjectClone/clone/";
-        } else {
-            projectUrl = `/ws/projects/${selectedTemplate}/clone/`;
-        }
-
-        setIsSubmitting(true);
-        let body = { "name": projectName, "description": description }
-        Fetch.post<ProjectInfo>(projectUrl, { body: JSON.stringify(body) })
-            .then(newProjectInfo => {
-                onSubmit(newProjectInfo);
-            }).catch(err => {
-                let e = err as JsonErrorMsg;
-                setDialogError(`Failed to create a new project: ${e.error}`);
-            }).finally(() => {
-                setIsSubmitting(false);
-            });
-    }
-
-    const submitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            submit();
-        }
-    }
-
-    return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Create a New Project" autoFocus={true}>
-            <DialogBody useOverflowScrollContainer>
-                <FormGroup label="Select a Project Template:">
-                    <HTMLSelect
-                        value={selectedTemplate}
-                        options={projectTemplates}
-                        onChange={(e) => setSelectedTemplate(e.currentTarget.value)}
-                        fill={true} iconName="caret-down" />
-                </FormGroup>
-
-                <FormGroup label="Project Name:">
-                    <InputGroup id="project-name"
-                        placeholder=""
-                        value={projectName}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setProjectName(val)} />
-                </FormGroup>
-
-                <FormGroup label="Description:">
-                    <InputGroup id="project-description"
-                        placeholder=""
-                        value={description}
-                        onKeyUp={submitOnEnter}
-                        onValueChange={(val: string) => setDescription(val)} />
-                </FormGroup>
-                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
-            </DialogBody>
-            <DialogFooter actions={
-                <>
-                    <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting}>Create</Button>
-                </>
-            } />
-        </Dialog>
     )
 }
