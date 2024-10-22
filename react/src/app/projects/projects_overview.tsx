@@ -5,7 +5,7 @@ import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime, toUnixSeconds } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
 
 
@@ -80,26 +80,34 @@ export const ProjectsOverview: React.FC = ({ }) => {
     }
 
     const projectDataDisplayed = useMemo(() => {
-        let displayedData = [...projectData];
+        // approved projects should always be pinned on top of the table 
+        let approvedProjects = projectData.filter(p => isProjectApproved(p));
+        let displayedData = projectData.filter(p => !isProjectApproved(p));
 
         // sort data according to selected filter
         switch (sortByColumn.column) {
             case 'created':
+                approvedProjects.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
                 break;
             case 'edit':
+                approvedProjects.sort((a, b) => sortByLastEditTime(a, b, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortByLastEditTime(a, b, sortByColumn.sortDesc));
                 break;
             case 'name':
+                approvedProjects.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 break;
             case 'owner':
+                approvedProjects.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 break;
             default:
+                approvedProjects.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortByCreationDate(a, b, sortByColumn.sortDesc));
         }
-        return displayedData;
+
+        return [...approvedProjects, ...displayedData];
     }, [projectData, sortByColumn]);
 
 
@@ -136,7 +144,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     <tbody>
                         {projectDataDisplayed.map((project) => {
                             return (
-                                <tr key={project._id}>
+                                <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
                                         <ButtonGroup minimal={true}>
                                             <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
@@ -152,7 +160,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                 }}
                                             />
 
-                                            {!isProjectSubmitted(project) ?
+                                            {!isProjectSubmitted(project) && !isProjectApproved(project) ?
                                                 <>
                                                     <Button icon="edit" title="Edit this project" minimal={true} small={true}
                                                         onClick={(e) => {

@@ -174,3 +174,7 @@ label.table-checkbox {
   display: flex;
   align-items: center;
 }
+
+.approved-table-row td {
+  background-color: #EC9A3C;
+}
