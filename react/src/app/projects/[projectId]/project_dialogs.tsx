@@ -3,7 +3,7 @@ import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -67,7 +67,7 @@ export const FilterFFTDialog: React.FC<{ isOpen: boolean, possibleStates: Device
 
 
 // this dialog is used to copy the fft setting to a different project
-export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: FFT, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
+export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: ProjectFFT, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
     const DEFAULT_PROJECT = "Please select a project"
     const [availableProjects, setAvailableProjects] = useState<ProjectInfo[]>([]);
     const [projectNames, setProjectNames] = useState<string[]>([DEFAULT_PROJECT]);

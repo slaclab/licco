@@ -4,10 +4,11 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFT, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectInfo, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
 import { ProjectApprovalDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
 
+import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import styles from './project_details.module.css';
 
@@ -80,11 +81,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
 
     // dialogs open state
+    const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
-    const [currentFFT, setCurrentFFT] = useState<FFT>({ _id: "", fc: "", fg: "" });
+    const [currentFFT, setCurrentFFT] = useState<ProjectFFT>({ _id: "", fc: "", fg: "" });
+    const [errorAlertMsg, setErrorAlertMsg] = useState<ReactNode>('');
 
     // filters to apply
     const [fcFilter, setFcFilter] = useState("");
@@ -135,9 +138,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         fetchProjectInfo(projectId)
             .then(data => setProjectData(data))
-            .catch(e => {
-                console.error("Failed to make a project request");
-                // TODO: display this error in the UI...
+            .catch((e: JsonErrorMsg) => {
+                console.error("Failed to load required project data", e);
+                setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
             });
 
         let showAllEntries = true;
@@ -204,6 +207,41 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         router.replace(`${pathName}?${params.toString()}`)
     }
 
+    const addNewFft = (newFft: FFTInfo) => {
+        if (!projectData) {
+            // this should never happen
+            setErrorAlertMsg("Can't add a new fft to a project without knowing the projec details; this is a programming bug");
+            return;
+        }
+
+        // check if desired fft combination already exist within the project 
+        // if it does, simply show an error message to the user
+        for (let fft of fftData) {
+            if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
+                setErrorAlertMsg(<>FFT <b>{fft.fc}-{fft.fg}</b> is already a part of the project: "{projectData.name}".</>);
+                return
+            }
+        }
+
+        let fft: ProjectFFT = {
+            _id: newFft._id,
+            fc: newFft.fc._id,
+            fg: newFft.fg._id,
+        }
+        return addFftsToProject(projectData._id, [fft])
+            .then(data => {
+                // TODO: when we try to add an fft that is already there, the backend doesn't complain
+                // it just returns success: true, erromsg: no changes detected.
+                // TODO: we only need the fft that was updated, not all ffts of the project
+                setFftData(data)
+                setIsAddNewFftDialogOpen(false);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to add an fft to a project: " + e.error;
+                console.error(msg, e);
+                setErrorAlertMsg(msg);
+            });
+    }
+
     const isProjectSubmitted = projectData?.status === "submitted";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" 
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter
@@ -226,6 +264,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Button icon="import" title="Download data to this project" minimal={true} small={true} />
                                         <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
+
+                                        <Divider />
+
+                                        <Button icon="add" title="Add a new FFT to Project" minimal={true} small={true}
+                                            onClick={e => setIsAddNewFftDialogOpen(true)}
+                                        />
 
                                         <Divider />
 
@@ -362,6 +406,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 : null
             }
 
+            {projectData ?
+                <AddFftDialog
+                    dialogType="addToProject"
+                    isOpen={isAddNewFftDialogOpen}
+                    onClose={() => setIsAddNewFftDialogOpen(false)}
+                    onSubmit={(newFft) => addNewFft(newFft)}
+                />
+                : null
+            }
+
             <FilterFFTDialog
                 isOpen={isFilterDialogOpen}
                 possibleStates={availableFftStates}
@@ -426,6 +480,18 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 />
                 : null}
+
+
+            {/* Alert for displaying error messages that may happen in other dialogs */}
+            <Alert
+                className="alert-default"
+                confirmButtonText="Ok"
+                onConfirm={(e) => setErrorAlertMsg('')}
+                intent="danger"
+                isOpen={errorAlertMsg != ""}>
+                <h5 className="alert-title"><Icon icon="error" />Error</h5>
+                <p>{errorAlertMsg}</p>
+            </Alert>
         </HtmlPage >
     )
 }

@@ -1,9 +1,9 @@
-import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState } from "@blueprintjs/core";
+import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useState } from "react";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
 
-interface FFT {
+export interface FFTInfo {
     _id: string;
     is_being_used: boolean;
     fc: FC;
@@ -22,20 +22,24 @@ interface FG {
     description: string;
 }
 
+export function fetchFfts(): Promise<FFTInfo[]> {
+    return Fetch.get<FFTInfo[]>("/ws/ffts/");
+}
+
 function deleteFft(fftId: string): Promise<void> {
     return Fetch.delete<void>(`/ws/ffts/${fftId}`);
 }
 
 export const FFTOverviewTable: React.FC = () => {
-    const [data, setData] = useState<FFT[]>([]);
+    const [data, setData] = useState<FFTInfo[]>([]);
     const [isFftDialogOpen, setIsFftDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [loadingError, setLoadingError] = useState('');
 
-    const [fftToDelete, setFftToDelete] = useState<FFT>();
+    const [fftToDelete, setFftToDelete] = useState<FFTInfo>();
     const [deleteError, setDeleteError] = useState('');
 
-    const deleteSelectedFft = (fftToDelete: FFT) => {
+    const deleteSelectedFft = (fftToDelete: FFTInfo) => {
         deleteFft(fftToDelete._id)
             .then(() => {
                 setDeleteError('');
@@ -51,7 +55,7 @@ export const FFTOverviewTable: React.FC = () => {
 
     useEffect(() => {
         setIsLoading(true);
-        Fetch.get<FFT[]>("/ws/ffts/")
+        fetchFfts()
             .then(data => setData(data))
             .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch ffts data: " + e.error;
@@ -77,9 +81,10 @@ export const FFTOverviewTable: React.FC = () => {
                                 <Button icon="add" title="Add a new FFT" small={true} minimal={true}
                                     onClick={e => setIsFftDialogOpen(true)}
                                 />
+                                {isLoading ? <Button loading={isLoading} minimal={true} /> : null}
                             </ButtonGroup>
                         </th>
-                        <th scope="col" className="">Functional component name {isLoading ? <Button loading={isLoading} minimal={true} /> : null}</th>
+                        <th scope="col" className="">Functional component name</th>
                         <th scope="col" className="">Fungible token</th>
                     </tr>
                 </thead>
@@ -104,7 +109,8 @@ export const FFTOverviewTable: React.FC = () => {
                 </tbody>
             </table>
 
-            <AddFfftDialog isOpen={isFftDialogOpen}
+            <AddFftDialog isOpen={isFftDialogOpen}
+                dialogType="create"
                 ffts={data}
                 onClose={() => setIsFftDialogOpen(false)}
                 onSubmit={(fft) => {
@@ -141,11 +147,13 @@ export const FFTOverviewTable: React.FC = () => {
 
 
 
-export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: () => void, onSubmit: (fft: FFT) => void }> = ({ isOpen, ffts, onClose, onSubmit }) => {
+export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, ffts, dialogType, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
     const [fgName, setFgName] = useState('');
+    const [allFfts, setAllFfts] = useState<FFTInfo[]>([]);
 
     const [dialogError, setDialogError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
 
@@ -155,7 +163,7 @@ export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: ()
     const [fgNames, setFgNames] = useState<Set<string>>(new Set());
     const [fgDescription, setFgDescription] = useState('');
 
-    useEffect(() => {
+    const createFgFcNames = (ffts: FFTInfo[]) => {
         let fcSet = new Set<string>();
         let fgSet = new Set<string>();
 
@@ -173,7 +181,34 @@ export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: ()
 
         setFcNames(fcSet);
         setFgNames(fgSet);
-    }, [ffts])
+    }
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        // ffts were provided, nothing to do
+        if (ffts != undefined) {
+            createFgFcNames(ffts);
+            setAllFfts(ffts);
+            return;
+        }
+
+        // ffts were not provided, download them on our own
+        setIsLoading(true);
+        fetchFfts()
+            .then(data => {
+                createFgFcNames(data);
+                setAllFfts(data);
+                setDialogError('');
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to fetch FFTs: " + e.error;
+                setDialogError(msg);
+            }).finally(() => {
+                setIsLoading(false)
+            });
+    }, [ffts, isOpen])
 
 
     const renderFcDescription = fcName != "" && !fcNames.has(fcName);
@@ -181,19 +216,40 @@ export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: ()
     const disableSubmit = fcName.trim() == "" || fgName.trim() == "" || (renderFcDescription && fcDescription.trim() == "" || renderFgDescription && fgDescription.trim() == "");
 
     const submit = () => {
+        const fc = fcName.trim();
+        const fg = fgName.trim();
+
+        if (dialogType === 'addToProject') {
+            // check if the chosen combination of fc-fg name already exists in provided data
+            // if it does, we simply return an existing fft. This is a special behavior
+            // when we are adding an fft to a project that doesn't already have such fft 
+            // assigned.
+            for (let fft of allFfts) {
+                if (fft.fc.name == fc && fft.fg.name == fg) {
+                    // the chosen combination already exists, so there is nothing 
+                    // to create. Simply return
+                    onSubmit(fft)
+                    return;
+                }
+            }
+
+            // chosen fc-fg name combination was not found, therefore we have to create
+            // a new one.
+        }
+
         let data: any = {
-            fc: fcName,
-            fg: fgName,
+            fc: fc,
+            fg: fg,
         }
         if (renderFcDescription) {
-            data["fc_description"] = fcDescription;
+            data["fc_description"] = fcDescription.trim();
         }
         if (renderFgDescription) {
-            data["fg_description"] = fgDescription;
+            data["fg_description"] = fgDescription.trim();
         }
 
         setIsSubmitting(true);
-        Fetch.post<FFT>("/ws/ffts/", { body: JSON.stringify(data) })
+        Fetch.post<FFTInfo>("/ws/ffts/", { body: JSON.stringify(data) })
             .then((resp) => {
                 onSubmit(resp);
             }).catch((e: JsonErrorMsg) => {
@@ -213,55 +269,60 @@ export const AddFfftDialog: React.FC<{ isOpen: boolean, ffts: FFT[], onClose: ()
                 </p>
                 <p>If either entity does not exist in the system, description inputs will be enabled. Please enter a valid description; and these will be automatically created in the system for you as part of creating the new FFT.</p>
 
-                <datalist id="fc-names-list">
-                    {Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
-                        return <option key={name} value={name} />
-                    })
-                    }
-                </datalist>
+                {isLoading ?
+                    <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
+                    :
+                    <>
+                        <datalist id="fc-names-list">
+                            {Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
+                                return <option key={name} value={name} />
+                            })
+                            }
+                        </datalist>
 
-                <datalist id="fg-names-list">
-                    {Array.from(fgNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
-                        return <option key={name} value={name} />
-                    })
-                    }
-                </datalist>
+                        <datalist id="fg-names-list">
+                            {Array.from(fgNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
+                                return <option key={name} value={name} />
+                            })
+                            }
+                        </datalist>
+                        <FormGroup label="Functional Component:" labelFor="fc-name">
+                            <InputGroup id="fc-name"
+                                autoFocus={true}
+                                list="fc-names-list"
+                                placeholder=""
+                                value={fcName}
+                                rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
+                                onValueChange={(val: string) => setFcName(val)} />
+                        </FormGroup>
 
-                <FormGroup label="Functional Component:" labelFor="fc-name">
-                    <InputGroup id="fc-name"
-                        autoFocus={true}
-                        list="fc-names-list"
-                        placeholder=""
-                        value={fcName}
-                        rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
-                        onValueChange={(val: string) => setFcName(val)} />
-                </FormGroup>
+                        <FormGroup label="FC Description:" labelInfo="(required)" labelFor="fc-description"
+                            disabled={!renderFcDescription}>
+                            <InputGroup id="fc-description"
+                                disabled={!renderFcDescription}
+                                value={fcDescription}
+                                onValueChange={(val: string) => setFcDescription(val)}
+                            />
+                        </FormGroup>
 
-                <FormGroup label="FC Description:" labelInfo="(required)" labelFor="fc-description"
-                    disabled={!renderFcDescription}>
-                    <InputGroup id="fc-description"
-                        disabled={!renderFcDescription}
-                        value={fcDescription}
-                        onValueChange={(val: string) => setFcDescription(val)}
-                    />
-                </FormGroup>
+                        <FormGroup label="Fungible Token:" labelFor="fg-name" className="mt-4">
+                            <InputGroup id="fg-name"
+                                list="fg-names-list"
+                                rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
+                                value={fgName}
+                                onValueChange={(val: string) => setFgName(val)} />
+                        </FormGroup>
 
-                <FormGroup label="Fungible Token:" labelFor="fg-name" className="mt-4">
-                    <InputGroup id="fg-name"
-                        list="fg-names-list"
-                        rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
-                        value={fgName}
-                        onValueChange={(val: string) => setFgName(val)} />
-                </FormGroup>
-
-                <FormGroup label="FG Description:" labelInfo="(required)" labelFor="fg-description"
-                    disabled={!renderFgDescription}>
-                    <InputGroup id="fg-description"
-                        disabled={!renderFgDescription}
-                        value={fgDescription}
-                        onValueChange={(val: string) => setFgDescription(val)}
-                    />
-                </FormGroup>
+                        <FormGroup label="FG Description:" labelInfo="(required)" labelFor="fg-description"
+                            disabled={!renderFgDescription}>
+                            <InputGroup id="fg-description"
+                                disabled={!renderFgDescription}
+                                value={fgDescription}
+                                onValueChange={(val: string) => setFgDescription(val)}
+                            />
+                        </FormGroup>
+                    </>
+                }
 
             </DialogBody>
             <DialogFooter actions={

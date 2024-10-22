@@ -62,18 +62,22 @@ export interface ProjectDeviceDetails extends deviceDetailFields {
 }
 
 export interface ProjectDeviceDetailsBackend extends deviceDetailFields {
-    fft: FFT;
+    fft: ProjectFFT;
 }
 
 export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBackend): ProjectDeviceDetails {
     // remove fft field from object, but copy every other field
     const { fft, ...copiedFields } = details;
-    return {
+    let data: ProjectDeviceDetails = {
         ...copiedFields,
         id: details.fft._id,
         fc: details.fft.fc,
         fg: details.fft.fg,
     }
+    // turn dates into date objects
+    // turn any number strings into undefined fields
+    transformProjectDeviceDetails(data);
+    return data;
 }
 
 interface deviceDetailFields {
@@ -115,7 +119,6 @@ export async function fetchProjectFfts(projectId: string, showAllEntries: boolea
     return Fetch.get<Record<string, ProjectDeviceDetailsBackend>>(url)
         .then(data => {
             let devices = Object.values(data);
-            devices.forEach(d => transformProjectDeviceDetails(d));
             return devices.map(d => deviceDetailsBackendToFrontend(d));
         });
 }
@@ -136,7 +139,7 @@ function numberOrDefault(input: number | string | undefined, defaultVal: number 
 }
 
 
-export function transformProjectDeviceDetails(device: deviceDetailFields) {
+function transformProjectDeviceDetails(device: deviceDetailFields) {
     device.state = DeviceState.fromString(device.state).name;
 
     // empty numeric fields are sent through as strings
@@ -147,7 +150,7 @@ export function transformProjectDeviceDetails(device: deviceDetailFields) {
     }
 }
 
-export interface FFT {
+export interface ProjectFFT {
     _id: string;
     fc: string;
     fg: string;
@@ -276,4 +279,13 @@ export interface ProjectApprovalHistory {
     prj: string; // project name
     description: string;
     owner: string;
+}
+
+export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise<ProjectDeviceDetails[]> {
+    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(ffts) })
+        .then(resp => {
+            let data = [...Object.values(resp)];
+            let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));
+            return frontendData;
+        })
 }
