@@ -66,8 +66,10 @@ export interface ProjectDeviceDetailsBackend extends deviceDetailFields {
 }
 
 export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBackend): ProjectDeviceDetails {
+    // remove fft field from object, but copy every other field
+    const { fft, ...copiedFields } = details;
     return {
-        ...details,
+        ...copiedFields,
         id: details.fft._id,
         fc: details.fft.fc,
         fg: details.fft.fg,
@@ -241,7 +243,9 @@ export class DeviceState {
 }
 
 export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetailsBackend>> {
-    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, { body: JSON.stringify(changes) });
+    // undefined values are not serialized, hence deleting a field (field == undefined) should be replaced with an empty string
+    let data = { body: JSON.stringify(changes, (k, v) => v === undefined ? '' : v) };
+    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, data);
 }
 
 
