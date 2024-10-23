@@ -496,20 +496,19 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     )
 }
 
+export const formatDevicePositionNumber = (value?: number | string): string => {
+    if (value === undefined) {
+        return '';
+    }
+    if (typeof value === "string") {
+        return value;
+    }
+    return value.toFixed(7);
+}
 
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft }) => {
-    // we have to cache each table row, as once we have lots of rows in a table editing text fields within
-    // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
-    const formatDevicePositionNumber = (value?: number | string): string => {
-        if (value === undefined) {
-            return '';
-        }
-        if (typeof value === "string") {
-            return value;
-        }
-        return value.toFixed(7);
-    }
-
+// we have to cache each table row, as once we have lots of rows in a table editing text fields within
+// becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
