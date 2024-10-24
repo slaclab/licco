@@ -8,8 +8,9 @@ export default function DiffHomepage({ params }: { params: { projectId: string }
 
     return (
         <HtmlPage>
-            <div className="mb-2" />
-            <ProjectDiffPage projectIdA={params.projectId} projectIdB={queryParams.get("with") || "ERROR"} />
+            <div className="mt-4">
+                <ProjectDiffPage projectIdA={params.projectId} projectIdB={queryParams.get("with") || "ERROR"} />
+            </div>
         </HtmlPage>
     )
 }

@@ -11,8 +11,8 @@ export interface ProjectFftDiff {
     //     or missing (the a project has extra fields compared to b project)
     new: ProjectDeviceDetails[];       // a project has extra rows
     missing: ProjectDeviceDetails[];   // a project does not have rows from b
-    unchanged: ProjectDeviceDetails[]; // rows that are the same for every property
-    changed: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]; // rows where at least 1 property has changed (not checking id)
+    identical: ProjectDeviceDetails[]; // rows that are the same for every property
+    updated: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]; // rows where at least 1 property has changed (not checking id)
 }
 
 
@@ -22,9 +22,9 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
         b: bProject,
 
         new: [],
-        unchanged: [],
+        identical: [],
         missing: [],
-        changed: [],
+        updated: [],
     }
 
     let fftGroup = new Map<string, { a?: ProjectDeviceDetails, b?: ProjectDeviceDetails }>();
@@ -71,17 +71,17 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
         let a = group.a!;
         let b = group.b!;
         if (deviceHasChangedValue(a, b)) {
-            fftDiff.changed.push({ a: a, b: b });
+            fftDiff.updated.push({ a: a, b: b });
         } else {
-            fftDiff.unchanged.push(a);
+            fftDiff.identical.push(a);
         }
     }
 
     // sort in ascending order (based on fc, fg name fields)
     sortDeviceDataByColumn(fftDiff.new, 'fc', false);
     sortDeviceDataByColumn(fftDiff.missing, 'fc', false);
-    sortDeviceDataByColumn(fftDiff.unchanged, 'fc', false);
-    fftDiff.changed.sort((a, b) => {
+    sortDeviceDataByColumn(fftDiff.identical, 'fc', false);
+    fftDiff.updated.sort((a, b) => {
         let first = a.a;
         let second = b.a;
         let diff = sortString(first.fc, second.fc, false);

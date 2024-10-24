@@ -2,9 +2,13 @@ import { JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
-import { ProjectDeviceDetails, ProjectInfo } from "../../project_model";
+import { Col, Row } from "react-bootstrap";
+import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
 import { ProjectFftDiff, loadProjectDiff } from "./project_diff_model";
+
+import { capitalizeFirstLetter } from "@/app/utils/string_utils";
+import styles from './project_diff.module.css';
 
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
     const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +20,6 @@ export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string 
         loadProjectDiff(projectIdA, projectIdB).then(diff => {
             setDiff(diff);
             setLoadError('');
-            console.log("DIFF:", diff);
         }).catch((e: JsonErrorMsg) => {
             let msg = "Failed to fetch all data for project diff page: " + e.error;
             console.error(msg, e);
@@ -30,23 +33,23 @@ export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string 
     // rendering part
 
     if (isLoading) {
-        return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." />
+        return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." className="mt-5" />
     }
 
     if (loadError) {
-        return <NonIdealState icon="error" title="Error" description={loadError} />
+        return <NonIdealState icon="error" title="Error" description={loadError} className="mt-5" />
     }
 
     if (!diff) {
-        return <NonIdealState icon="blank" title="No Diff to Display" description="There is no diff to display" />
+        return <NonIdealState icon="blank" title="No Diff to Display" description="There is no diff to display" className="mt-5" />
     }
 
     return (
         <>
             <ProjectDiffTable diff={diff} type="new" />
             <ProjectDiffTable diff={diff} type="missing" />
-            <ProjectDiffTable diff={diff} type="changed" />
-            <ProjectDiffTable diff={diff} type="unchanged" defaultOpen={false} />
+            <ProjectDiffTable diff={diff} type="updated" />
+            <ProjectDiffTable diff={diff} type="identical" defaultOpen={false} />
         </>
     )
 }
@@ -91,7 +94,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 }
 
 // just for displaying data
-export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'changed' | 'missing' | 'unchanged', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
+export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
 
     const createProjectLink = (project: ProjectInfo, type: 'a' | 'b') => {
@@ -102,40 +105,59 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'c
     const titleDescription: ReactNode = useMemo(() => {
         switch (type) {
             case "new": return <>{diff.new.length} New devices in {createProjectLink(diff.a, 'a')} compared to {createProjectLink(diff.b, 'b')}</>
-            case "changed": return <>{diff.changed.length} Updated devices in {createProjectLink(diff.a, 'a')} compared to {createProjectLink(diff.b, 'b')}</>
+            case "updated": return <>{diff.updated.length} Updated devices in {createProjectLink(diff.a, 'a')} compared to {createProjectLink(diff.b, 'b')}</>
             case "missing": return <>{diff.missing.length} Missing devices from {createProjectLink(diff.a, 'a')} (they are present in {createProjectLink(diff.b, 'b')})</>
-            case "unchanged": return <>{diff.unchanged.length} Identical devices in {createProjectLink(diff.a, 'a')} and {createProjectLink(diff.b, 'b')}</>
+            case "identical": return <>{diff.identical.length} Identical devices in {createProjectLink(diff.a, 'a')} and {createProjectLink(diff.b, 'b')}</>
         }
     }, [diff, type])
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
-        // const formatField = (a: any, field: keyof ProjectDeviceDetails) => {
-        //     let isNumeric = ProjectDevicePositionKeys.indexOf(field as string) >= 0;
-        // }
+        const formatValueIfNumber = (val: any, field: keyof ProjectDeviceDetails) => {
+            if (field == "id" || field == "fc" || field == "fg") {
+                return val;
+            }
+            const isPositionField = ProjectDevicePositionKeys.indexOf(field) >= 0;
+            if (isPositionField) {
+                return formatDevicePositionNumber(val);
+            }
+            return val;
+        }
 
-        const getColor = (type: 'a' | 'b') => {
-            return type == 'a' ? Colors.RED5 : Colors.BLUE5;
+        const formatField = (val: any, field: keyof ProjectDeviceDetails) => {
+            if (val === undefined || val == "") {
+                // TODO: decide whether to display empty or just a single empty space?
+                return "<empty>";
+            }
+
+            if (typeof val == "string" && val.trim() == "") {
+                // html by default collapses multiple spaces into 1; since we would like to preserve
+                // the exact number of spaces, an extra span is needed.
+                return <span style={{ whiteSpace: 'pre' }}>{val}</span>;
+            }
+
+            return formatValueIfNumber(val, field)
         }
 
         const renderField = (a: ProjectDeviceDetails, b: ProjectDeviceDetails, field: keyof ProjectDeviceDetails) => {
             let isChanged = a[field] != b[field];
             if (!isChanged) {
-                return <span style={{ color: Colors.GRAY1 }}>{a[field]}</span>
+                // if the value is empty, we just render empty tag
+                return <span style={{ color: Colors.GRAY1 }}>{formatValueIfNumber(a[field], field)}</span>
             }
 
             // there is a change in fields (display both one under the other)
-            let aData = a[field] != undefined && a[field] != "" ? a[field] : '<empty>';
-            let bData = b[field] != undefined && b[field] != "" ? b[field] : '<empty>';
+            let aData = formatField(a[field], field);
+            let bData = formatField(b[field], field);
             return (
                 <>
-                    <span style={{ backgroundColor: getColor('a') }}>{aData}</span>
+                    <span style={{ backgroundColor: Colors.RED5 }}>{aData}</span>
                     <br />
-                    <span style={{ backgroundColor: getColor('b') }}>{bData}</span>
+                    <span style={{ backgroundColor: Colors.BLUE5 }}>{bData}</span>
                 </>
             )
         }
 
-        return Object.values(data).map(devices => {
+        return data.map(devices => {
             return (<tr key={devices.a.id}>
                 <td>{renderField(devices.a, devices.b, 'fc')}</td>
                 <td>{renderField(devices.a, devices.b, 'fg')}</td>
@@ -195,8 +217,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'c
         switch (type) {
             case 'new': return renderDataRows(diff.new);
             case 'missing': return renderDataRows(diff.missing);
-            case 'unchanged': return renderDataRows(diff.unchanged);
-            case 'changed': return renderDiffRows(diff.changed);
+            case 'identical': return renderDataRows(diff.identical);
+            case 'updated': return renderDiffRows(diff.updated);
         }
     }
 
@@ -204,32 +226,36 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'c
         switch (type) {
             case 'new': return diff.new.length == 0;
             case 'missing': return diff.missing.length == 0;
-            case 'unchanged': return diff.unchanged.length == 0;
-            case 'changed': return diff.changed.length == 0;
+            case 'identical': return diff.identical.length == 0;
+            case 'updated': return diff.updated.length == 0;
         }
     }, [diff]);
 
 
     if (type == "missing" && diff.missing.length == 0) {
-        // no need to display the entire table if it's not there
+        // no need to display the missing table if nothing is missing
         return null;
     }
 
     return (
         <div className="mb-5">
-            <h5 className="m-0">
-                <Button icon={collapsed ? "chevron-right" : "chevron-down"} minimal={true}
-                    onClick={(e) => setCollapsed((collapsed) => !collapsed)}
-                />
-                {titleDescription}
-            </h5>
+            <Row className="align-items-center">
+                <Col className="col-auto pe-0">
+                    <Button icon={collapsed ? "chevron-right" : "chevron-down"} minimal={true}
+                        onClick={(e) => setCollapsed((collapsed) => !collapsed)}
+                    />
+                </Col>
+                <Col className="ps-0">
+                    <h5 className="m-0">{titleDescription}</h5>
+                </Col>
+            </Row>
 
             <Collapse isOpen={!collapsed} keepChildrenMounted={true}>
                 {noDevices ?
-                    <NonIdealState icon="clean" title="No Such Devices" description="There are no such devices" />
+                    <NonIdealState icon="clean" title={`No ${capitalizeFirstLetter(type)} Devices`} description={`There are no ${type} devices`} />
                     :
-                    <div className="table-responsive" style={{ maxHeight: "70vh" }}>
-                        <table className="table table-sm table-bordered table-striped table-sticky">
+                    <div className="table-responsive" style={{ maxHeight: "75vh" }}>
+                        <table className={`table table-sm table-bordered table-striped table-sticky ${styles.diffTable}`}>
                             <DiffTableHeading />
                             <tbody>{renderTableBody()}</tbody>
                         </table>
