@@ -80,7 +80,7 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBack
     return data;
 }
 
-interface deviceDetailFields {
+export interface deviceDetailFields {
     tc_part_no: string;
     comments: string;
     state: string;
@@ -96,12 +96,33 @@ interface deviceDetailFields {
     ray_trace?: number;
 }
 
-export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
+export const ProjectDevicePositionKeys: (keyof deviceDetailFields)[] = [
     'nom_ang_x', 'nom_ang_y', 'nom_ang_z',
     'nom_dim_x', 'nom_dim_y', 'nom_dim_z',
     'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
+]
+
+export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
+    ...ProjectDevicePositionKeys,
     'ray_trace'
 ]
+
+
+// compare every value field for a change 
+export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
+    let key: keyof ProjectDeviceDetails;
+    for (key in a) {
+        if (key == "id" || key == "fc" || key == "fg") { // ignored 
+            continue;
+        }
+
+        if (a[key] != b[key]) {
+            // there is a difference in value
+            return true;
+        }
+    }
+    return false;
+}
 
 export async function fetchProjectFfts(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
