@@ -654,14 +654,19 @@ const DeviceDataEditTableRow: React.FC<{
         fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
-            if (deviceWithChanges[field] !== device[field]) { // this field has changed
+            let value = deviceWithChanges[field];
+            if (typeof value === "string") {
+                value = value.trim();
+            }
+
+            if (value !== device[field]) { // this field has changed
                 if (field === "state") {
                     // we have to transform the state from what's displayed into an enum that
                     // a backend understands, hence this transformation
                     changes[field] = DeviceState.fromString(deviceWithChanges[field]).backendEnumName;
                     continue;
                 }
-                changes[field] = deviceWithChanges[field];
+                changes[field] = value;
             }
         }
 
