@@ -5,8 +5,8 @@ import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGro
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
-import { ProjectApprovalDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog } from "./project_dialogs";
+import { ProjectApprovalDialog, ProjectImportDialog, ProjectExportDialog } from "../projects_overview_dialogs";
+import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagSelectionDialog, TagCreationDialog } from "./project_dialogs";
 
 import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
@@ -86,6 +86,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
+    const [isTagSelectionDialogOpen, setIsTagSelectionDialogOpen] = useState(false);
+    const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [currentFFT, setCurrentFFT] = useState<ProjectFFT>({ _id: "", fc: "", fg: "" });
     const [errorAlertMsg, setErrorAlertMsg] = useState<ReactNode>('');
 
@@ -96,6 +100,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [stateFilter, setStateFilter] = useState("");
     const [showFftSinceCreationFilter, setShowFftSinceCreationFilter] = useState(false);
     const [asOfTimestampFilter, setAsOfTimestampFilter] = useState("");
+
+    // tag creation
+    const [tagName, setTagName] = useState("");
 
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
@@ -243,7 +250,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     }
 
     const isProjectSubmitted = projectData?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "" 
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != ""
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter
     const isEditedTable = editedDevice != undefined;
 
@@ -262,8 +269,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{projectData?.name}</h5>
 
-                                        <Button icon="import" title="Download data to this project" minimal={true} small={true} />
-                                        <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
+                                        <Button icon="import" title="Download a copy of this project"
+                                            minimal={true} small={true}
+                                            onClick={(e) => { setIsExportDialogOpen(true) }}
+                                        />
+                                        <Button icon="export" title="Upload data to this project"
+                                            minimal={true} small={true}
+                                            onClick={(e) => { setIsImportDialogOpen(true) }}
+                                        />
 
                                         <Divider />
 
@@ -312,9 +325,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Divider />
 
-                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true} />
-                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true} />
-
+                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true}
+                                            onClick={(e) => { setIsTagCreationDialogOpen(true) }}
+                                        />
+                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true}
+                                            onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
+                                        />
                                         <Divider />
 
                                         <Button icon="history" title="Show the history of changes" minimal={true} small={true}
@@ -480,8 +496,43 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 />
                 : null}
-
-
+            {projectData ?
+                <TagSelectionDialog
+                    isOpen={isTagSelectionDialogOpen}
+                    projectId={projectData._id}
+                    onSubmit={(tagDate) => {
+                        //TODO: figure out how to actually filter the data based on tag
+                        let timestampFilter = tagDate;
+                        setIsTagSelectionDialogOpen(false);
+                    }}
+                    onClose={() => setIsTagSelectionDialogOpen(false)}
+                />
+                : null}
+            {projectData ?
+                <TagCreationDialog
+                    isOpen={isTagCreationDialogOpen}
+                    projectId={projectData._id}
+                    onSubmit={() => setIsTagCreationDialogOpen(false)}
+                    onClose={() => setIsTagCreationDialogOpen(false)}
+                />
+                : null}
+            {projectData ?
+                <ProjectImportDialog
+                    isOpen={isImportDialogOpen}
+                    project={projectData}
+                    onSubmit={() => setIsImportDialogOpen(false)}
+                    onClose={() => setIsImportDialogOpen(false)}
+                />
+                : null}
+            {projectData ?
+                <ProjectExportDialog
+                    isOpen={isExportDialogOpen}
+                    project={projectData}
+                    onSubmit={() => setIsExportDialogOpen(false)}
+                    onClose={() => setIsExportDialogOpen(false)}
+                />
+                : null
+            }
             {/* Alert for displaying error messages that may happen in other dialogs */}
             <Alert
                 className="alert-default"
@@ -731,21 +782,21 @@ const DeviceDataEditTableRow: React.FC<{
             })
             }
 
-                {editError ?
-                    <Alert
-                        className="alert-default"
-                        confirmButtonText="Ok"
-                        onConfirm={(e) => setEditError('')}
-                        intent="danger"
-                        isOpen={editError != ""}>
-                        <h5 className="alert-title"><Icon icon="error" />Error</h5>
-                        <p>{editError}</p>
-                    </Alert>
-                    : null
-                }
-            </tr>
-        )
-    }
+            {editError ?
+                <Alert
+                    className="alert-default"
+                    confirmButtonText="Ok"
+                    onConfirm={(e) => setEditError('')}
+                    intent="danger"
+                    isOpen={editError != ""}>
+                    <h5 className="alert-title"><Icon icon="error" />Error</h5>
+                    <p>{editError}</p>
+                </Alert>
+                : null
+            }
+        </tr>
+    )
+}
 
 
 const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {
@@ -758,7 +809,7 @@ const SelectEditField: React.FC<{ value: string, setter: any, options: string[],
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
     }, [value, options, err])
-} 
+}
 
 // performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
 const NumericEditField: React.FC<{ value: string | number | undefined, setter: any, err: boolean, errSetter: any, min?: number, max?: number, allowNumbersOnly?: boolean }> = ({ value, setter, err, errSetter, min, max, allowNumbersOnly: allowNumericCharsOnly }) => {

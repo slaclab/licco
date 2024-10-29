@@ -1,3 +1,5 @@
+import { ok } from "assert";
+
 export const HOSTNAME = process.env.NEXT_PUBLIC_BACKEND_URL;
 const FORBIDDEN = 403;
 const UNAUTHORIZED = 401;
@@ -93,6 +95,9 @@ export class Fetch {
         }
 
         if (response.ok) {
+            if (config["headers"]["Accept"] !== "application/json") {
+                return response.blob() as T;
+            }
             try {
                 let json = await response.json() as LiccoRequest<T>;
                 if (json.success) {
