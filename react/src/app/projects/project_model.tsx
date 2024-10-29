@@ -198,6 +198,13 @@ interface fftDiffBackend {
     ot: string | number;  // other's project value
 }
 
+export interface Tag {
+    _id: string,
+    prj: string,
+    name: string,
+    time: Date
+}
+
 function parseFftFieldsFromDiff(diff: fftDiffBackend): { id: string, field: string } {
     let [id, ...rest] = diff.key.split(".",);
     let nameOfField = rest.join(".");

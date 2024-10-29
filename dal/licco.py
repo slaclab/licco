@@ -777,7 +777,7 @@ def approve_project(prjid, userid):
                                                          "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     # change the project status to development instead of submitted
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+                                                         "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
 
 
@@ -1007,9 +1007,10 @@ def add_project_tag(prjid, tagname, asoftimestamp):
     if not prj:
         return False, f"Cannot find project for {prjid}", None
 
-    extsting_tag = licco_db[line_config_db_name]["tags"].find_one({
-                                                                  "name": tagname})
-    if extsting_tag:
+    existing_tag = licco_db[line_config_db_name]["tags"].find_one({
+                                                                  "name": tagname, 
+                                                                  "prj": ObjectId(prjid)})
+    if existing_tag:
         return False, f"Tag {tagname} already exists for project {prjid}", None
 
     licco_db[line_config_db_name]["tags"].insert_one(

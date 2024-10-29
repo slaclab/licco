@@ -18,9 +18,11 @@
 .btn {
     font-weight: 700;
 }
+
 .btn:hover {
     background-color: #960108 !important;
 }
+
 .btnActive {
     background-color: #800107 !important;
 }
