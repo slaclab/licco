@@ -501,8 +501,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     isOpen={isTagSelectionDialogOpen}
                     projectId={projectData._id}
                     onSubmit={(tagDate) => {
-                        //TODO: figure out how to actually filter the data based on tag
-                        let timestampFilter = tagDate;
+                        const timestampFilter = new Date(tagDate);
+                        loadFFTData(projectData._id, true, timestampFilter);
+                        updateQueryParams(fcFilter, fgFilter, stateFilter, tagDate);
+                        setAsOfTimestampFilter(tagDate);
                         setIsTagSelectionDialogOpen(false);
                     }}
                     onClose={() => setIsTagSelectionDialogOpen(false)}
