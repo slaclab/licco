@@ -205,6 +205,11 @@ export interface Tag {
     time: Date
 }
 
+export interface ImportResult {
+    log_name: string,
+    status_str: string
+}
+
 function parseFftFieldsFromDiff(diff: fftDiffBackend): { id: string, field: string } {
     let [id, ...rest] = diff.key.split(".",);
     let nameOfField = rest.join(".");

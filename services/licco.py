@@ -578,7 +578,8 @@ def svc_import_project(prjid):
         except UnicodeDecodeError as e:
             error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
             logger.debug(error_msg)
-            return {"status_str": error_msg, "log_name": None}
+            response_value = {"status_str": error_msg, "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
 
     with StringIO(filestring) as fp:
         fp.seek(0)
@@ -597,8 +598,8 @@ def svc_import_project(prjid):
         if not req_headers:
             error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
             logger.debug(error_msg)
-            return {"status_str": error_msg, "log_name": None}
-
+            response_value = {"status_str": error_msg, "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
         # Set reader at beginning of header row
         fp.seek(loc)
         reader = csv.DictReader(fp)
@@ -620,7 +621,8 @@ def svc_import_project(prjid):
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
-            return {"status_str": "Import Error: No data detected in import file.", "log_name": None}
+            response_value = {"status_str": "Import Error: No data detected in import file.", "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
 
     log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
@@ -704,7 +706,8 @@ def svc_import_project(prjid):
     imp_log.info(status_str)
     imp_log.removeHandler(imp_handler)
     imp_handler.close()
-    return {"status_str": status_str, "log_name": log_name}
+    response_value = {"status_str": status_str, "log_name": log_name}
+    return JSONEncoder().encode({"success": True, "value": response_value})
 
 
 @licco_ws_blueprint.route("/projects/<report>/download/", methods=["GET", "POST"])

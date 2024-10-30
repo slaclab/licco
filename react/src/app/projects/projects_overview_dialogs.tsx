@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates, ImportResult } from "./project_model";
 //import { File } from "buffer";
 
 
@@ -407,8 +407,9 @@ export const ProjectImportDialog: React.FC<{
 }> = ({ isOpen, project, onClose, onSubmit }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
-    const [selectedFile, setSelectedFile] = useState();
-
+    const [selectedFile, setSelectedFile] = useState('');
+    const [importResult, setImportResult] = useState(String);
+    const [robustReport, setRobustReport] = useState(String);
 
     useEffect(() => {
         if (!isOpen) {
@@ -421,12 +422,18 @@ export const ProjectImportDialog: React.FC<{
         const data = new FormData();
         data.append("file", selectedFile);
         data.append("name", selectedFile.value)
-        Fetch.post<SubmitFile>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
+
+
+        Fetch.post<ImportResult>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
             .then((resp) => {
-                onSubmit(resp);
+                console.log(resp);
+                setImportResult(resp.status_str);
+                setRobustReport(resp.log_name);
+                //onSubmit();
                 setDialogError('');
             })
             .catch((e: JsonErrorMsg) => {
+                console.log(e);
                 let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}'`;
                 setDialogError(msg);
                 console.error(msg, e);
@@ -444,6 +451,34 @@ export const ProjectImportDialog: React.FC<{
         setSelectedFile(e.target.files[0]);
     }
 
+    const downloadReport = () => {
+        // TODO: robustReport, download with same way as export... bring out helper function
+        return;
+    }
+
+    const renderImportResult = () => {
+        // Before file is selected
+        if (selectedFile === '') {
+            return <NonIdealState icon={"search"} title="Please Upload a File" description={"Please select and upload a file"} />
+        }
+        // Before file is uploaded
+        if (importResult === '') {
+            return <NonIdealState icon={"search"} title="Please Click Upload" />
+        }
+
+        return (
+            <>
+                <h5>{project.name} - {selectedFile.name}</h5>
+                <h6>Import Results</h6>
+                <Text>
+                    {importResult}
+                </Text>
+                <h6>Downloadable Report</h6>
+                <Button onClick={(e) => downloadReport()}>Download</Button>
+            </>
+        )
+    }
+
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
@@ -456,11 +491,12 @@ export const ProjectImportDialog: React.FC<{
                     />
                 </FormGroup>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
+                {renderImportResult()}
             </DialogBody>
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={project.name == ""}>Submit File</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={project.name === ""}>Submit File</Button>
                 </>
             } />
         </Dialog>
