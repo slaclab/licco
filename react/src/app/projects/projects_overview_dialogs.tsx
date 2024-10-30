@@ -410,6 +410,7 @@ export const ProjectImportDialog: React.FC<{
     const [selectedFile, setSelectedFile] = useState('');
     const [importResult, setImportResult] = useState(String);
     const [robustReport, setRobustReport] = useState(String);
+    const [buttonState, setButtonState] = useState(false)
 
     useEffect(() => {
         if (!isOpen) {
@@ -426,12 +427,11 @@ export const ProjectImportDialog: React.FC<{
 
         Fetch.post<ImportResult>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
             .then((resp) => {
-                console.log(resp);
-
                 setImportResult(resp.status_str.replaceAll("_", ""));
                 setRobustReport(resp.log_name);
                 //onSubmit();
                 setDialogError('');
+                setButtonState(false);
             })
             .catch((e: JsonErrorMsg) => {
                 console.log(e);
@@ -450,6 +450,7 @@ export const ProjectImportDialog: React.FC<{
             return;
         }
         setSelectedFile(e.target.files[0]);
+        setButtonState(true);
     }
 
     const downloadReport = () => {
@@ -458,7 +459,6 @@ export const ProjectImportDialog: React.FC<{
             setDialogError("No robust report found.")
             return;
         }
-        console.log("are we in herer");
         Fetch.get<Blob>(`/ws/projects/${robustReport}/download/`, { headers: { "Content-Type": "MULTIPART", "Accept": "text/plain" } })
             .then((resp) => {
                 let url = window.URL.createObjectURL(resp);
@@ -490,7 +490,7 @@ export const ProjectImportDialog: React.FC<{
                     </div>
                 </Text>
                 <h5>(Optional) Informational Report</h5>
-                <Button onClick={(e) => downloadReport()}>Download</Button>
+                <Button onClick={(e) => downloadReport()} intent="primary">Download</Button>
             </>
         )
     }
@@ -512,7 +512,7 @@ export const ProjectImportDialog: React.FC<{
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={project.name === ""}>Submit File</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!buttonState}>Submit File</Button>
                 </>
             } />
         </Dialog>

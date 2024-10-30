@@ -18,7 +18,7 @@ fi
 
 export ACCESS_LOG_FORMAT='%(h)s %(l)s %({REMOTE_USER}i)s %(t)s "%(r)s" "%(q)s" %(s)s %(b)s %(D)s'
 export LOG_LEVEL=${LOG_LEVEL:-"INFO"}
-export SERVER_IP_PORT=${SERVER_IP_PORT:-"0.0.0.0:8000"}
+export SERVER_IP_PORT=${SERVER_IP_PORT:-"0.0.0.0:5000"}
 
 export PYTHONPATH="${PWD}/modules/flask_authnz":"${PYTHONPATH}"
 
