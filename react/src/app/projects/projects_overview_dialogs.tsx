@@ -427,7 +427,8 @@ export const ProjectImportDialog: React.FC<{
         Fetch.post<ImportResult>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
             .then((resp) => {
                 console.log(resp);
-                setImportResult(resp.status_str);
+
+                setImportResult(resp.status_str.replaceAll("_", ""));
                 setRobustReport(resp.log_name);
                 //onSubmit();
                 setDialogError('');
@@ -471,9 +472,11 @@ export const ProjectImportDialog: React.FC<{
                 <h5>{project.name} - {selectedFile.name}</h5>
                 <h6>Import Results</h6>
                 <Text>
-                    {importResult}
+                    <div style={{ whiteSpace: 'pre-line' }}>
+                        {importResult}
+                    </div>
                 </Text>
-                <h6>Downloadable Report</h6>
+                <h5>(Optional) Informational Report</h5>
                 <Button onClick={(e) => downloadReport()}>Download</Button>
             </>
         )
@@ -532,7 +535,8 @@ export const ProjectExportDialog: React.FC<{
                 let url = window.URL.createObjectURL(blob);
                 let a = document.createElement('a');
                 a.href = url;
-                a.download = 'test.csv';
+                const now = new Date().toISOString();
+                a.download = `${project.name}_${now}.csv`;
                 a.click();
 
                 onSubmit();
