@@ -4,7 +4,6 @@ import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
 import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates, ImportResult } from "./project_model";
-//import { File } from "buffer";
 
 
 type projectApprovers = string[];
@@ -429,12 +428,10 @@ export const ProjectImportDialog: React.FC<{
             .then((resp) => {
                 setImportResult(resp.status_str.replaceAll("_", ""));
                 setRobustReport(resp.log_name);
-                //onSubmit();
                 setDialogError('');
                 setButtonState(false);
             })
             .catch((e: JsonErrorMsg) => {
-                console.log(e);
                 let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}'`;
                 setDialogError(msg);
                 console.error(msg, e);
@@ -556,7 +553,6 @@ export const ProjectExportDialog: React.FC<{
                 setDialogError("");
             })
             .catch((e) => {
-                let err = e as JsonErrorMsg;
                 let msg = `Failed to download the project.`;
                 setDialogError(msg);
                 console.error(msg, e);
