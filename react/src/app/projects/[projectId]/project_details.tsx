@@ -522,7 +522,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <ProjectImportDialog
                     isOpen={isImportDialogOpen}
                     project={projectData}
-                    onSubmit={() => setIsImportDialogOpen(false)}
                     onClose={() => setIsImportDialogOpen(false)}
                 />
                 : null}

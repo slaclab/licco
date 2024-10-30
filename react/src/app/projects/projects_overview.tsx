@@ -321,10 +321,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     onClose={() => {
                         setIsImportDialogOpen(false);
                     }}
-                    onSubmit={() => {
-                        setIsImportDialogOpen(false);
-                    }
-                    }
                 />
                 : null
             }

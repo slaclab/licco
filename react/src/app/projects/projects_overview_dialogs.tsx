@@ -1,4 +1,4 @@
-import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, FileInput, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
+import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, FileInput, Label, NonIdealState, Spinner, Text, Divider } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
@@ -396,20 +396,21 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
         </Dialog>
     )
 }
-type SubmitFile = string[];
 
 export const ProjectImportDialog: React.FC<{
     isOpen: boolean,
     project: ProjectInfo,
     onClose: () => void,
-    onSubmit: () => void
-}> = ({ isOpen, project, onClose, onSubmit }) => {
+}> = ({ isOpen, project, onClose }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
     const [selectedFile, setSelectedFile] = useState('');
     const [importResult, setImportResult] = useState(String);
     const [robustReport, setRobustReport] = useState(String);
-    const [buttonState, setButtonState] = useState(false)
+    const [downloadButtonState, setDownloadButtonState] = useState(false)
+    const [fileButtonState, setFileButtonState] = useState(true)
+
+
 
     useEffect(() => {
         if (!isOpen) {
@@ -429,7 +430,8 @@ export const ProjectImportDialog: React.FC<{
                 setImportResult(resp.status_str.replaceAll("_", ""));
                 setRobustReport(resp.log_name);
                 setDialogError('');
-                setButtonState(false);
+                setDownloadButtonState(false);
+                setFileButtonState(false);
             })
             .catch((e: JsonErrorMsg) => {
                 let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}'`;
@@ -447,7 +449,7 @@ export const ProjectImportDialog: React.FC<{
             return;
         }
         setSelectedFile(e.target.files[0]);
-        setButtonState(true);
+        setDownloadButtonState(true);
     }
 
     const downloadReport = () => {
@@ -474,19 +476,20 @@ export const ProjectImportDialog: React.FC<{
         }
         // Before file is uploaded
         if (importResult === '') {
-            return <NonIdealState icon={"search"} title="Please Click Upload" />
+            return <NonIdealState title="Click Submit to upload file." />
         }
 
         return (
             <>
-                <h5>{project.name} - {selectedFile.name}</h5>
-                <h6>Import Results</h6>
+                <h5>Project: {project.name}</h5>
+                <h6>Filename: {selectedFile.name}</h6>
                 <Text>
                     <div style={{ whiteSpace: 'pre-line' }}>
                         {importResult}
                     </div>
                 </Text>
-                <h5>(Optional) Informational Report</h5>
+                <Divider></Divider>
+                <h5>(Optional) Robust Changelog</h5>
                 <Button onClick={(e) => downloadReport()} intent="primary">Download</Button>
             </>
         )
@@ -498,18 +501,19 @@ export const ProjectImportDialog: React.FC<{
                 <Text> Upload a .csv to import the data into this project.</Text>
                 <FormGroup label="Select a file:">
                     <FileInput id="upload-file" inputProps={{ accept: ".csv" }}
-                        disabled={false}
+                        disabled={!fileButtonState}
                         text={selectedFile?.name || "Choose file to upload"}
                         onInputChange={e => importFileChosen(e)}
                     />
                 </FormGroup>
+                <Divider></Divider>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
                 {renderImportResult()}
             </DialogBody>
             <DialogFooter actions={
                 <>
-                    <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!buttonState}>Submit File</Button>
+                    <Button onClick={(e) => onClose()} >Close</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!downloadButtonState}>Submit File</Button>
                 </>
             } />
         </Dialog>
