@@ -453,7 +453,20 @@ export const ProjectImportDialog: React.FC<{
     }
 
     const downloadReport = () => {
-        // TODO: robustReport, download with same way as export... bring out helper function
+        if (robustReport === '') {
+            // For whatever reason, no report url            
+            setDialogError("No robust report found.")
+            return;
+        }
+        console.log("are we in herer");
+        Fetch.get<Blob>(`/ws/projects/${robustReport}/download/`, { headers: { "Content-Type": "MULTIPART", "Accept": "text/plain" } })
+            .then((resp) => {
+                let url = window.URL.createObjectURL(resp);
+                let a = document.createElement('a');
+                a.href = url;
+                a.download = `${robustReport}.txt`;
+                a.click();
+            });
         return;
     }
 

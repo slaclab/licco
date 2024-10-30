@@ -723,6 +723,7 @@ def svc_download_report(report):
     try:
         repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
+
     except FileNotFoundError:
         return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None})
 
