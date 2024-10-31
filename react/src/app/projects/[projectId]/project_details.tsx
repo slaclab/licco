@@ -496,20 +496,19 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     )
 }
 
+export const formatDevicePositionNumber = (value?: number | string): string => {
+    if (value === undefined) {
+        return '';
+    }
+    if (typeof value === "string") {
+        return value;
+    }
+    return value.toFixed(7);
+}
 
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft }) => {
-    // we have to cache each table row, as once we have lots of rows in a table editing text fields within
-    // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
-    const formatDevicePositionNumber = (value?: number | string): string => {
-        if (value === undefined) {
-            return '';
-        }
-        if (typeof value === "string") {
-            return value;
-        }
-        return value.toFixed(7);
-    }
-
+// we have to cache each table row, as once we have lots of rows in a table editing text fields within
+// becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
@@ -655,14 +654,19 @@ const DeviceDataEditTableRow: React.FC<{
         fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
-            if (deviceWithChanges[field] !== device[field]) { // this field has changed
+            let value = deviceWithChanges[field];
+            if (typeof value === "string") {
+                value = value.trim();
+            }
+
+            if (value !== device[field]) { // this field has changed
                 if (field === "state") {
                     // we have to transform the state from what's displayed into an enum that
                     // a backend understands, hence this transformation
                     changes[field] = DeviceState.fromString(deviceWithChanges[field]).backendEnumName;
                     continue;
                 }
-                changes[field] = deviceWithChanges[field];
+                changes[field] = value;
             }
         }
 
