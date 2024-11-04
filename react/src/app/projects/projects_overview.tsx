@@ -6,7 +6,7 @@ import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
 
 export const ProjectsOverview: React.FC = ({ }) => {
@@ -21,6 +21,8 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     // sorting
@@ -156,7 +158,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
-
                                                     <Button icon="user" title="Submit this project for approval"
                                                         minimal={true} small={true}
                                                         onClick={(e) => {
@@ -164,14 +165,24 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsApprovalDialogOpen(true);
                                                         }}
                                                     />
-
-                                                    <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
+                                                    <Button icon="export" title="Upload data to this project"
+                                                        minimal={true} small={true}
+                                                        onClick={(e) => {
+                                                            setSelectedProject(project);
+                                                            setIsImportDialogOpen(true);
+                                                        }}
+                                                    />
                                                 </>
                                                 : null
                                             }
 
-                                            <Button icon="import" title="Download this project" minimal={true} small={true} />
-
+                                            <Button icon="import" title="Download a copy of this project"
+                                                minimal={true} small={true}
+                                                onClick={(e) => {
+                                                    setSelectedProject(project);
+                                                    setIsExportDialogOpen(true);
+                                                }}
+                                            />
                                         </ButtonGroup>
                                     </td>
                                     <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
@@ -289,6 +300,30 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 : null
             }
 
+            {selectedProject && isExportDialogOpen ?
+                <ProjectExportDialog
+                    isOpen={isExportDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsExportDialogOpen(false);
+                    }}
+                    onSubmit={() => {
+                        setIsExportDialogOpen(false);
+                    }
+                    }
+                />
+                : null
+            }
+            {selectedProject && isImportDialogOpen ?
+                <ProjectImportDialog
+                    isOpen={isImportDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsImportDialogOpen(false);
+                    }}
+                />
+                : null
+            }
         </>
     )
 }

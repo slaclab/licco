@@ -1,9 +1,9 @@
-import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
+import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, FileInput, Label, NonIdealState, Spinner, Text, Divider } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates, ImportResult } from "./project_model";
 
 
 type projectApprovers = string[];
@@ -391,6 +391,190 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Close</Button>
+                </>
+            } />
+        </Dialog>
+    )
+}
+
+export const ProjectImportDialog: React.FC<{
+    isOpen: boolean,
+    project: ProjectInfo,
+    onClose: () => void,
+}> = ({ isOpen, project, onClose }) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [dialogError, setDialogError] = useState('');
+    const [selectedFile, setSelectedFile] = useState('');
+    const [importResult, setImportResult] = useState(String);
+    const [robustReport, setRobustReport] = useState(String);
+    const [downloadButtonState, setDownloadButtonState] = useState(false)
+    const [fileButtonState, setFileButtonState] = useState(true)
+
+
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+    }, [isOpen])
+
+    const submit = () => {
+        setIsSubmitting(true);
+        const data = new FormData();
+        data.append("file", selectedFile);
+        data.append("name", selectedFile.value)
+
+
+        Fetch.post<ImportResult>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
+            .then((resp) => {
+                setImportResult(resp.status_str.replaceAll("_", ""));
+                setRobustReport(resp.log_name);
+                setDialogError('');
+                setDownloadButtonState(false);
+                setFileButtonState(false);
+            })
+            .catch((e: JsonErrorMsg) => {
+                let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}'`;
+                setDialogError(msg);
+                console.error(msg, e);
+            })
+            .finally(() => {
+                setIsSubmitting(false);
+            })
+
+    }
+
+    const importFileChosen = (e: any) => {
+        if (!e) {
+            return;
+        }
+        setSelectedFile(e.target.files[0]);
+        setDownloadButtonState(true);
+    }
+
+    const downloadReport = () => {
+        if (robustReport === '') {
+            // For whatever reason, no report url            
+            setDialogError("No robust report found.")
+            return;
+        }
+        Fetch.get<Blob>(`/ws/projects/${robustReport}/download/`, { headers: { "Content-Type": "MULTIPART", "Accept": "text/plain" } })
+            .then((resp) => {
+                let url = window.URL.createObjectURL(resp);
+                let a = document.createElement('a');
+                a.href = url;
+                a.download = `${robustReport}.txt`;
+                a.click();
+            });
+        return;
+    }
+
+    const renderImportResult = () => {
+        // Before file is selected
+        if (selectedFile === '') {
+            return <NonIdealState icon={"search"} title="Please Upload a File" description={"Please select and upload a file"} />
+        }
+        // Before file is uploaded
+        if (importResult === '') {
+            return <NonIdealState title="Click Submit to upload file." />
+        }
+
+        return (
+            <>
+                <h5>Project: {project.name}</h5>
+                <h6>Filename: {selectedFile.name}</h6>
+                <Text>
+                    <div style={{ whiteSpace: 'pre-line' }}>
+                        {importResult}
+                    </div>
+                </Text>
+                <Divider></Divider>
+                <h5>(Optional) Robust Changelog</h5>
+                <Button onClick={(e) => downloadReport()} intent="primary">Download</Button>
+            </>
+        )
+    }
+
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
+            <DialogBody useOverflowScrollContainer>
+                <Text> Upload a .csv to import the data into this project.</Text>
+                <FormGroup label="Select a file:">
+                    <FileInput id="upload-file" inputProps={{ accept: ".csv" }}
+                        disabled={!fileButtonState}
+                        text={selectedFile?.name || "Choose file to upload"}
+                        onInputChange={e => importFileChosen(e)}
+                    />
+                </FormGroup>
+                <Divider></Divider>
+                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
+                {renderImportResult()}
+            </DialogBody>
+            <DialogFooter actions={
+                <>
+                    <Button onClick={(e) => onClose()} >Close</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!downloadButtonState}>Submit File</Button>
+                </>
+            } />
+        </Dialog>
+    )
+}
+
+export const ProjectExportDialog: React.FC<{
+    isOpen: boolean,
+    project: ProjectInfo,
+    onClose: () => void,
+    onSubmit: () => void;
+}> = ({ isOpen, project, onClose, onSubmit }) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [dialogError, setDialogError] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+    }, [isOpen])
+
+    const submit = () => {
+        setIsSubmitting(true);
+        if (!project._id) {
+            // in general this should never happen, if it does we have a bug
+            setDialogError(`Invalid project id for project '${project}'`);
+            return;
+        }
+
+        Fetch.get<Blob>(`/ws/projects/${project._id}/export/`, { headers: { "Content-Type": "MULTIPART", "Accept": "text/csv" } })
+            .then(blob => {
+                let url = window.URL.createObjectURL(blob);
+                let a = document.createElement('a');
+                a.href = url;
+                const now = new Date().toISOString();
+                a.download = `${project.name}_${now}.csv`;
+                a.click();
+
+                onSubmit();
+                setDialogError("");
+            })
+            .catch((e) => {
+                let msg = `Failed to download the project.`;
+                setDialogError(msg);
+                console.error(msg, e);
+            })
+        setDialogError('');
+        onSubmit();
+        setIsSubmitting(false);
+    }
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Download Project (${project.name})`} autoFocus={true}>
+            <DialogBody useOverflowScrollContainer>
+                <p>Download a copy of this project as a .csv?</p>
+                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
+            </DialogBody>
+            <DialogFooter actions={
+                <>
+                    <Button onClick={(e) => onClose()}>Cancel</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={""}>Download</Button>
                 </>
             } />
         </Dialog>
