@@ -7,7 +7,7 @@ see: https://confluence.slac.stanford.edu/display/PCDS/Validated+Machine+Configu
 
 ## Credentials
 
-In order for notification module to work, you have to create a credentials
+In order for notification module to work, you have to create a `credentials.ini`
 file in the main directory, e.g.:
 
 ```ini

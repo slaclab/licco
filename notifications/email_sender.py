@@ -7,9 +7,7 @@ from typing import List
 
 
 class EmailSettings:
-    def __init__(self, url: str = "", port: int = 587,
-                 email_send_as_ssl: bool = False,
-                 username: str = "", password: str = ""):
+    def __init__(self, url: str, port: int, username: str, password: str, email_send_as_ssl: bool = False):
         if not url:
             raise ValueError("Email url should not be empty")
         if not port:
@@ -21,31 +19,20 @@ class EmailSettings:
 
         self.url = url
         self.port = port
-        # send as SMTP_SSL or SMTP_StartTLS
-        self.email_send_as_ssl = email_send_as_ssl
         self.username = username
         self.password = password
-
-    def validate(self):
-        if not self.url:
-            raise ValueError("Email url should not be empty")
-        if not self.port:
-            raise ValueError("Email port should not be empty")
-        if not self.username:
-            raise ValueError("Username should not be empty")
-        if not self.password:
-            raise ValueError("Password should not be empty")
+        # send as SMTP_SSL or SMTP_StartTLS
+        self.email_send_as_ssl = email_send_as_ssl
 
 
 class EmailSender:
     """Helper class for easy sending of email notifications"""
 
     def __init__(self, settings: EmailSettings):
-        settings.validate()
         self.settings = settings
         self.context = ssl.create_default_context()
 
-    def send_email(self, from_user: str = "", to_users: List[str] = [], subject: str = "", content: str = "",
+    def send_email(self, from_user: str, to_users: List[str], subject: str, content: str,
                    plain_text_content: str = ""):
         """
         - from_user: user that sent an email in the form of "<first name> <last name> <email@example.com>"
@@ -73,12 +60,12 @@ class EmailSender:
         # if plain text is required, it should be attached first
         # (email clients apparently display the last attached text [html] if possible)
         if plain_text_content:
-            plainText = MIMEText(plain_text_content, "plain")
-            email.attach(plainText)
+            plain_text = MIMEText(plain_text_content, "plain")
+            email.attach(plain_text)
 
         # html should be attached last, since last message is displayed first
-        htmlText = MIMEText(content, "html")
-        email.attach(htmlText)
+        html_text = MIMEText(content, "html")
+        email.attach(html_text)
         self._send_email(email)
 
     def _send_email(self, msg: Message):

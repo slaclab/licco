@@ -31,7 +31,7 @@ app.config["NOTIFICATIONS"] = {"service_url": "http://localhost:3000"}
 # read credentials file for notifications module
 credentials_file = "./credentials.ini"
 if not os.path.exists(credentials_file):
-    print("Credentials file does not exist, notifications are disabled")
+    print("'credentials.ini' file was not found, user notifications are disabled")
 else:
     config = configparser.ConfigParser()
     config.read(credentials_file)
@@ -46,8 +46,7 @@ root = logging.getLogger()
 root.setLevel(logging.getLevelName(os.environ.get("LOG_LEVEL", "INFO")))
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 root.addHandler(ch)
 
@@ -60,21 +59,21 @@ app.register_blueprint(licco_ws_blueprint, url_prefix="/ws")
 def create_notifier(app: Flask) -> Notifier:
     notifications_config = app.config["NOTIFICATIONS"]
     if not notifications_config:
-        # NOTE: empty notifier without configuration will not send any notifications
-        return Notifier()
+        # empty notifier without configuration will not send any notifications
+        return Notifier("")
 
     service_url = notifications_config["service_url"]
     email_config = notifications_config["email"]
     if email_config:
-        return Notifier(service_url=service_url,
-                        email_config=EmailSettings(url=email_config["url"], port=email_config["port"],
-                                                   username=email_config["user"], password=email_config["password"]))
-    return Notifier(service_url=service_url)
+        return Notifier(service_url, EmailSettings(email_config["url"], email_config["port"],
+                                      email_config["user"], email_config["password"]))
+    return Notifier(service_url)
 
 
 context.notifier = create_notifier(app)
 
 initialize_collections()
+
 
 if __name__ == '__main__':
     print("Please use gunicorn for development as well.")
