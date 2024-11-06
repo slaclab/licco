@@ -7,7 +7,7 @@ _NOTIFICATION_TEMPLATES = {
         "html": """
         <p>Automated Message - Please Do Not Reply</p>
         <p>You have been added to project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database as Project Approver. Please take action at <a href="{project_url}">{project_url}</a></p>
-        <p>If you have any questions, please contact the database administrator at {admin_email}.</p>" 
+        <p>If you have any questions, please contact the database administrator at {admin_email}.</p>
         """,
         # if more templates are necessary, simply add them to this map, e.g:
         # "markdown": You have been added to the project [project_name](project_url)...
