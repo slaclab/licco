@@ -29,7 +29,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = app.debug
 app.config["NOTIFICATIONS"] = {"service_url": "http://localhost:3000"}
 
 # read credentials file for notifications module
-credentials_file = "./credentials.ini"
+credentials_file = os.environ.get("LICCO_CREDENTIALS_FILE_LOCATION", "./credentials.ini")
 if not os.path.exists(credentials_file):
     print("'credentials.ini' file was not found, user notifications are disabled")
 else:
