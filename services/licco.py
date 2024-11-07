@@ -55,6 +55,9 @@ KEYMAP = {
 }
 KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
 
+def logAndAbortJson(error_msg, ret_status=500):
+    logger.error(error_msg)
+    return {'status': False, 'errormsg': error_msg, 'value': None}, ret_status
 
 def logAndAbort(error_msg, ret_status=500):
     logger.error(error_msg)
@@ -783,12 +786,12 @@ def svc_approve_project(prjid):
     userid = context.security.get_current_user_id()
     # See if approval confitions are good
     status, errormsg, prj = approve_project(prjid, userid)
-    if status is True:
-        approved = get_currently_approved_project()
-        if not approved:
-            return {"success": False, "errormsg": errormsg}
-    else:
+    if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
+
+    approved = get_currently_approved_project()
+    if not approved:
+        return {"success": False, "errormsg": errormsg}
     # merge project in to previously approved project
     current_ffts = get_project_ffts(prjid)
     status, errormsg, update_status = update_ffts_in_project(approved["_id"], current_ffts)
@@ -807,8 +810,19 @@ def svc_reject_project(prjid):
     """
     userid = context.security.get_current_user_id()
     reason = request.args.get("reason", None)
+    if not reason and request.json:
+        reason = request.json.get("reason")
+
     if not reason:
-        return logAndAbort("Please provide a reason for why this project is not being approved")
+        return logAndAbortJson("Please provide a reason for why this project is not being approved")
+
+    # TODO: notes should probably be stored in a format (user: <username>, date: datetime, content: "")
+    # so we can avoid rendering them when they are no longer relevant.
+    #
+    # add current user and datetime to the original reason
+    now = datetime.utcnow()
+    licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
+    reason = f"{userid} ({licco_datetime}):\n{reason}"
     status, errormsg, prj = reject_project(prjid, userid, reason)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 

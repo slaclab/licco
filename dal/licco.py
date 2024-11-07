@@ -786,15 +786,16 @@ def reject_project(prjid, userid, reason):
     Do not approve a submitted project.
     Set the status to development
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
+
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow(), "notes": [reason] + prj.get("notes", [])}})
-    return True, "", prj
+    updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    return True, "", updated_project
 
 
 def get_currently_approved_project_by_switch():

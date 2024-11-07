@@ -1,12 +1,12 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
-import { Alert, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
+import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
-import { ProjectApprovalDialog, ProjectImportDialog, ProjectExportDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagSelectionDialog, TagCreationDialog } from "./project_dialogs";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
+import { ProjectApprovalDialog, ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
+import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
 import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
@@ -79,6 +79,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [projectData, setProjectData] = useState<ProjectInfo>();
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
+    const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
+
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -341,6 +343,17 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             disabled={isProjectSubmitted}
                                             onClick={(e) => setIsApprovalDialogOpen(true)}
                                         />
+
+                                        {isUserAProjectApprover(projectData, currentlyLoggedInUser) ?
+                                            <>
+                                                <Divider />
+                                                <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
+                                                    href={`/projects/${projectData._id}/approval`}
+                                                />
+                                            </>
+                                            : null
+                                        }
+
                                     </ButtonGroup>
                                 }
                             </th>

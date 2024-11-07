@@ -1,37 +1,22 @@
-import { JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
-import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import React, { ReactNode, useMemo, useState } from "react";
 import { Col, Row } from "react-bootstrap";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
-import { ProjectFftDiff, loadProjectDiff } from "./project_diff_model";
+import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import styles from './project_diff.module.css';
 
+// displays the diff tables between two projects
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [diff, setDiff] = useState<ProjectFftDiff>();
-
-    useEffect(() => {
-        setIsLoading(true);
-        loadProjectDiff(projectIdA, projectIdB).then(diff => {
-            setDiff(diff);
-            setLoadError('');
-        }).catch((e: JsonErrorMsg) => {
-            let msg = "Failed to fetch all data for project diff page: " + e.error;
-            console.error(msg, e);
-            setLoadError(msg);
-        }).finally(() => {
-            setIsLoading(false);
-        })
-    }, [projectIdA, projectIdB])
+    const { isLoading, loadError, diff } = fetchProjectDiffDataHook(projectIdA, projectIdB)
+    return <ProjectDiffTables isLoading={isLoading} loadError={loadError} diff={diff} />
+}
 
 
-    // rendering part
-
+export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, diff?: ProjectFftDiff }> = ({ isLoading, loadError, diff }) => {
     if (isLoading) {
         return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." className="mt-5" />
     }

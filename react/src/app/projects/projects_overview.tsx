@@ -1,11 +1,11 @@
-import { Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
 
@@ -13,6 +13,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
     const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
+    const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
 
     // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
@@ -137,6 +138,12 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
                                         <ButtonGroup minimal={true}>
+                                            {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                                <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
+                                                    href={`/projects/${project._id}/approval`}
+                                                />
+                                                : null
+                                            }
                                             <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
                                                 onClick={e => {
                                                     setSelectedProject(project);
@@ -211,7 +218,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
-                    projectTransformTimeIntoDates(newProject);
+                    transformProjectForFrontendUse(newProject);
                     let newData = [...projectData, newProject];
                     setProjectData(newData);
                     setIsAddProjectDialogOpen(false)
@@ -242,7 +249,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     onClose={() => setIsApprovalDialogOpen(false)}
                     onSubmit={(approvedProject) => {
                         // replace an existing project with a new one
-                        projectTransformTimeIntoDates(approvedProject);
+                        transformProjectForFrontendUse(approvedProject);
                         let updatedProjects = [];
                         for (let p of projectData) {
                             if (p._id !== approvedProject._id) {

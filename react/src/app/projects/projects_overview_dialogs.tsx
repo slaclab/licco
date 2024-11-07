@@ -1,9 +1,9 @@
-import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, FileInput, Label, NonIdealState, Spinner, Text, Divider } from "@blueprintjs/core";
+import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates, ImportResult } from "./project_model";
+import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
 
 
 type projectApprovers = string[];
@@ -209,7 +209,7 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
         setIsSubmitting(true);
         Fetch.post<ProjectInfo>(`/ws/projects/${project._id}/clone/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
-                projectTransformTimeIntoDates(clonedProject);
+                transformProjectForFrontendUse(clonedProject);
                 onSubmit(clonedProject);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to clone project '${project.name}': ${e.error}`;
@@ -274,7 +274,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
         let clonedName = "NewBlankProjectClone"
         Fetch.post<ProjectInfo>(`/ws/projects/${clonedName}/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
-                projectTransformTimeIntoDates(clonedProject);
+                transformProjectForFrontendUse(clonedProject);
                 onSubmit(clonedProject);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to update project ${project.name} data: ${e.error}`;
