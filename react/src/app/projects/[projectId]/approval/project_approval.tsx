@@ -9,6 +9,8 @@ import { ProjectInfo, approveProject, fetchMasterProjectInfo, isProjectApproved,
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, loadProjectDiff } from "../diff/project_diff_model";
 
+import styles from "./project_approval.module.css";
+
 
 export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId }) => {
     // loading has to be set to true, to show the loading symbol when the page is started initially 
@@ -21,6 +23,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [showingNotes, setShowingNotes] = useState(false);
 
     const [isApproving, setIsApproving] = useState(false);
+    const [userActionError, setUserActionError] = useState('');
 
     const fetchApprovalDiff = async () => {
         const masterProject = await fetchMasterProjectInfo();
@@ -33,7 +36,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         fetchApprovalDiff()
             .then(diff => {
                 setDiff(diff);
-                // TODO: set user decision based on the field (if any)
+                // TODO: set user decision based on their past decision (currently the backend does not store it)
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to fetch projects diff: ${e.error}`;
                 console.error(msg, e)
@@ -55,10 +58,9 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 updatedDiff.a = updatedProject;
                 setDiff(updatedDiff);
                 setUserDecision("Approved");
+                setUserActionError(''); // clear error
             }).catch((e: JsonErrorMsg) => {
-                // TODO: use a separate error state
-                let msg = `Failed to accept the project: ${e.error}`
-                setLoadError(msg);
+                setUserActionError(`Failed to approve project: ${e.error}`);
             }).finally(() => {
                 setIsApproving(false);
             })
@@ -79,17 +81,18 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
             }
 
             // TODO: if the project was already approved by this user, we should hide the buttons and display the text
-            // (e.g., you have already approved)
+            // (e.g., you have already approved). The backend, however, does not store user decision so
+            // we can't display it here unless the user votes. On page refresh, however, that decision will be lost
             if (userDecision) {
                 return <b>{userDecision}</b>
             }
 
             if (isProjectApproved(project)) {
-                // @TODO: we don't know who rejected or approved the project, so there is nothing to do
                 return 'This project is already approved';
             }
 
             return (
+                <>
                 <ButtonGroup>
                     <Button icon="tick" large={true} intent="danger" disabled={isApproving} loading={isApproving}
                         onClick={(e) => approveCallback()}>
@@ -101,6 +104,9 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                         Reject (keep master values)
                     </Button>
                 </ButtonGroup>
+
+                    {userActionError ? <p className="error m-0 mt-2 error">{userActionError}</p> : null}
+                </>
             )
         }
 
@@ -141,7 +147,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                                         <Button small={true} onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
                                         <Collapse isOpen={showingNotes} keepChildrenMounted={true}>
                                             {notes.map((note, i) => {
-                                                return <div key={i} className="user-note mb-2 p-2" style={{ backgroundColor: Colors.LIGHT_GRAY4 }}>
+                                                return <div key={i} className={styles.userNote} style={{ backgroundColor: Colors.LIGHT_GRAY4 }}>
                                                     <MultiLineText text={note} />
                                                 </div>
                                             })
@@ -161,12 +167,13 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 </table>
             </Container>
         )
-    }, [userDecision, showingNotes, isApproving, diff])
+    }, [userDecision, showingNotes, userActionError, isApproving, diff])
 
 
     return (
         <>
             {isLoading ? null : summaryTable}
+
             <ProjectDiffTables isLoading={isLoading} loadError={loadError} diff={diff} />
 
             {diff ?
@@ -180,6 +187,8 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
                         setDiff(updatedDiff);
                         setUserDecision("Rejected");
+                        // clear any error on success, any error on reject action will be shown in dialog
+                        setUserActionError(''); 
                         setIsRejectDialogOpen(false);
                     }}
                 />

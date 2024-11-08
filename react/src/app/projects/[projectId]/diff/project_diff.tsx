@@ -29,6 +29,13 @@ export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string
         return <NonIdealState icon="blank" title="No Diff to Display" description="There is no diff to display" className="mt-5" />
     }
 
+    if (diff.a._id == diff.b._id) {
+        // user compared project 'a' to the same project
+        // this can happen when we approve the project and the compared and approved projects are the same
+        // in this case we just show the entire list of devices
+        return <ProjectDiffTable diff={diff} type="listOfIdenticalDevices" />
+    }
+
     return (
         <>
             <ProjectDiffTable diff={diff} type="new" />
@@ -79,7 +86,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 }
 
 // just for displaying data
-export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
+export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
 
     const createProjectLink = (project: ProjectInfo, type: 'a' | 'b') => {
@@ -93,6 +100,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             case "updated": return <>{diff.updated.length} Updated devices in {createProjectLink(diff.a, 'a')} compared to {createProjectLink(diff.b, 'b')}</>
             case "missing": return <>{diff.missing.length} Missing devices from {createProjectLink(diff.a, 'a')} (they are present in {createProjectLink(diff.b, 'b')})</>
             case "identical": return <>{diff.identical.length} Identical devices in {createProjectLink(diff.a, 'a')} and {createProjectLink(diff.b, 'b')}</>
+            case "listOfIdenticalDevices": return <>{diff.identical.length} devices in {createProjectLink(diff.a, 'a')}</>
         }
     }, [diff, type])
 
@@ -202,8 +210,9 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
         switch (type) {
             case 'new': return renderDataRows(diff.new);
             case 'missing': return renderDataRows(diff.missing);
-            case 'identical': return renderDataRows(diff.identical);
             case 'updated': return renderDiffRows(diff.updated);
+            case 'identical': return renderDataRows(diff.identical);
+            case 'listOfIdenticalDevices': return renderDataRows(diff.identical);
         }
     }
 
@@ -211,8 +220,9 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
         switch (type) {
             case 'new': return diff.new.length == 0;
             case 'missing': return diff.missing.length == 0;
-            case 'identical': return diff.identical.length == 0;
             case 'updated': return diff.updated.length == 0;
+            case 'identical': return diff.identical.length == 0;
+            case 'listOfIdenticalDevices': return diff.identical.length == 0
         }
     }, [diff]);
 
