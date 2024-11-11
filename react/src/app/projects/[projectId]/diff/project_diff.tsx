@@ -1,12 +1,12 @@
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
-import { Col, Row } from "react-bootstrap";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
 import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
+import { Col, Row } from "react-bootstrap";
 import styles from './project_diff.module.css';
 
 // displays the diff tables between two projects
@@ -234,8 +234,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
 
     return (
         <div className="mb-5">
-            <Row className="align-items-center">
-                <Col className="col-auto pe-0">
+            <Row className="align-items-center m-0">
+                <Col className="col-auto ps-0 pe-0">
                     <Button icon={collapsed ? "chevron-right" : "chevron-down"} minimal={true}
                         onClick={(e) => setCollapsed((collapsed) => !collapsed)}
                     />
