@@ -71,35 +71,55 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const projectDataDisplayed = useMemo(() => {
         // approved projects should always be pinned to the top of the table 
-        let approvedProjects = projectData.filter(p => isProjectApproved(p));
-        let displayedData = projectData.filter(p => !isProjectApproved(p));
+        let approvedProjects: ProjectInfo[] = [];
+        let projectsToApprove: ProjectInfo[] = [];
+        let displayedData: ProjectInfo[] = [];
+
+        for (let p of projectData) {
+            if (isProjectApproved(p)) {
+                approvedProjects.push(p);
+                continue;
+            }
+
+            if (isUserAProjectApprover(p, currentlyLoggedInUser)) {
+                projectsToApprove.push(p);
+                continue;
+            }
+
+            displayedData.push(p);
+        }
 
         // sort data according to selected filter
         switch (sortByColumn.column) {
             case 'created':
                 approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 break;
             case 'edit':
                 approvedProjects.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
                 break;
             case 'name':
                 approvedProjects.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 break;
             case 'owner':
                 approvedProjects.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 break;
             default:
                 approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
         }
 
-        let projects: ProjectInfo[] = [...approvedProjects, ...displayedData];
+        let projects: ProjectInfo[] = [...approvedProjects, ...projectsToApprove, ...displayedData];
         return projects;
-    }, [projectData, sortByColumn]);
+    }, [projectData, currentlyLoggedInUser, sortByColumn]);
 
 
     if (err) {
