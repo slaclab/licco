@@ -1,13 +1,15 @@
-import { AnchorButton, Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, ButtonGroup, Collapse, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
+import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
+import styles from './projects_overview.module.css';
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
@@ -217,7 +219,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     <td>{formatToLiccoDateTime(project.creation_time)}</td>
                                     <td>{formatToLiccoDateTime(project.edit_time)}</td>
                                     <td>{project.description}</td>
-                                    <td></td>
+                                    <td><CollapsibleProjectNotes notes={project.notes} /></td>
                                 </tr>
                             )
                         })
@@ -351,6 +353,30 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 />
                 : null
             }
+        </>
+    )
+}
+
+
+export const CollapsibleProjectNotes: React.FC<{ notes: string[], defaultNoNoteMsg?: React.ReactNode, defaultOpen?: boolean }> = ({ notes, defaultNoNoteMsg = <>/</>, defaultOpen = false }) => {
+    const [showingNotes, setShowingNotes] = useState(defaultOpen);
+
+    if (notes.length == 0) {
+        return <>{defaultNoNoteMsg}</>
+    }
+
+    return (
+        <>
+            <Button small={true} onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
+            <Collapse isOpen={showingNotes} keepChildrenMounted={true}>
+                {notes.map((note, i) => {
+                    return (
+                        <div key={i} className={styles.userNote}>
+                            <MultiLineText text={note} />
+                        </div>
+                    )
+                })}
+            </Collapse>
         </>
     )
 }

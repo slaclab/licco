@@ -1,7 +1,6 @@
-import { MultiLineText } from "@/app/components/multiline_text";
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { Button, ButtonGroup, Collapse, Colors, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
+import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
@@ -9,7 +8,7 @@ import { ProjectInfo, approveProject, fetchMasterProjectInfo, isProjectApproved,
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, loadProjectDiff } from "../diff/project_diff_model";
 
-import styles from "./project_approval.module.css";
+import { CollapsibleProjectNotes } from "../../projects_overview";
 
 
 export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -141,20 +140,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                         <tr>
                             <td>Notes: </td>
                             <td>
-                                {notes.length == 0 ? "/"
-                                    :
-                                    <>
-                                        <Button small={true} onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
-                                        <Collapse isOpen={showingNotes} keepChildrenMounted={true}>
-                                            {notes.map((note, i) => {
-                                                return <div key={i} className={styles.userNote} style={{ backgroundColor: Colors.LIGHT_GRAY4 }}>
-                                                    <MultiLineText text={note} />
-                                                </div>
-                                            })
-                                            }
-                                        </Collapse>
-                                    </>
-                                }
+                                <CollapsibleProjectNotes notes={notes} />
                             </td>
                         </tr>
                         <tr>
