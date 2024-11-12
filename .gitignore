@@ -108,3 +108,5 @@ ENV/
 
 # pycharm
 .idea
+
+credentials.ini

@@ -1,4 +1,6 @@
+import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
+import { useEffect, useState } from "react";
 import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchProjectFfts, fetchProjectInfo } from "../../project_model";
 import { sortDeviceDataByColumn } from "../project_details";
 
@@ -114,3 +116,23 @@ export const loadProjectDiff = async (projectIdA: string, projectIdB: string): P
 }
 
 
+export const fetchProjectDiffDataHook = (projectIdA: string, projectIdB: string) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [diff, setDiff] = useState<ProjectFftDiff>();
+
+    useEffect(() => {
+        setIsLoading(true);
+        loadProjectDiff(projectIdA, projectIdB).then(diff => {
+            setDiff(diff);
+            setLoadError('');
+        }).catch((e: JsonErrorMsg) => {
+            let msg = "Failed to fetch all project diff data: " + e.error;
+            setLoadError(msg);
+        }).finally(() => {
+            setIsLoading(false);
+        })
+    }, [projectIdA, projectIdB])
+
+    return { isLoading: isLoading, loadError: loadError, diff: diff };
+}

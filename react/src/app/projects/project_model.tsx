@@ -10,32 +10,66 @@ export interface ProjectInfo {
     edit_time?: Date;
     status: string;
     approver?: string;
+    approved_time?: Date;
     submitted_time?: Date;
     submitter?: string;
+    notes: string[];
 }
+
+// Determines if the user is an approver of the chosen project. The user is considered an approver if:
+//
+// - the project was submitted for approval and the logged in user was selected as an approver 
+// - the currently logged in user is a super approver (or admin)
+export function isUserAProjectApprover(project: ProjectInfo, username: string): boolean {
+    if (isProjectSubmitted(project)) {
+        // @TODO: we don't have a list of approvers or even know who is the currently logged in user
+        // we will have to change that later on...
+        if (project.approver === username || username == '') {
+            return true
+        }
+    }
+    return false;
+}
+
 
 // fetch data about all projects
 export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
     const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
-    projects.forEach(p => projectTransformTimeIntoDates(p))
+    projects.forEach(p => transformProjectForFrontendUse(p))
     return projects;
+}
+
+export async function fetchMasterProjectInfo(): Promise<ProjectInfo | undefined> {
+    const project = await Fetch.get<ProjectInfo>("/ws/approved/");
+    if (!project) {
+        // there is no master project. This can only happen on a fresh database
+        return undefined;
+    }
+    transformProjectForFrontendUse(project);
+    return project;
 }
 
 export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> {
     return Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
         .then(data => {
-            projectTransformTimeIntoDates(data);
+            transformProjectForFrontendUse(data);
             return data;
         });
 }
 
-export function projectTransformTimeIntoDates(project: ProjectInfo) {
+export function transformProjectForFrontendUse(project: ProjectInfo) {
     project.creation_time = new Date(project.creation_time);
     if (project.edit_time) {
         project.edit_time = new Date(project.edit_time);
     }
     if (project.submitted_time) {
-        project.submitted_time = new Date(project.submitted_time)
+        project.submitted_time = new Date(project.submitted_time);
+    }
+    if (project.approved_time) {
+        project.approved_time = new Date(project.approved_time);
+    }
+    if (project.notes == undefined) {
+        project.notes = [];
     }
 }
 
@@ -320,5 +354,22 @@ export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise
             let data = [...Object.values(resp)];
             let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));
             return frontendData;
+        })
+}
+
+export async function approveProject(projectId: string): Promise<ProjectInfo> {
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/approve_project`)
+        .then((project) => {
+            transformProjectForFrontendUse(project);
+            return project;
+        })
+}
+
+export function rejectProject(projectId: string, rejectionMsg: string): Promise<ProjectInfo> {
+    let d = { "reason": rejectionMsg };
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/reject_project`, { body: JSON.stringify(d) })
+        .then(project => {
+            transformProjectForFrontendUse(project);
+            return project;
         })
 }

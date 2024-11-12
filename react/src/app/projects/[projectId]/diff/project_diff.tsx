@@ -1,37 +1,22 @@
-import { JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
-import React, { ReactNode, useEffect, useMemo, useState } from "react";
-import { Col, Row } from "react-bootstrap";
+import React, { ReactNode, useMemo, useState } from "react";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
-import { ProjectFftDiff, loadProjectDiff } from "./project_diff_model";
+import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
+import { Col, Row } from "react-bootstrap";
 import styles from './project_diff.module.css';
 
+// displays the diff tables between two projects
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [diff, setDiff] = useState<ProjectFftDiff>();
-
-    useEffect(() => {
-        setIsLoading(true);
-        loadProjectDiff(projectIdA, projectIdB).then(diff => {
-            setDiff(diff);
-            setLoadError('');
-        }).catch((e: JsonErrorMsg) => {
-            let msg = "Failed to fetch all data for project diff page: " + e.error;
-            console.error(msg, e);
-            setLoadError(msg);
-        }).finally(() => {
-            setIsLoading(false);
-        })
-    }, [projectIdA, projectIdB])
+    const { isLoading, loadError, diff } = fetchProjectDiffDataHook(projectIdA, projectIdB)
+    return <ProjectDiffTables isLoading={isLoading} loadError={loadError} diff={diff} />
+}
 
 
-    // rendering part
-
+export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, diff?: ProjectFftDiff }> = ({ isLoading, loadError, diff }) => {
     if (isLoading) {
         return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." className="mt-5" />
     }
@@ -42,6 +27,13 @@ export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string 
 
     if (!diff) {
         return <NonIdealState icon="blank" title="No Diff to Display" description="There is no diff to display" className="mt-5" />
+    }
+
+    if (diff.a._id == diff.b._id) {
+        // user compared project 'a' to the same project
+        // this can happen when we approve the project and the compared and approved projects are the same
+        // in this case we just show the entire list of devices
+        return <ProjectDiffTable diff={diff} type="listOfIdenticalDevices" />
     }
 
     return (
@@ -94,7 +86,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 }
 
 // just for displaying data
-export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
+export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
 
     const createProjectLink = (project: ProjectInfo, type: 'a' | 'b') => {
@@ -108,6 +100,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             case "updated": return <>{diff.updated.length} Updated devices in {createProjectLink(diff.a, 'a')} compared to {createProjectLink(diff.b, 'b')}</>
             case "missing": return <>{diff.missing.length} Missing devices from {createProjectLink(diff.a, 'a')} (they are present in {createProjectLink(diff.b, 'b')})</>
             case "identical": return <>{diff.identical.length} Identical devices in {createProjectLink(diff.a, 'a')} and {createProjectLink(diff.b, 'b')}</>
+            case "listOfIdenticalDevices": return <>{diff.identical.length} devices in {createProjectLink(diff.a, 'a')}</>
         }
     }, [diff, type])
 
@@ -217,8 +210,9 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
         switch (type) {
             case 'new': return renderDataRows(diff.new);
             case 'missing': return renderDataRows(diff.missing);
-            case 'identical': return renderDataRows(diff.identical);
             case 'updated': return renderDiffRows(diff.updated);
+            case 'identical': return renderDataRows(diff.identical);
+            case 'listOfIdenticalDevices': return renderDataRows(diff.identical);
         }
     }
 
@@ -226,10 +220,18 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
         switch (type) {
             case 'new': return diff.new.length == 0;
             case 'missing': return diff.missing.length == 0;
-            case 'identical': return diff.identical.length == 0;
             case 'updated': return diff.updated.length == 0;
+            case 'identical': return diff.identical.length == 0;
+            case 'listOfIdenticalDevices': return diff.identical.length == 0
         }
     }, [diff]);
+
+    const noDevicesDisplay = () => {
+        if (type == 'listOfIdenticalDevices') {
+            return <NonIdealState icon="clean" title={`No Devices`} description={`There are no devices`} />
+        }
+        return <NonIdealState icon="clean" title={`No ${capitalizeFirstLetter(type)} Devices`} description={`There are no ${type} devices`} />
+    }
 
 
     if (type == "missing" && diff.missing.length == 0) {
@@ -239,8 +241,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
 
     return (
         <div className="mb-5">
-            <Row className="align-items-center">
-                <Col className="col-auto pe-0">
+            <Row className="align-items-center m-0">
+                <Col className="col-auto ps-0 pe-0">
                     <Button icon={collapsed ? "chevron-right" : "chevron-down"} minimal={true}
                         onClick={(e) => setCollapsed((collapsed) => !collapsed)}
                     />
@@ -251,8 +253,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             </Row>
 
             <Collapse isOpen={!collapsed} keepChildrenMounted={true}>
-                {noDevices ?
-                    <NonIdealState icon="clean" title={`No ${capitalizeFirstLetter(type)} Devices`} description={`There are no ${type} devices`} />
+                {noDevices ? <>{noDevicesDisplay()}</>
                     :
                     <div className="table-responsive" style={{ maxHeight: "75vh" }}>
                         <table className={`table table-sm table-bordered table-striped table-sticky ${styles.diffTable}`}>

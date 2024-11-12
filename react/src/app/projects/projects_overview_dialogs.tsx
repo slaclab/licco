@@ -1,9 +1,9 @@
-import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, FileInput, Label, NonIdealState, Spinner, Text, Divider } from "@blueprintjs/core";
+import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-import { ProjectApprovalHistory, ProjectInfo, projectTransformTimeIntoDates, ImportResult } from "./project_model";
+import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
 
 
 type projectApprovers = string[];
@@ -209,7 +209,7 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
         setIsSubmitting(true);
         Fetch.post<ProjectInfo>(`/ws/projects/${project._id}/clone/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
-                projectTransformTimeIntoDates(clonedProject);
+                transformProjectForFrontendUse(clonedProject);
                 onSubmit(clonedProject);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to clone project '${project.name}': ${e.error}`;
@@ -274,7 +274,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
         let clonedName = "NewBlankProjectClone"
         Fetch.post<ProjectInfo>(`/ws/projects/${clonedName}/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
-                projectTransformTimeIntoDates(clonedProject);
+                transformProjectForFrontendUse(clonedProject);
                 onSubmit(clonedProject);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to update project ${project.name} data: ${e.error}`;
@@ -404,7 +404,7 @@ export const ProjectImportDialog: React.FC<{
 }> = ({ isOpen, project, onClose }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
-    const [selectedFile, setSelectedFile] = useState('');
+    const [selectedFile, setSelectedFile] = useState<File>();
     const [importResult, setImportResult] = useState(String);
     const [robustReport, setRobustReport] = useState(String);
     const [downloadButtonState, setDownloadButtonState] = useState(false)
@@ -419,10 +419,14 @@ export const ProjectImportDialog: React.FC<{
     }, [isOpen])
 
     const submit = () => {
+        if (!selectedFile) {
+            return;
+        }
+
         setIsSubmitting(true);
         const data = new FormData();
         data.append("file", selectedFile);
-        data.append("name", selectedFile.value)
+        data.append("name", selectedFile.name)
 
 
         Fetch.post<ImportResult>(`/ws/projects/${project._id}/import/`, { body: data, headers: { "Content-Type": "MULTIPART" } })
@@ -445,10 +449,11 @@ export const ProjectImportDialog: React.FC<{
     }
 
     const importFileChosen = (e: any) => {
-        if (!e) {
+        if (!e || !e.target.files) {
             return;
         }
-        setSelectedFile(e.target.files[0]);
+        let file = e.target.files[0] as File;
+        setSelectedFile(file);
         setDownloadButtonState(true);
     }
 
@@ -471,7 +476,7 @@ export const ProjectImportDialog: React.FC<{
 
     const renderImportResult = () => {
         // Before file is selected
-        if (selectedFile === '') {
+        if (!selectedFile) {
             return <NonIdealState icon={"search"} title="Please Upload a File" description={"Please select and upload a file"} />
         }
         // Before file is uploaded
@@ -560,10 +565,9 @@ export const ProjectExportDialog: React.FC<{
                 let msg = `Failed to download the project.`;
                 setDialogError(msg);
                 console.error(msg, e);
+            }).finally(() => {
+                setIsSubmitting(false);
             })
-        setDialogError('');
-        onSubmit();
-        setIsSubmitting(false);
     }
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`Download Project (${project.name})`} autoFocus={true}>
@@ -574,7 +578,7 @@ export const ProjectExportDialog: React.FC<{
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={""}>Download</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting}>Download</Button>
                 </>
             } />
         </Dialog>
