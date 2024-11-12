@@ -763,8 +763,7 @@ def approve_project(prjid, userid):
     Approve a submitted project.
     Set the status to approved
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     approved = get_currently_approved_project()
     if not prj:
         return False, f"Cannot find project for {prjid}", None
@@ -777,7 +776,7 @@ def approve_project(prjid, userid):
                                                          "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     # update the approved project with most recent changed time
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+                                                         "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow(), "notes": []}})
     return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
 
 
