@@ -314,7 +314,8 @@ def svc_get_currently_approved_project():
     logged_in_user = context.security.get_current_user_id()
     prj = get_currently_approved_project()
     if not prj:
-        return JSONEncoder().encode({"success": False, "value": None})
+         # no currently approved project (this can happen when the project is submitted for the first time)
+        return JSONEncoder().encode({"success": True, "value": None})
     prj_ffts = get_project_ffts(prj["_id"])
     prj["ffts"] = prj_ffts
     return JSONEncoder().encode({"success": True, "value": prj})
@@ -784,21 +785,24 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
-    # See if approval confitions are good
+    # See if approval conditions are good
     status, errormsg, prj = approve_project(prjid, userid)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
-    approved = get_currently_approved_project()
-    if not approved:
+    approved_project = get_currently_approved_project()
+    if not approved_project:
+        # this should never happen
+        errormsg = "Can't find an approved project, after approving the project: this is a programming bug"
         return {"success": False, "errormsg": errormsg}
+
+    # @BUG: these updates should be done in a transaction when the project is approved
     # merge project in to previously approved project
     current_ffts = get_project_ffts(prjid)
-    status, errormsg, update_status = update_ffts_in_project(approved["_id"], current_ffts)
-    updated_ffts = get_project_ffts(prjid)
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], current_ffts)
     logger.debug(errormsg)
     logger.debug(update_status)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": updated_ffts})
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": approved_project})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])

@@ -39,8 +39,12 @@ export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
     return projects;
 }
 
-export async function fetchMasterProjectInfo(): Promise<ProjectInfo> {
+export async function fetchMasterProjectInfo(): Promise<ProjectInfo | undefined> {
     const project = await Fetch.get<ProjectInfo>("/ws/approved/");
+    if (!project) {
+        // there is no master project. This can only happen on a fresh database
+        return undefined;
+    }
     transformProjectForFrontendUse(project);
     return project;
 }
@@ -353,7 +357,7 @@ export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise
         })
 }
 
-export function approveProject(projectId: string): Promise<ProjectInfo> {
+export async function approveProject(projectId: string): Promise<ProjectInfo> {
     return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/approve_project`)
         .then((project) => {
             transformProjectForFrontendUse(project);

@@ -19,13 +19,20 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [rejectDialogOpen, setIsRejectDialogOpen] = useState(false);
     const [userDecision, setUserDecision] = useState('');
 
-    const [showingNotes, setShowingNotes] = useState(false);
-
     const [isApproving, setIsApproving] = useState(false);
     const [userActionError, setUserActionError] = useState('');
 
     const fetchApprovalDiff = async () => {
         const masterProject = await fetchMasterProjectInfo();
+
+        if (!masterProject) {
+            // there is no master project and there was also no error:
+            // this can happen when the user displays the approval page for the first time (before
+            // any other project was approved; e.g., on a fresh database). In this case we will simply
+            // compare the same project ids, which is handled correctly internally in the diff algorithm.
+            return await loadProjectDiff(projectId, projectId);
+        }
+
         const projectDiff = await loadProjectDiff(projectId, masterProject._id);
         return projectDiff;
     }
@@ -52,14 +59,16 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
         setIsApproving(true);
         approveProject(projectId)
-            .then(updatedProject => {
-                let updatedDiff = structuredClone(diff);
-                updatedDiff.a = updatedProject;
-                setDiff(updatedDiff);
-                setUserDecision("Approved");
-                setUserActionError(''); // clear error
+            .then(approvedProject => {
+                // refetch the entire diff
+                return fetchApprovalDiff()
+                    .then(updatedDiff => {
+                        setUserDecision("Approved")
+                        setDiff(updatedDiff)
+                        setUserActionError('');
+                    })
             }).catch((e: JsonErrorMsg) => {
-                setUserActionError(`Failed to approve project: ${e.error}`);
+                setUserActionError(e.error);
             }).finally(() => {
                 setIsApproving(false);
             })
@@ -128,13 +137,27 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                             <td className="text-nowrap">Submitted at:</td>
                             <td>{formatToLiccoDateTime(project.submitted_time) || "/"}</td>
                         </tr>
+                        {project.approved_time ?
+                            <tr>
+                                <td>Approved at:</td>
+                                <td>{formatToLiccoDateTime(project.approved_time)}</td>
+                            </tr>
+                            : null
+                        }
                         <tr>
                             <td>Summary:</td>
                             <td>
-                                {diff.new.length} New <br />
-                                {diff.missing.length > 0 ? <>{diff.missing.length} Missing <br /></> : null}
-                                {diff.updated.length} Updated <br />
-                                {diff.identical.length} Identical <br />
+                                {/* same ids case only happens on a fresh database where there are no approved projects yet */}
+                                {diff.a._id == diff.b._id ?
+                                    <>{diff.identical.length} New <br /></>
+                                    :
+                                    <>
+                                        {diff.new.length} New <br />
+                                        {diff.missing.length > 0 ? <>{diff.missing.length} Missing <br /></> : null}
+                                        {diff.updated.length} Updated <br />
+                                        {diff.identical.length} Identical <br />
+                                    </>
+                                }
                             </td>
                         </tr>
                         <tr>
@@ -153,7 +176,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 </table>
             </Container>
         )
-    }, [userDecision, showingNotes, userActionError, isApproving, diff])
+    }, [userDecision, userActionError, isApproving, diff])
 
 
     return (

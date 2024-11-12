@@ -764,16 +764,18 @@ def approve_project(prjid, userid):
     Set the status to approved
     """
     prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
-    approved = get_currently_approved_project()
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
     if prj["submitter"] == userid:
         return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
-    # update the most recent approved time
-    licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
-                                                         "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+
+    approved = get_currently_approved_project()
+    if approved:
+        # update the most recent approved time
+        licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
+                                                             "approver": userid, "approved_time": datetime.datetime.utcnow()}})
     # update the approved project with most recent changed time
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow(), "notes": []}})
@@ -813,8 +815,8 @@ def get_currently_approved_project():
     """
     Get the current approved project by status
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"status": "approved"})
+    # since there could be multiple projects with status 'approved', we grab the latest one based on the approved time
+    prj = licco_db[line_config_db_name]["projects"].find_one({"status": "approved"}, sort=[("approved_time", -1)])
     return prj if prj else None
 
 def get_projects_approval_history():
