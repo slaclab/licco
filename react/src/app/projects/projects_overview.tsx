@@ -161,7 +161,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     <td>
                                         <ButtonGroup minimal={true}>
                                             {isUserAProjectApprover(project, currentlyLoggedInUser) ?
-                                                <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
+                                                <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
                                                     href={`/projects/${project._id}/approval`}
                                                 />
                                                 : null

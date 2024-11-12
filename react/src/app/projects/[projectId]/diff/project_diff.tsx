@@ -226,6 +226,13 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
         }
     }, [diff]);
 
+    const noDevicesDisplay = () => {
+        if (type == 'listOfIdenticalDevices') {
+            return <NonIdealState icon="clean" title={`No Devices`} description={`There are no devices`} />
+        }
+        return <NonIdealState icon="clean" title={`No ${capitalizeFirstLetter(type)} Devices`} description={`There are no ${type} devices`} />
+    }
+
 
     if (type == "missing" && diff.missing.length == 0) {
         // no need to display the missing table if nothing is missing
@@ -246,8 +253,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             </Row>
 
             <Collapse isOpen={!collapsed} keepChildrenMounted={true}>
-                {noDevices ?
-                    <NonIdealState icon="clean" title={`No ${capitalizeFirstLetter(type)} Devices`} description={`There are no ${type} devices`} />
+                {noDevices ? <>{noDevicesDisplay()}</>
                     :
                     <div className="table-responsive" style={{ maxHeight: "75vh" }}>
                         <table className={`table table-sm table-bordered table-striped table-sticky ${styles.diffTable}`}>

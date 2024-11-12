@@ -8,7 +8,7 @@ import os
 import fnmatch
 import re
 from io import BytesIO, StringIO
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple, Dict
 
 import pytz
@@ -820,7 +820,7 @@ def svc_reject_project(prjid):
     # so we can avoid rendering them when they are no longer relevant.
     #
     # add current user and datetime to the original reason
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
     reason = f"{userid} ({licco_datetime}):\n{reason}"
     status, errormsg, prj = reject_project(prjid, userid, reason)
