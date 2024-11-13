@@ -9,7 +9,7 @@ from enum import Enum
 import copy
 import json
 import math
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 
 import pytz
 import tempfile
@@ -742,7 +742,7 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
 
 
-def submit_project_for_approval(prjid, userid, approver):
+def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     """
     Submit a project for approval.
     Set the status to submitted
@@ -752,8 +752,11 @@ def submit_project_for_approval(prjid, userid, approver):
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "development":
         return False, f"Project {prjid} is not in development status", None
+    if len(approvers) == 0:
+        return False, f"Project should have at least 1 approver", None
+
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "submitted", "submitter": userid, "approver": approver, "submitted_time": datetime.datetime.utcnow()}})
+                                                         "status": "submitted", "submitter": userid, "approvers": approvers, "submitted_time": datetime.datetime.utcnow()}})
     updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     return True, "", updated_project_info
 
@@ -771,15 +774,34 @@ def approve_project(prjid, userid):
     if prj["submitter"] == userid:
         return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
 
-    approved = get_currently_approved_project()
-    if approved:
-        # update the most recent approved time
-        licco_db[line_config_db_name]["projects"].update_one({"_id": approved["_id"]}, {"$set": {
-                                                             "approver": userid, "approved_time": datetime.datetime.utcnow()}})
-    # update the approved project with most recent changed time
-    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "approved", "approver": userid, "approved_time": datetime.datetime.utcnow(), "notes": []}})
-    return True, f"Project {prj['name']} approved by {prj['submitter']}.", prj
+    if userid not in prj.get("approvers", []):
+        # TODO: check if the user is a super approver
+        return False, f"User {userid} is not allowed to approve the project", None
+
+    # update the project metadata
+    approved_by = [userid] + prj.get("approved_by", [])
+    updated_project_data = {
+        "approved_by": approved_by
+    }
+
+    all_approvers_approved = len(approved_by) == len(prj.get("approvers", []))
+    if all_approvers_approved:
+        # TODO: super approvers should approve as well, how do we check and store for that?
+        updated_project_data["status"] = "approved",
+        updated_project_data['approved_time'] = datetime.datetime.utcnow()
+        updated_project_data['notes'] = []
+
+        # update current master project
+        approved_project = get_currently_approved_project()
+        if approved_project:
+            # update the most recent approved time
+            # TODO: I don't think we should change the approver to the current user id
+            licco_db[line_config_db_name]["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
+                                                                 "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+
+    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
+    return True, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
 
 def reject_project(prjid, userid, reason):
@@ -794,7 +816,10 @@ def reject_project(prjid, userid, reason):
         return False, f"Project {prjid} is not in submitted status", None
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "development", "approver": userid, "approved_time": datetime.datetime.utcnow(), "notes": [reason] + prj.get("notes", [])}})
+                                                        "status": "development",
+                                                        "approved_by": [],
+                                                        "approved_time": None,
+                                                        "notes": [reason] + prj.get("notes", [])}})
     updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     return True, "", updated_project
 

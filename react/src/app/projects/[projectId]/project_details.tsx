@@ -76,7 +76,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // data and loading
     const [isLoading, setIsLoading] = useState(false);
     const [fftDataLoadingError, setFftDataLoadingError] = useState('');
-    const [projectData, setProjectData] = useState<ProjectInfo>();
+    const [project, setProject] = useState<ProjectInfo>();
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
@@ -146,7 +146,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         fetchProjectInfo(projectId)
-            .then(data => setProjectData(data))
+            .then(data => setProject(data))
             .catch((e: JsonErrorMsg) => {
                 console.error("Failed to load required project data", e);
                 setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -217,7 +217,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     }
 
     const addNewFft = (newFft: FFTInfo) => {
-        if (!projectData) {
+        if (!project) {
             // this should never happen
             setErrorAlertMsg("Can't add a new fft to a project without knowing the projec details; this is a programming bug");
             return;
@@ -227,7 +227,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
             if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
-                setErrorAlertMsg(<>FFT <b>{fft.fc}-{fft.fg}</b> is already a part of the project: "{projectData.name}".</>);
+                setErrorAlertMsg(<>FFT <b>{fft.fc}-{fft.fg}</b> is already a part of the project: "{project.name}".</>);
                 return
             }
         }
@@ -237,7 +237,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             fc: newFft.fc._id,
             fg: newFft.fg._id,
         }
-        return addFftsToProject(projectData._id, [fft])
+        return addFftsToProject(project._id, [fft])
             .then(data => {
                 // TODO: when we try to add an fft that is already there, the backend doesn't complain
                 // it just returns success: true, erromsg: no changes detected.
@@ -251,7 +251,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             });
     }
 
-    const isProjectSubmitted = projectData?.status === "submitted";
+    const isProjectSubmitted = project?.status === "submitted";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != ""
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter
     const isEditedTable = editedDevice != undefined;
@@ -266,10 +266,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     <thead>
                         <tr>
                             <th colSpan={6}>
-                                {!projectData ? <></> :
+                                {!project ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
-                                        <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{projectData?.name}</h5>
+                                        <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{project?.name}</h5>
 
                                         <Button icon="import" title="Download a copy of this project"
                                             minimal={true} small={true}
@@ -300,10 +300,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                                 if (showFftSinceCreationFilter) {
                                                     setShowFftSinceCreationFilter(false);
-                                                    loadFFTData(projectData._id, true);
+                                                    loadFFTData(project._id, true);
                                                 } else if (timestampFilter) {
                                                     // timestamp filter was applied and now we have to load original data
-                                                    loadFFTData(projectData._id, true);
+                                                    loadFFTData(project._id, true);
                                                 }
                                                 updateQueryParams('', '', '', '');
                                             }}
@@ -344,11 +344,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             onClick={(e) => setIsApprovalDialogOpen(true)}
                                         />
 
-                                        {isUserAProjectApprover(projectData, currentlyLoggedInUser) ?
+                                        {isUserAProjectApprover(project, currentlyLoggedInUser) ?
                                             <>
                                                 <Divider />
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
-                                                    href={`/projects/${projectData._id}/approval`}
+                                                    href={`/projects/${project._id}/approval`}
                                                 />
                                             </>
                                             : null
@@ -390,7 +390,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.id} project={projectData} device={device} disabled={disableRow}
+                                return <DeviceDataTableRow key={device.id} project={project} device={device} disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
                                         setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
@@ -400,7 +400,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} project={projectData} device={device} availableFftStates={availableFftStates}
+                            return <DeviceDataEditTableRow key={device.id} project={project} device={device} availableFftStates={availableFftStates}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -427,7 +427,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             </div>
 
             {!isLoading && !fftDataLoadingError && !isFilterApplied && fftDataDisplay.length == 0 ?
-                <NonIdealState icon="search" title="No FFTs Found" description={<>Project {projectData?.name} does not have any FFTs</>} />
+                <NonIdealState icon="search" title="No FFTs Found" description={<>Project {project?.name} does not have any FFTs</>} />
                 : null}
 
             {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
@@ -435,7 +435,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 : null
             }
 
-            {projectData ?
+            {project ?
                 <AddFftDialog
                     dialogType="addToProject"
                     isOpen={isAddNewFftDialogOpen}
@@ -459,25 +459,23 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 }}
             />
 
-            {projectData ?
+            {project ?
                 <ProjectApprovalDialog
                     isOpen={isApprovalDialogOpen}
-                    projectTitle={projectData.name}
-                    projectId={projectData._id}
-                    projectOwner={projectData.owner}
+                    project={project}
                     onClose={() => setIsApprovalDialogOpen(false)}
                     onSubmit={(projectInfo) => {
-                        setProjectData(projectInfo);
+                        setProject(projectInfo);
                         setIsApprovalDialogOpen(false);
                     }}
                 />
                 : null}
 
-            {projectData ?
+            {project ?
                 <CopyFFTToProjectDialog
                     isOpen={isCopyFFTDialogOpen}
                     FFT={currentFFT}
-                    currentProject={projectData}
+                    currentProject={project}
                     onClose={() => setIsCopyFFTDialogOpen(false)}
                     onSubmit={(newDeviceDetails) => {
                         // find current fft and update device details
@@ -494,13 +492,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 /> : null}
 
-            {projectData ?
+            {project ?
                 <ProjectHistoryDialog
-                    currentProject={projectData}
+                    currentProject={project}
                     isOpen={isProjectHistoryDialogOpen}
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
                     displayProjectSince={(time) => {
-                        loadFFTData(projectData._id, true, time);
+                        loadFFTData(project._id, true, time);
                         setIsProjectHistoryDialogOpen(false);
 
                         let timestampFilter = time.toISOString();
@@ -509,39 +507,38 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 />
                 : null}
-            {projectData ?
+            {project ?
                 <TagSelectionDialog
                     isOpen={isTagSelectionDialogOpen}
-                    projectId={projectData._id}
+                    projectId={project._id}
                     onSubmit={(tagDate) => {
-                        const timestampFilter = new Date(tagDate);
-                        loadFFTData(projectData._id, true, timestampFilter);
-                        updateQueryParams(fcFilter, fgFilter, stateFilter, tagDate);
-                        setAsOfTimestampFilter(tagDate);
+                        loadFFTData(project._id, true, tagDate);
+                        updateQueryParams(fcFilter, fgFilter, stateFilter, tagDate.toISOString());
+                        setAsOfTimestampFilter(tagDate.toISOString());
                         setIsTagSelectionDialogOpen(false);
                     }}
                     onClose={() => setIsTagSelectionDialogOpen(false)}
                 />
                 : null}
-            {projectData ?
+            {project ?
                 <TagCreationDialog
                     isOpen={isTagCreationDialogOpen}
-                    projectId={projectData._id}
+                    projectId={project._id}
                     onSubmit={() => setIsTagCreationDialogOpen(false)}
                     onClose={() => setIsTagCreationDialogOpen(false)}
                 />
                 : null}
-            {projectData ?
+            {project ?
                 <ProjectImportDialog
                     isOpen={isImportDialogOpen}
-                    project={projectData}
+                    project={project}
                     onClose={() => setIsImportDialogOpen(false)}
                 />
                 : null}
-            {projectData ?
+            {project ?
                 <ProjectExportDialog
                     isOpen={isExportDialogOpen}
-                    project={projectData}
+                    project={project}
                     onSubmit={() => setIsExportDialogOpen(false)}
                     onClose={() => setIsExportDialogOpen(false)}
                 />

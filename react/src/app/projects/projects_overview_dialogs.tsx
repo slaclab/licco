@@ -8,7 +8,8 @@ import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForF
 
 type projectApprovers = string[];
 
-export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: string, projectId: string, projectOwner: string, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, projectTitle, projectId, projectOwner, onClose, onSubmit }) => {
+/// @deprecated: this dialog is replaced via a separate submit page
+export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, project, onClose, onSubmit }) => {
     const DEFAULT_USER = "Please select an approver";
     const [selectedApprover, setSelectedApprover] = useState(DEFAULT_USER);
     const [approvers, setApprovers] = useState<string[]>([]);
@@ -21,7 +22,7 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
         if (isOpen) {
             Fetch.get<projectApprovers>('/ws/approvers/')
                 .then(projectApprovers => {
-                    let approvers = [DEFAULT_USER, ...projectApprovers.filter(a => a != projectOwner)];
+                    let approvers = [DEFAULT_USER, ...projectApprovers.filter(a => a != project.owner)];
                     setApprovers(approvers);
                 }).catch((e: JsonErrorMsg) => {
                     let msg = `Failed to fetch project approvers: ${e.error}`;
@@ -29,7 +30,9 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
                     setDialogErr(msg);
                 })
         }
-    }, [isOpen, projectOwner]);
+    }, [isOpen, project]);
+
+    const projectId = project._id;
 
     useEffect(() => {
         const userNotSelected = !selectedApprover || selectedApprover === DEFAULT_USER;
@@ -65,7 +68,7 @@ export const ProjectApprovalDialog: React.FC<{ isOpen: boolean, projectTitle: st
     }
 
     return (
-        <Dialog onClose={onClose} isOpen={isOpen} title={`Submit Project for Approval (${projectTitle})`}>
+        <Dialog onClose={onClose} isOpen={isOpen} title={`Submit Project for Approval (${project.name})`}>
             <DialogBody>
                 <FormGroup label="Project Approver:">
                     <HTMLSelect

@@ -1,3 +1,4 @@
+import { toUnixSeconds } from "../utils/date_utils";
 import { Fetch } from "../utils/fetching";
 
 export interface ProjectInfo {
@@ -9,7 +10,7 @@ export interface ProjectInfo {
     creation_time: Date;
     edit_time?: Date;
     status: string;
-    approver?: string;
+    approvers?: string[];
     approved_time?: Date;
     submitted_time?: Date;
     submitter?: string;
@@ -22,10 +23,8 @@ export interface ProjectInfo {
 // - the currently logged in user is a super approver (or admin)
 export function isUserAProjectApprover(project: ProjectInfo, username: string): boolean {
     if (isProjectSubmitted(project)) {
-        // @TODO: we don't have a list of approvers or even know who is the currently logged in user
-        // we will have to change that later on...
-        if (project.approver === username || username == '') {
-            return true
+        if (project.approvers?.includes(username) || username == '') {
+            return true;
         }
     }
     return false;
@@ -55,6 +54,18 @@ export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> 
             transformProjectForFrontendUse(data);
             return data;
         });
+}
+
+
+// fetch all available approvers 
+export async function fetchProjectApprovers(projectOwner?: string): Promise<string[]> {
+    return Fetch.get<string[]>('/ws/approvers/')
+        .then(approvers => {
+            if (projectOwner) {
+                return approvers.filter(username => username != projectOwner);
+            }
+            return approvers;
+        })
 }
 
 export function transformProjectForFrontendUse(project: ProjectInfo) {
@@ -365,11 +376,20 @@ export async function approveProject(projectId: string): Promise<ProjectInfo> {
         })
 }
 
-export function rejectProject(projectId: string, rejectionMsg: string): Promise<ProjectInfo> {
+export async function rejectProject(projectId: string, rejectionMsg: string): Promise<ProjectInfo> {
     let d = { "reason": rejectionMsg };
     return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/reject_project`, { body: JSON.stringify(d) })
         .then(project => {
             transformProjectForFrontendUse(project);
             return project;
         })
+}
+
+
+export function submitForApproval(projectId: string, approvers: string[], approveUntil?: Date): Promise<ProjectInfo> {
+    let data = {
+        'approvers': approvers,
+        'approve_until': approveUntil ? toUnixSeconds(approveUntil) : 0,
+    }
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval`, { body: JSON.stringify(data) })
 }

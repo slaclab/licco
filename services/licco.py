@@ -770,10 +770,20 @@ def svc_submit_for_approval(prjid):
     """
     Submit a project for approval
     """
-    approver = request.args.get("approver", None)
+    approvers = []
+    if request.json:
+        approvers = request.json.get("approvers", [])
+        if len(approvers) == 0:
+            return JSONEncoder().encode({"success": False, "errormsg": "At least 1 approver is expected"})
+    else:
+        # TODO: DEPRECATED: old gui approved project this way
+        # Once old GUI is removed, this else statement should go away as well
+        approver = request.args.get("approver", None)
+        if approver:
+            approvers.append(approver)
+
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = submit_project_for_approval(
-        prjid, userid, approver)
+    status, errormsg, prj = submit_project_for_approval(prjid, userid, approvers)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -796,7 +806,7 @@ def svc_approve_project(prjid):
         errormsg = "Can't find an approved project, after approving the project: this is a programming bug"
         return {"success": False, "errormsg": errormsg}
 
-    # @BUG: these updates should be done in a transaction when the project is approved
+    # @TODO: these updates should be done in a transaction when the project is approved
     # merge project in to previously approved project
     current_ffts = get_project_ffts(prjid)
     status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], current_ffts)

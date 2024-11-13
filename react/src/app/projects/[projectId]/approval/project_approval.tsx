@@ -4,9 +4,9 @@ import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, TextA
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { ProjectInfo, approveProject, fetchMasterProjectInfo, isProjectApproved, isProjectSubmitted, rejectProject } from "../../project_model";
+import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, rejectProject } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
-import { ProjectFftDiff, loadProjectDiff } from "../diff/project_diff_model";
+import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
 import { CollapsibleProjectNotes } from "../../projects_overview";
 
@@ -22,24 +22,9 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [isApproving, setIsApproving] = useState(false);
     const [userActionError, setUserActionError] = useState('');
 
-    const fetchApprovalDiff = async () => {
-        const masterProject = await fetchMasterProjectInfo();
-
-        if (!masterProject) {
-            // there is no master project and there was also no error:
-            // this can happen when the user displays the approval page for the first time (before
-            // any other project was approved; e.g., on a fresh database). In this case we will simply
-            // compare the same project ids, which is handled correctly internally in the diff algorithm.
-            return await loadProjectDiff(projectId, projectId);
-        }
-
-        const projectDiff = await loadProjectDiff(projectId, masterProject._id);
-        return projectDiff;
-    }
-
     useEffect(() => {
         // get master project and fetch the diff between current project id and master project
-        fetchApprovalDiff()
+        fetchDiffWithMasterProject(projectId)
             .then(diff => {
                 setDiff(diff);
                 // TODO: set user decision based on their past decision (currently the backend does not store it)
@@ -61,7 +46,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         approveProject(projectId)
             .then(approvedProject => {
                 // refetch the entire diff
-                return fetchApprovalDiff()
+                return fetchDiffWithMasterProject(projectId)
                     .then(updatedDiff => {
                         setUserDecision("Approved")
                         setDiff(updatedDiff)
@@ -217,7 +202,6 @@ export const RejectProjectDialog: React.FC<{ isOpen: boolean, project: ProjectIn
         setIsSubmitting(true);
         rejectProject(project._id, rejectionMsg.trim())
             .then((project) => {
-                console.log("project:", project);
                 onSubmit(project);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to reject a project: ${e.error}`;
