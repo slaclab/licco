@@ -163,6 +163,10 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                             <td className="w-100"><a href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</a></td>
                         </tr>
                         <tr>
+                            <td>Owner:</td>
+                            <td>{project.owner}</td>
+                        </tr>
+                        <tr>
                             <td>Status:</td>
                             <td>{project.status}</td>
                         </tr>

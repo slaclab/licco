@@ -119,6 +119,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
     project_ffts = get_project_ffts(prjid)
 
     # Iterate through parameter fft set
+    errormsg = ""
     for fft in ffts:
         if "_id" not in fft:
             # REVIEW: the database layer should return the kind of structure that you
@@ -169,7 +170,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
             update_status = {k: update_status[k]+results[k]
                              for k in update_status.keys()}
 
-    # BUG: error message is not declared anywhere, so it will always be None or set to the last value
+    # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
     # that comes out of fft update loop
     return True, errormsg, update_status
 

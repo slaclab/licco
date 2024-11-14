@@ -774,20 +774,25 @@ def approve_project(prjid, userid):
     if prj["submitter"] == userid:
         return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
 
-    if userid not in prj.get("approvers", []):
+    assigned_approvers = prj.get("approvers", [])
+    if userid not in assigned_approvers:
         # TODO: check if the user is a super approver
         return False, f"User {userid} is not allowed to approve the project", None
 
     # update the project metadata
-    approved_by = [userid] + prj.get("approved_by", [])
+    approved_by = prj.get("approved_by", [])
+    if userid in approved_by:
+        return False, f"User {userid} has already approved this project", None
+
+    approved_by = [userid] + approved_by
     updated_project_data = {
         "approved_by": approved_by
     }
 
-    all_approvers_approved = len(approved_by) == len(prj.get("approvers", []))
-    if all_approvers_approved:
+    all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
+    if all_assigned_approvers_approved:
         # TODO: super approvers should approve as well, how do we check and store for that?
-        updated_project_data["status"] = "approved",
+        updated_project_data["status"] = "approved"
         updated_project_data['approved_time'] = datetime.datetime.utcnow()
         updated_project_data['notes'] = []
 
