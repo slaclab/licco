@@ -1,6 +1,6 @@
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
+import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
@@ -93,7 +93,10 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                     </Button>
                     &ensp;
                     <Button icon="cross-circle" large={true} intent="primary" disabled={isApproving}
-                        onClick={e => setIsRejectDialogOpen(true)}>
+                            onClick={e => {
+                                setIsRejectDialogOpen(true);
+                                setUserDecision("Rejected");
+                            }}>
                         Reject (keep master values)
                     </Button>
                 </ButtonGroup>
@@ -107,12 +110,13 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         const notes = project.notes;
         return (
             <Container className="mb-5">
+                <h4>Approve Project</h4>
                 <table className="table table-nohead table-sm">
                     <thead></thead>
                     <tbody>
                         <tr>
                             <td className="text-nowrap pe-4">Project Name:</td>
-                            <td className="w-100"><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
+                            <td className="w-100"><Link href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</Link></td>
                         </tr>
                         <tr>
                             <td>Submitter:</td>

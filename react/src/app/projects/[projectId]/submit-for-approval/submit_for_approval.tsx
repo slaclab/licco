@@ -154,9 +154,9 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     return (
         <>
             <Container>
-                <h3>Submit Project for Approval</h3>
+                <h4>Submit Project for Approval</h4>
                 <b>Project: </b>
-                {project.name}
+                <a href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</a>
                 <br />
 
                 <b>Status: </b>
@@ -193,15 +193,14 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                 <Row className="mt-4">
                     <ButtonGroup>
                         {isProjectInDevelopment(project) ?
-                            <Button icon="tick" intent="danger" loading={submittingForm}
+                            <Button icon="tick" intent="danger" large={true}
+                                loading={submittingForm}
                                 disabled={selectedApprovers.length == 0}
                                 onClick={e => submitButtonClicked()}>
                                 Submit for Approval
                             </Button>
                             :
-                            <NonIdealState icon="info-sign" className="mb-4" title="Nothing to Approve"
-                                description={<>Project is not in a development state<br />and can't be approved</>}
-                            />
+                            null
                         }
                     </ButtonGroup>
 

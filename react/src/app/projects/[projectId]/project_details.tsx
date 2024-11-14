@@ -5,7 +5,7 @@ import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
-import { ProjectApprovalDialog, ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
+import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
 import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
@@ -85,7 +85,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isTagSelectionDialogOpen, setIsTagSelectionDialogOpen] = useState(false);
@@ -339,9 +338,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             intent={asOfTimestampFilter ? "danger" : "none"}
                                             onClick={(e) => setIsProjectHistoryDialogOpen(true)}
                                         />
-                                        <Button icon="user" title="Submit this project for approval" minimal={true} small={true}
+                                        <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
+                                            href={`/projects/${project._id}/submit-for-approval`}
                                             disabled={isProjectSubmitted}
-                                            onClick={(e) => setIsApprovalDialogOpen(true)}
                                         />
 
                                         {isUserAProjectApprover(project, currentlyLoggedInUser) ?
@@ -458,18 +457,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     setIsFilterDialogOpen(false);
                 }}
             />
-
-            {project ?
-                <ProjectApprovalDialog
-                    isOpen={isApprovalDialogOpen}
-                    project={project}
-                    onClose={() => setIsApprovalDialogOpen(false)}
-                    onSubmit={(projectInfo) => {
-                        setProject(projectInfo);
-                        setIsApprovalDialogOpen(false);
-                    }}
-                />
-                : null}
 
             {project ?
                 <CopyFFTToProjectDialog
