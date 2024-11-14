@@ -797,18 +797,19 @@ def svc_approve_project(prjid):
     """
     userid = context.security.get_current_user_id()
     # See if approval conditions are good
-    status, errormsg, prj = approve_project(prjid, userid)
+    status, all_approved, errormsg, prj = approve_project(prjid, userid)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
+    if not all_approved:
+        # successful approval, but we are still waiting for some approvers
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+
     approved_project = get_currently_approved_project()
     if not approved_project:
-        # this should never happen
         errormsg = "Can't find an approved project, after approving the project: this is a programming bug"
         return {"success": False, "errormsg": errormsg}
 
-    # @TODO: these updates should be done in a transaction when the project is approved
-    # merge project in to previously approved project
     current_ffts = get_project_ffts(prjid)
     status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], current_ffts)
     logger.debug(errormsg)

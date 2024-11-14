@@ -761,28 +761,28 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     return True, "", updated_project_info
 
 
-def approve_project(prjid, userid):
+def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
     """
     Approve a submitted project.
     Set the status to approved
     """
     prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", None
+        return False, False, f"Cannot find project for {prjid}", {}
     if prj["status"] != "submitted":
-        return False, f"Project {prjid} is not in submitted status", None
+        return False, False, f"Project {prjid} is not in submitted status", {}
     if prj["submitter"] == userid:
-        return False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", None
+        return False, False, f"Project {prj['name']} cannot be approved by its submitter {userid}. Please ask someone other than the submitter to approve the project", {}
 
     assigned_approvers = prj.get("approvers", [])
     if userid not in assigned_approvers:
         # TODO: check if the user is a super approver
-        return False, f"User {userid} is not allowed to approve the project", None
+        return False, False, f"User {userid} is not allowed to approve the project", {}
 
     # update the project metadata
     approved_by = prj.get("approved_by", [])
     if userid in approved_by:
-        return False, f"User {userid} has already approved this project", None
+        return False, False, f"User {userid} has already approved this project", {}
 
     approved_by = [userid] + approved_by
     updated_project_data = {
@@ -806,7 +806,7 @@ def approve_project(prjid, userid):
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
     updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
-    return True, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
+    return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
 
 def reject_project(prjid, userid, reason):
