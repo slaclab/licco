@@ -37,11 +37,11 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
             .then((data) => {
                 // TODO: how do we find superapprovers that should be always present?
                 setProject(data.projectInfo);
+                setDiff(data.diff);
                 if (data.projectInfo.approvers) {
                     setSelectedApprovers([...data.projectInfo.approvers])
                 }
                 setAllApprovers(data.approvers)
-                setDiff(data.diff);
             }).catch((e: JsonErrorMsg) => {
                 setLoadError(e.error);
             }).finally(() => {
@@ -145,7 +145,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     if (loadError) {
         return <ErrorDisplay description={loadError} />
     }
-    if (!project) {
+    if (!project || !diff) {
         return <NonIdealState icon="clean" title="No Data Found" description={"No project data found"} />
     }
 
@@ -155,40 +155,57 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         <>
             <Container>
                 <h4>Submit Project for Approval</h4>
-                <b>Project: </b>
-                <a href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</a>
-                <br />
-
-                <b>Status: </b>
-                {project.status}
-
-                <FormGroup
-                    label={<b>Approvers:</b>}
-                    inline={false}
-                    className="mt-4"
-                >
-                    <ControlGroup className="mb-2">
-                        <HTMLSelect
-                            iconName="caret-down"
-                            value={currentApprover}
-                            options={availableApprovers}
-                            autoFocus={true}
-                            disabled={disableActions}
-                            onChange={(e) => setCurrentApprover(e.target.value)}
-                        />
-                        <Button icon="add"
-                            disabled={currentApprover === DEFAULT_USER || disableActions}
-                            onClick={e => addUser(currentApprover)}>
-                            Add
-                        </Button>
-                    </ControlGroup>
-
-                    {renderApprovers(selectedApprovers)}
-                </FormGroup>
-
-
-                <b className="mt-4">Super Approvers:</b><br />
-                {renderSuperApprovers(superApprovers)}
+                <table className="table table-nohead table-sm">
+                    <thead></thead>
+                    <tbody>
+                        <tr>
+                            <td>Project:</td>
+                            <td className="w-100"><a href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</a></td>
+                        </tr>
+                        <tr>
+                            <td>Status:</td>
+                            <td>{project.status}</td>
+                        </tr>
+                        <tr>
+                            <td>Summary:</td>
+                            <td>
+                                <>
+                                    {diff.new.length} New <br />
+                                    {diff.missing.length > 0 ? <>{diff.missing.length} Missing <br /></> : null}
+                                    {diff.updated.length} Updated <br />
+                                    {diff.identical.length} Identical <br />
+                                </>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Approvers:</td>
+                            <td>
+                                <FormGroup inline={false} className="m-0">
+                                    <ControlGroup>
+                                        <HTMLSelect
+                                            iconName="caret-down"
+                                            value={currentApprover}
+                                            options={availableApprovers}
+                                            autoFocus={true}
+                                            disabled={disableActions}
+                                            onChange={(e) => setCurrentApprover(e.target.value)}
+                                        />
+                                        <Button icon="add"
+                                            disabled={currentApprover === DEFAULT_USER || disableActions}
+                                            onClick={e => addUser(currentApprover)}>
+                                            Add
+                                        </Button>
+                                    </ControlGroup>
+                                    {renderApprovers(selectedApprovers)}
+                                </FormGroup>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td className="text-nowrap">Super Approvers:</td>
+                            <td>{renderSuperApprovers(superApprovers)}</td>
+                        </tr>
+                    </tbody>
+                </table>
 
                 <Row className="mt-4">
                     <ButtonGroup>
