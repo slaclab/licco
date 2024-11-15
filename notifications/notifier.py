@@ -1,6 +1,8 @@
-from typing import List, Literal
+import logging
+from typing import List, Literal, Optional
+from notifications.email_sender import EmailSettings, EmailSender, EmailSenderInterface
 
-from notifications.email_sender import EmailSettings, EmailSender
+logger = logging.getLogger(__name__)
 
 _NOTIFICATION_TEMPLATES = {
     "add_approver": {
@@ -71,12 +73,12 @@ class Notifier:
     # TODO: decide on the default 'from' username
     DEFAULT_FROM_USER = "slac noreply"
 
-    def __init__(self, service_url: str, email_config: EmailSettings = None):
+    def __init__(self, licco_service_url: str, email_config: EmailSettings = None):
         # service url is necessary so we can construct a valid url that points to the project
         # during development this url will in the form of "localhost:port", in production it
         # should have the url that gets assigned to the licco project.
-        self.service_url = service_url
-        self.email_sender = None
+        self.service_url = licco_service_url
+        self.email_sender : Optional[EmailSenderInterface] = None
         self.admin_email = "XX@slac.stanford.edu"  # TODO: this should come from the configuration
         if email_config:
             if not self.service_url:
@@ -116,17 +118,23 @@ class Notifier:
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_emails, subject, content)
 
-    def send_email_notification(self, receiver_emails: List[str], subject: str, html_msg: str,
+    def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
                                 plain_text_msg: str = ""):
+        """
+        Send an email notification, if the email credentials were loaded.
+
+        - receivers: usernames or emails of users. If the provided name is an username, an additional
+          network call will be made to the central service to get the user's right email address
+        """
         if not self.email_sender:
             return
-        if len(receiver_emails) == 0:
+        if len(receivers) == 0:
             raise ValueError("No receiver emails were specified: at least one is expected")
 
-        # TODO: we may want to send this in the background to avoid blocking
-        # the REST API response while we are sending our emails.
+        # we are sending notifications in a separate thread, to avoid blocking the main thread
+        # that is supposed to send a response back to the user.
         from_user = Notifier.DEFAULT_FROM_USER
-        self.email_sender.send_email(from_user, receiver_emails, subject, html_msg, plain_text_content=plain_text_msg)
+        self.email_sender.send_email(from_user, receivers, subject, html_msg, plain_text_content=plain_text_msg)
 
     def _create_project_url(self, project_id: str):
         return f"{self.service_url}/projects/{project_id}"

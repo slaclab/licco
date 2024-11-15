@@ -29,9 +29,9 @@ app.config["TEMPLATES_AUTO_RELOAD"] = app.debug
 app.config["NOTIFICATIONS"] = {"service_url": "http://localhost:3000"}
 
 # read credentials file for notifications module
-credentials_file = os.environ.get("LICCO_CREDENTIALS_FILE_LOCATION", "./credentials.ini")
+credentials_file = os.environ.get("LICCO_CREDENTIALS_FILE", "./credentials.ini")
 if not os.path.exists(credentials_file):
-    print("'credentials.ini' file was not found, user notifications are disabled")
+    print(f"'credentials.ini' file was not found (path: {credentials_file}), user notifications are disabled")
 else:
     config = configparser.ConfigParser()
     config.read(credentials_file)
@@ -40,6 +40,7 @@ else:
         "port": config["email"]["port"],
         "user": config["email"]["user"],
         "password": config["email"]["password"],
+        "username_to_email_service": config["email"]["username_to_email_service"]
     }
 
 root = logging.getLogger()
@@ -50,7 +51,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 root.addHandler(ch)
 
-
 # Register routes.
 app.register_blueprint(pages_blueprint, url_prefix="")
 app.register_blueprint(licco_ws_blueprint, url_prefix="/ws")
@@ -58,7 +58,7 @@ app.register_blueprint(licco_ws_blueprint, url_prefix="/ws")
 
 def create_notifier(app: Flask) -> Notifier:
     notifications_config = app.config["NOTIFICATIONS"]
-    if not notifications_config:
+    if not notifications_config or not notifications_config.get("email"):
         # empty notifier without configuration will not send any notifications
         return Notifier("")
 
@@ -66,7 +66,8 @@ def create_notifier(app: Flask) -> Notifier:
     email_config = notifications_config["email"]
     if email_config:
         return Notifier(service_url, EmailSettings(email_config["url"], email_config["port"],
-                                      email_config["user"], email_config["password"]))
+                                                   email_config["user"], email_config["password"],
+                                                   email_config["username_to_email_service"]))
     return Notifier(service_url)
 
 

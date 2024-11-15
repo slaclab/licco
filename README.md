@@ -17,4 +17,5 @@ url = smtp.example.com
 port = 587
 user = user.name@example.com
 password = password
+username_to_email_service = http://www.example.com/ws/
 ```

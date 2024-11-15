@@ -765,11 +765,11 @@ def svc_submit_for_approval(prjid):
     approver = request.args.get("approver", None)
     userid = context.security.get_current_user_id()
     status, errormsg, prj = submit_project_for_approval(prjid, userid, approver)
-    if status and False:  # NOTE: this endpoint works, but we don't have approver's emails
+    if status:
         project_name = prj["name"]
         project_id = prj["_id"]
-        approver_email = ""  # @TODO: we need a way to access approver users email
-        context.notifier.add_project_approvers([approver_email], project_name, project_id)
+        approver_username = approver
+        context.notifier.add_project_approvers([approver_username], project_name, project_id)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
