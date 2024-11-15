@@ -66,18 +66,18 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
 
         const renderDecisionField = () => {
-            const project = diff.a;
-            const submitedOrAproved = isProjectSubmitted(project) || isProjectApproved(project);
-            if (!submitedOrAproved) {
-                // if project is in development state, we should not render approval buttons
-                return <b>You can't approve a project with status: {project.status}</b>
-            }
-
             // TODO: if the project was already approved by this user, we should hide the buttons and display the text
             // (e.g., you have already approved). The backend, however, does not store user decision so
             // we can't display it here unless the user votes. On page refresh, however, that decision will be lost
             if (userDecision) {
                 return <b>{userDecision}</b>
+            }
+
+            const project = diff.a;
+            const submitedOrAproved = isProjectSubmitted(project) || isProjectApproved(project);
+            if (!submitedOrAproved) {
+                // if project is in development state, we should not render approval buttons
+                return <b>You can't approve a project with status: {project.status}</b>
             }
 
             if (isProjectApproved(project)) {
@@ -95,7 +95,6 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                     <Button icon="cross-circle" large={true} intent="primary" disabled={isApproving}
                             onClick={e => {
                                 setIsRejectDialogOpen(true);
-                                setUserDecision("Rejected");
                             }}>
                         Reject (keep master values)
                     </Button>
