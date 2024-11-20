@@ -1,6 +1,6 @@
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
+import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, TextArea } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
@@ -132,6 +132,26 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                             </tr>
                             : null
                         }
+                        <tr>
+                            <td>Approvers:</td>
+                            <td>
+                                {project.approvers ?
+                                    <>
+                                        {`${project.approved_by?.length || 0} / ${project.approvers?.length || 0}`}
+                                        <br />
+                                        <ul className="list-unstyled">
+                                            {project.approvers.map(a => {
+                                                // TODO: if currently logged in user is project owner or editor, we should render a button to remove the approver
+                                                const alreadyApproved = project.approved_by?.includes(a) || false;
+                                                return <li key={a}>{alreadyApproved ? <Icon className="me-1" icon="tick" size={14} /> : null}{a}</li>
+                                            })}
+                                        </ul>
+                                    </>
+                                    :
+                                    <>No approvers selected</>
+                                }
+                            </td>
+                        </tr>
                         <tr>
                             <td>Summary:</td>
                             <td>
