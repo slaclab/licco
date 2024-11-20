@@ -795,10 +795,15 @@ def svc_approve_project(prjid):
     updated_ffts = get_project_ffts(prjid)
     logger.debug(errormsg)
     logger.debug(update_status)
+
     if status and False:
         # TODO: only send a notification when all approvers approved the project
+        # Approvers are part of another branch that has to be merged before this one
         project_name = prj["name"]
-        notified_user_emails = []  # project_owner + editor_approval
+        owner = prj["owner"]
+        editors = prj["editors"]
+        approvers = prj["approvers"]
+        notified_user_emails = list(set([owner] + editors + approvers))
         context.notifier.project_approval_approved(notified_user_emails, project_name, prjid)
 
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": updated_ffts})
@@ -817,11 +822,15 @@ def svc_reject_project(prjid):
         return logAndAbort("Please provide a reason for why this project is not being approved")
 
     status, errormsg, prj = reject_project(prjid, userid, reason)
-    if status and False:   # TODO: send notification on successful rejection
+    if status and False:
+        # TODO: enable once approving branch is merged into main
         project_id = prj["_id"]
         project_name = prj["name"]
-        project_approver_emails = []  # TODO: we don't have them in the db right now
-        user_who_rejected = userid    # TODO: we don't have an email of our user
+        owner = prj["owner"]
+        editors = prj["editors"]
+        approvers = prj["approvers"]
+        project_approver_emails = list(set([owner] + editors + approvers))
+        user_who_rejected = userid
         context.notifier.project_approval_rejected(project_approver_emails, project_name, project_id, user_who_rejected)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
