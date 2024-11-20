@@ -805,16 +805,15 @@ def svc_approve_project(prjid):
         # successful approval, but we are still waiting for some approvers
         return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
+    # all users approved
+    # copy ffts to the master project.
+    # FUTURE: This should be done in approve_project method, but can't due to circular imports
     approved_project = get_currently_approved_project()
-    if not approved_project:
-        errormsg = "Can't find an approved project, after approving the project: this is a programming bug"
-        return {"success": False, "errormsg": errormsg}
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid))
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
-    current_ffts = get_project_ffts(prjid)
-    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], current_ffts)
-    logger.debug(errormsg)
-    logger.debug(update_status)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": approved_project})
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])

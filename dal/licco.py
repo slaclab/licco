@@ -10,14 +10,9 @@ import copy
 import json
 import math
 from typing import Tuple, Dict, List
-
 import pytz
-import tempfile
-
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import PyMongoError
-
 from context import licco_db
 
 from .projdetails import get_project_attributes, get_all_project_changes
@@ -26,6 +21,8 @@ __author__ = 'mshankar@slac.stanford.edu'
 
 line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
+
+MASTER_PROJECT_NAME = 'LCLS Machine Configuration Database'
 
 
 class FCState(Enum):
@@ -98,6 +95,13 @@ def initialize_collections():
     if 'app_1_name_1' not in licco_db[line_config_db_name]["roles"].index_information().keys():
         licco_db[line_config_db_name]["roles"].create_index(
             [("app", ASCENDING), ("name", ASCENDING)], unique=True, name="app_1_name_1")
+
+    # add a master project if it doesn't exist already
+    master_project = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+    if not master_project:
+        prj = create_new_project(MASTER_PROJECT_NAME, "Master Project", '')
+        # initial status is set to development, so we can avoid displaying it on the frontend
+        licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "development"}})
 
 
 def get_all_users():
@@ -792,17 +796,22 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     if all_assigned_approvers_approved:
         # TODO: super approvers should approve as well, how do we check and store for that?
-        updated_project_data["status"] = "approved"
+        #
+        # once the project is approved, it goes back into the development status
+        # we have only 1 approved project at a time, to which the ffts are copied
+        updated_project_data["status"] = "development"
         updated_project_data['approved_time'] = datetime.datetime.utcnow()
+        # should we clear the past project metadata?
+        # updated_project_data["approvers"] = []
+        # updated_project_data["approved_by"] = []
         updated_project_data['notes'] = []
 
         # update current master project
-        approved_project = get_currently_approved_project()
-        if approved_project:
-            # update the most recent approved time
-            # TODO: I don't think we should change the approver to the current user id
-            licco_db[line_config_db_name]["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
-                                                                 "approver": userid, "approved_time": datetime.datetime.utcnow()}})
+        approved_project = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+        if not approved_project:
+            return False, False, "Failed to find an approved project: this is a programming bug", {}
+        licco_db[line_config_db_name]["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
+                                                            "status": "approved", "approved_time": datetime.datetime.utcnow()}})
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
     updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
@@ -846,8 +855,11 @@ def get_currently_approved_project():
     Get the current approved project by status
     """
     # since there could be multiple projects with status 'approved', we grab the latest one based on the approved time
-    prj = licco_db[line_config_db_name]["projects"].find_one({"status": "approved"}, sort=[("approved_time", -1)])
-    return prj if prj else None
+    # prj = licco_db[line_config_db_name]["projects"].find_one({"status": "approved"}, sort=[("approved_time", -1)])
+    prj = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+    if prj and prj["status"] == "approved":
+        return prj
+    return None
 
 def get_projects_approval_history():
     """

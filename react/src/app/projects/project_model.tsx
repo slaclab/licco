@@ -11,6 +11,7 @@ export interface ProjectInfo {
     edit_time?: Date;
     status: string;
     approvers?: string[];
+    approved_by?: string[];
     approved_time?: Date;
     submitted_time?: Date;
     submitter?: string;
@@ -30,12 +31,24 @@ export function isUserAProjectApprover(project: ProjectInfo, username: string): 
     return false;
 }
 
+const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
 
 // fetch data about all projects
 export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
     const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
-    projects.forEach(p => transformProjectForFrontendUse(p))
-    return projects;
+    let pArr = [];
+    for (let p of projects) {
+        if (p.name !== MASTER_PROJECT_NAME) {
+            pArr.push(p);
+            continue;
+        }
+        // it's master project, it should only be visibile if it's approved
+        if (isProjectApproved(p)) {
+            pArr.push(p)
+        }
+    }
+    pArr.forEach(p => transformProjectForFrontendUse(p))
+    return pArr;
 }
 
 export async function fetchMasterProjectInfo(): Promise<ProjectInfo | undefined> {
