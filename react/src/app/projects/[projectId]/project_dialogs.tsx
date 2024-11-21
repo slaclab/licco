@@ -3,7 +3,7 @@ import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -522,12 +522,12 @@ export const TagSelectionDialog: React.FC<{
   isOpen: boolean;
   projectId: string;
   onClose: () => void;
-  onSubmit: (tagDate: string) => void;
+  onSubmit: (tagDate: Date) => void;
 }> = ({ isOpen, projectId, onClose, onSubmit }) => {
   const DEFAULT_TAG = "Please select a tag";
   const [selectedTag, setSelectedTag] = useState(DEFAULT_TAG);
   const [tagNames, setTagNames] = useState<string[]>([]);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [submittingForm, setSubmittingForm] = useState(false);
   const [disableSubmit, setDisableSubmit] = useState(true);
 

@@ -119,6 +119,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
     project_ffts = get_project_ffts(prjid)
 
     # Iterate through parameter fft set
+    errormsg = ""
     for fft in ffts:
         if "_id" not in fft:
             # REVIEW: the database layer should return the kind of structure that you
@@ -169,7 +170,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
             update_status = {k: update_status[k]+results[k]
                              for k in update_status.keys()}
 
-    # BUG: error message is not declared anywhere, so it will always be None or set to the last value
+    # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
     # that comes out of fft update loop
     return True, errormsg, update_status
 
@@ -276,6 +277,22 @@ def svc_get_users():
     logged_in_user = context.security.get_current_user_id()
     users = get_all_users()
     return JSONEncoder().encode({"success": True, "value": users})
+
+
+@licco_ws_blueprint.route("/users/<username>/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_logged_in_user(username):
+    """
+    Get the user related data
+    """
+    if username == "WHOAMI":
+        # get the currently logged in user data
+        logged_in_user = context.security.get_current_user_id()
+        return JSONEncoder().encode({"success": True, "value": logged_in_user})
+
+    # get the specified user data (for now we don't have any, so we just return username)
+    return JSONEncoder().encode({"success": True, "value": username})
+
 
 @licco_ws_blueprint.route("/approvers/", methods=["GET"])
 @context.security.authentication_required
@@ -770,10 +787,20 @@ def svc_submit_for_approval(prjid):
     """
     Submit a project for approval
     """
-    approver = request.args.get("approver", None)
+    approvers = []
+    if request.json:
+        approvers = request.json.get("approvers", [])
+        if len(approvers) == 0:
+            return JSONEncoder().encode({"success": False, "errormsg": "At least 1 approver is expected"})
+    else:
+        # TODO: DEPRECATED: old gui approved project this way
+        # Once old GUI is removed, this else statement should go away as well
+        approver = request.args.get("approver", None)
+        if approver:
+            approvers.append(approver)
+
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = submit_project_for_approval(
-        prjid, userid, approver)
+    status, errormsg, prj = submit_project_for_approval(prjid, userid, approvers)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -786,23 +813,23 @@ def svc_approve_project(prjid):
     """
     userid = context.security.get_current_user_id()
     # See if approval conditions are good
-    status, errormsg, prj = approve_project(prjid, userid)
+    status, all_approved, errormsg, prj = approve_project(prjid, userid)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
-    approved_project = get_currently_approved_project()
-    if not approved_project:
-        # this should never happen
-        errormsg = "Can't find an approved project, after approving the project: this is a programming bug"
-        return {"success": False, "errormsg": errormsg}
+    if not all_approved:
+        # successful approval, but we are still waiting for some approvers
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
-    # @BUG: these updates should be done in a transaction when the project is approved
-    # merge project in to previously approved project
-    current_ffts = get_project_ffts(prjid)
-    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], current_ffts)
-    logger.debug(errormsg)
-    logger.debug(update_status)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": approved_project})
+    # all users approved
+    # copy ffts to the master project.
+    # FUTURE: This should be done in approve_project method, but can't due to circular imports
+    approved_project = get_currently_approved_project()
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid))
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
+
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])

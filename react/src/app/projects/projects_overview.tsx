@@ -7,7 +7,7 @@ import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
 
@@ -21,7 +21,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
-    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -187,13 +186,11 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
-                                                    <Button icon="user" title="Submit this project for approval"
+                                                    <AnchorButton icon="user" title="Submit this project for approval"
+                                                        href={`/projects/${project._id}/submit-for-approval`}
                                                         minimal={true} small={true}
-                                                        onClick={(e) => {
-                                                            setSelectedProject(project);
-                                                            setIsApprovalDialogOpen(true);
-                                                        }}
                                                     />
+
                                                     <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}
                                                         onClick={(e) => {
@@ -258,31 +255,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     project={selectedProject}
                     availableProjects={projectData}
                     onClose={() => setIsComparisonDialogOpen(false)}
-                />
-                : null
-            }
-
-            {selectedProject && isApprovalDialogOpen ?
-                <ProjectApprovalDialog
-                    isOpen={isApprovalDialogOpen}
-                    projectTitle={selectedProject.name}
-                    projectId={selectedProject._id}
-                    projectOwner={selectedProject.owner}
-                    onClose={() => setIsApprovalDialogOpen(false)}
-                    onSubmit={(approvedProject) => {
-                        // replace an existing project with a new one
-                        transformProjectForFrontendUse(approvedProject);
-                        let updatedProjects = [];
-                        for (let p of projectData) {
-                            if (p._id !== approvedProject._id) {
-                                updatedProjects.push(p);
-                                continue;
-                            }
-                            updatedProjects.push(approvedProject);
-                        }
-                        setProjectData(updatedProjects);
-                        setIsApprovalDialogOpen(false);
-                    }}
                 />
                 : null
             }

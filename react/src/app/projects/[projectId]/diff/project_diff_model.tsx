@@ -1,7 +1,7 @@
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { useEffect, useState } from "react";
-import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchProjectFfts, fetchProjectInfo } from "../../project_model";
+import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchMasterProjectInfo, fetchProjectFfts, fetchProjectInfo } from "../../project_model";
 import { sortDeviceDataByColumn } from "../project_details";
 
 export interface ProjectFftDiff {
@@ -135,4 +135,20 @@ export const fetchProjectDiffDataHook = (projectIdA: string, projectIdB: string)
     }, [projectIdA, projectIdB])
 
     return { isLoading: isLoading, loadError: loadError, diff: diff };
+}
+
+
+export async function fetchDiffWithMasterProject(projectId: string): Promise<ProjectFftDiff> {
+    const masterProject = await fetchMasterProjectInfo();
+
+    if (!masterProject) {
+        // there is no master project and there was also no error:
+        // this can happen when the user displays the approval page for the first time (before
+        // any other project was approved; e.g., on a fresh database). In this case we will simply
+        // compare the same project ids, which is handled correctly internally in the diff algorithm.
+        return await loadProjectDiff(projectId, projectId);
+    }
+
+    const projectDiff = await loadProjectDiff(projectId, masterProject._id);
+    return projectDiff;
 }

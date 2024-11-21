@@ -1,12 +1,12 @@
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, TextArea } from "@blueprintjs/core";
+import { AnchorButton, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, TextArea } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { ProjectInfo, approveProject, fetchMasterProjectInfo, isProjectApproved, isProjectSubmitted, rejectProject } from "../../project_model";
+import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, rejectProject, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
-import { ProjectFftDiff, loadProjectDiff } from "../diff/project_diff_model";
+import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
 import { CollapsibleProjectNotes } from "../../projects_overview";
 
@@ -22,27 +22,17 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [isApproving, setIsApproving] = useState(false);
     const [userActionError, setUserActionError] = useState('');
 
-    const fetchApprovalDiff = async () => {
-        const masterProject = await fetchMasterProjectInfo();
-
-        if (!masterProject) {
-            // there is no master project and there was also no error:
-            // this can happen when the user displays the approval page for the first time (before
-            // any other project was approved; e.g., on a fresh database). In this case we will simply
-            // compare the same project ids, which is handled correctly internally in the diff algorithm.
-            return await loadProjectDiff(projectId, projectId);
-        }
-
-        const projectDiff = await loadProjectDiff(projectId, masterProject._id);
-        return projectDiff;
-    }
+    const [loggedInUser, setLoggedInUser] = useState('');
 
     useEffect(() => {
         // get master project and fetch the diff between current project id and master project
-        fetchApprovalDiff()
+        fetchDiffWithMasterProject(projectId)
             .then(diff => {
                 setDiff(diff);
-                // TODO: set user decision based on their past decision (currently the backend does not store it)
+
+                return whoAmI().then(user => {
+                    setLoggedInUser(user);
+                });
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to fetch projects diff: ${e.error}`;
                 console.error(msg, e)
@@ -51,6 +41,10 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 setIsLoading(false);
             });
     }, [])
+
+    const userIsEditor = useMemo(() => {
+        return diff?.a.owner === loggedInUser || diff?.a.editors.includes(loggedInUser);
+    }, [loggedInUser, diff])
 
     const approveCallback = () => {
         if (!diff) {
@@ -61,7 +55,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         approveProject(projectId)
             .then(approvedProject => {
                 // refetch the entire diff
-                return fetchApprovalDiff()
+                return fetchDiffWithMasterProject(projectId)
                     .then(updatedDiff => {
                         setUserDecision("Approved")
                         setDiff(updatedDiff)
@@ -81,6 +75,14 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
 
         const renderDecisionField = () => {
+            if (diff.a.approved_by?.includes(loggedInUser)) {
+                return <b>Approved</b>
+            }
+
+            if (userDecision) {
+                return <b>{userDecision}</b>
+            }
+
             const project = diff.a;
             const submitedOrAproved = isProjectSubmitted(project) || isProjectApproved(project);
             if (!submitedOrAproved) {
@@ -88,15 +90,12 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 return <b>You can't approve a project with status: {project.status}</b>
             }
 
-            // TODO: if the project was already approved by this user, we should hide the buttons and display the text
-            // (e.g., you have already approved). The backend, however, does not store user decision so
-            // we can't display it here unless the user votes. On page refresh, however, that decision will be lost
-            if (userDecision) {
-                return <b>{userDecision}</b>
-            }
-
             if (isProjectApproved(project)) {
                 return 'This project is already approved';
+            }
+
+            if (!diff.a.approvers?.includes(loggedInUser)) {
+                return "/"
             }
 
             return (
@@ -108,7 +107,9 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                     </Button>
                     &ensp;
                     <Button icon="cross-circle" large={true} intent="primary" disabled={isApproving}
-                        onClick={e => setIsRejectDialogOpen(true)}>
+                            onClick={e => {
+                                setIsRejectDialogOpen(true);
+                            }}>
                         Reject (keep master values)
                     </Button>
                 </ButtonGroup>
@@ -122,12 +123,13 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         const notes = project.notes;
         return (
             <Container className="mb-5">
+                <h4>Approve Project</h4>
                 <table className="table table-nohead table-sm">
                     <thead></thead>
                     <tbody>
                         <tr>
                             <td className="text-nowrap pe-4">Project Name:</td>
-                            <td className="w-100"><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
+                            <td className="w-100"><Link href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</Link></td>
                         </tr>
                         <tr>
                             <td>Submitter:</td>
@@ -144,6 +146,33 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                             </tr>
                             : null
                         }
+                        <tr>
+                            <td>Approvers:</td>
+                            <td>
+                                {project.approvers ?
+                                    <>
+                                        {`${project.approved_by?.length || 0} / ${project.approvers?.length || 0}`}
+                                        <br />
+                                        <ul className="list-unstyled">
+                                            {project.approvers.map(a => {
+                                                // TODO: if currently logged in user is project owner or editor, we should render a button to remove the approver
+                                                const alreadyApproved = project.approved_by?.includes(a) || false;
+                                                return <li key={a}>{alreadyApproved ? <Icon className="me-1" icon="tick" size={14} /> : null}{a}</li>
+                                            })}
+                                        </ul>
+
+                                        {userIsEditor ?
+                                            <AnchorButton small={true} href={`/projects/${project._id}/submit-for-approval`}>
+                                                Edit Approvers
+                                            </AnchorButton>
+                                            : null
+                                        }
+                                    </>
+                                    :
+                                    <>No approvers selected</>
+                                }
+                            </td>
+                        </tr>
                         <tr>
                             <td>Summary:</td>
                             <td>
@@ -217,7 +246,6 @@ export const RejectProjectDialog: React.FC<{ isOpen: boolean, project: ProjectIn
         setIsSubmitting(true);
         rejectProject(project._id, rejectionMsg.trim())
             .then((project) => {
-                console.log("project:", project);
                 onSubmit(project);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to reject a project: ${e.error}`;
