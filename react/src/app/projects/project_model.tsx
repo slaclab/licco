@@ -398,11 +398,15 @@ export async function rejectProject(projectId: string, rejectionMsg: string): Pr
         })
 }
 
-
 export function submitForApproval(projectId: string, approvers: string[], approveUntil?: Date): Promise<ProjectInfo> {
     let data = {
         'approvers': approvers,
         'approve_until': approveUntil ? toUnixSeconds(approveUntil) : 0,
     }
     return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval`, { body: JSON.stringify(data) })
+}
+
+// returns the username of the currently logged in user
+export function whoAmI(): Promise<string> {
+    return Fetch.get<string>(`/ws/users/WHOAMI/`);
 }

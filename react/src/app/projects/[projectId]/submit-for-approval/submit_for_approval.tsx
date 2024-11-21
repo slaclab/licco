@@ -2,10 +2,10 @@ import { DividerWithText } from "@/app/components/divider";
 import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { Button, ButtonGroup, Colors, ControlGroup, FormGroup, HTMLSelect, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, ButtonGroup, Colors, ControlGroup, FormGroup, HTMLSelect, NonIdealState } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
-import { ProjectInfo, fetchProjectApprovers, fetchProjectInfo, isProjectInDevelopment, submitForApproval } from "../../project_model";
+import { ProjectInfo, fetchProjectApprovers, fetchProjectInfo, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
@@ -14,6 +14,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     const [loadError, setLoadError] = useState('');
     const [project, setProject] = useState<ProjectInfo>();
     const [diff, setDiff] = useState<ProjectFftDiff>();
+    const [loggedInUser, setLoggedInUser] = useState('');
 
     // state 
     const DEFAULT_USER = "Please select an approver...";
@@ -41,7 +42,26 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                 if (data.projectInfo.approvers) {
                     setSelectedApprovers([...data.projectInfo.approvers])
                 }
-                setAllApprovers(data.approvers)
+
+                return whoAmI().then(loggedInUser => {
+                    let filteredApprovers = [];
+                    for (let approver of data.approvers) {
+                        // project editors, owners, or submitters should not be allowed
+                        // to approve the project
+                        if (diff?.a.owner === approver) {
+                            continue;
+                        }
+
+                        if (diff?.a.editors.includes(approver)) {
+                            continue;
+                        }
+
+                        filteredApprovers.push(approver);
+                    }
+                    // user who approves
+                    setAllApprovers(filteredApprovers);
+                    setLoggedInUser(loggedInUser);
+                });
             }).catch((e: JsonErrorMsg) => {
                 setLoadError(e.error);
             }).finally(() => {
@@ -83,7 +103,23 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     }, [selectedApprovers, allApprovers])
 
 
-    const disableActions = !isProjectInDevelopment(project)
+    const userCanSubmitTheProject = () => {
+        if (!diff?.a) {
+            return false;
+        }
+
+        if (diff.a.owner === loggedInUser) {
+            return true;
+        }
+
+        if (diff.a.editors.includes(loggedInUser)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    const disableActions = !isProjectInDevelopment(project) || !userCanSubmitTheProject()
 
     const renderApprovers = (approvers: string[]) => {
         if (approvers.length == 0) {
@@ -138,6 +174,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                 setSubmittingForm(false);
             })
     }
+
 
     if (loading) {
         return <LoadingSpinner isLoading={loading} title="Loading" description={"Fetching project data..."} />
@@ -212,20 +249,31 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                 </table>
 
                 <Row className="mt-4">
-                    <ButtonGroup>
-                        {isProjectInDevelopment(project) ?
-                            <Button icon="tick" intent="danger" large={true}
-                                loading={submittingForm}
-                                disabled={selectedApprovers.length == 0}
-                                onClick={e => submitButtonClicked()}>
-                                Submit for Approval
-                            </Button>
-                            :
-                            null
-                        }
-                    </ButtonGroup>
+                    {userCanSubmitTheProject() ?
+                        <>
+                            <ButtonGroup>
+                                {isProjectInDevelopment(project) ?
+                                    <Button icon="tick" intent="danger" large={true}
+                                        loading={submittingForm}
+                                        disabled={selectedApprovers.length == 0}
+                                        onClick={e => submitButtonClicked()}>
+                                        Submit for Approval
+                                    </Button>
+                                    :
+                                    null
+                                }
 
-                    {submitError ? <p className="error">ERROR: {submitError}</p> : null}
+                                {isProjectSubmitted(project) ?
+                                    <AnchorButton intent="danger" href={`/projects/${diff.a._id}/approval`} large={true} icon="arrow-right">See Approval Page</AnchorButton>
+                                    : null
+                                }
+                            </ButtonGroup>
+
+                            {submitError ? <p className="error">ERROR: {submitError}</p> : null}
+                        </>
+                        :
+                        <NonIdealState icon="user" className="pb-4 mb-4" title="No Permissions" description={"You don't have permissions to submit a project for approval"} />
+                    }
                 </Row>
             </Container>
 

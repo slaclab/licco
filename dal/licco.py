@@ -758,6 +758,10 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
         return False, f"Project {prjid} is not in development status", None
     if len(approvers) == 0:
         return False, f"Project should have at least 1 approver", None
+    if userid in approvers:
+        return False, f"Submitter {userid} is not allowed to also be a project approver", None
+    if prj["owner"] in approvers:
+        return False, f"A project owner {userid} is not allowed to also be a project approver", None
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "submitted", "submitter": userid, "approvers": approvers, "submitted_time": datetime.datetime.utcnow()}})
@@ -801,9 +805,10 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
         # we have only 1 approved project at a time, to which the ffts are copied
         updated_project_data["status"] = "development"
         updated_project_data['approved_time'] = datetime.datetime.utcnow()
-        # should we clear the past project metadata?
-        # updated_project_data["approvers"] = []
-        # updated_project_data["approved_by"] = []
+        # clean the project metadata as if it was freshly created project
+        updated_project_data["editors"] = []
+        updated_project_data["approvers"] = []
+        updated_project_data["approved_by"] = []
         updated_project_data['notes'] = []
 
         # update current master project

@@ -4,7 +4,7 @@ import { Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGrou
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, rejectProject } from "../../project_model";
+import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, rejectProject, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
@@ -22,12 +22,17 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [isApproving, setIsApproving] = useState(false);
     const [userActionError, setUserActionError] = useState('');
 
+    const [loggedInUser, setLoggedInUser] = useState('');
+
     useEffect(() => {
         // get master project and fetch the diff between current project id and master project
         fetchDiffWithMasterProject(projectId)
             .then(diff => {
                 setDiff(diff);
-                // TODO: set user decision based on their past decision (currently the backend does not store it)
+
+                return whoAmI().then(user => {
+                    setLoggedInUser(user);
+                });
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to fetch projects diff: ${e.error}`;
                 console.error(msg, e)
@@ -66,9 +71,10 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
 
         const renderDecisionField = () => {
-            // TODO: if the project was already approved by this user, we should hide the buttons and display the text
-            // (e.g., you have already approved). The backend, however, does not store user decision so
-            // we can't display it here unless the user votes. On page refresh, however, that decision will be lost
+            if (diff.a.approved_by?.includes(loggedInUser)) {
+                return <b>Approved</b>
+            }
+
             if (userDecision) {
                 return <b>{userDecision}</b>
             }
@@ -82,6 +88,10 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
 
             if (isProjectApproved(project)) {
                 return 'This project is already approved';
+            }
+
+            if (!diff.a.approvers?.includes(loggedInUser)) {
+                return "/"
             }
 
             return (

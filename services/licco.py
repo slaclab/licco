@@ -278,6 +278,22 @@ def svc_get_users():
     users = get_all_users()
     return JSONEncoder().encode({"success": True, "value": users})
 
+
+@licco_ws_blueprint.route("/users/<username>/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_logged_in_user(username):
+    """
+    Get the user related data
+    """
+    if username == "WHOAMI":
+        # get the currently logged in user data
+        logged_in_user = context.security.get_current_user_id()
+        return JSONEncoder().encode({"success": True, "value": logged_in_user})
+
+    # get the specified user data (for now we don't have any, so we just return username)
+    return JSONEncoder().encode({"success": True, "value": username})
+
+
 @licco_ws_blueprint.route("/approvers/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_users_with_approve_privilege():
