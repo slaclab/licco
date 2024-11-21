@@ -2,7 +2,7 @@ import { DividerWithText } from "@/app/components/divider";
 import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { AnchorButton, Button, ButtonGroup, Colors, ControlGroup, FormGroup, HTMLSelect, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, Colors, ControlGroup, FormGroup, HTMLSelect, NonIdealState } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
 import { ProjectInfo, fetchProjectApprovers, fetchProjectInfo, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
@@ -119,7 +119,14 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         return false;
     }
 
-    const disableActions = !isProjectInDevelopment(project) || !userCanSubmitTheProject()
+    const disableActions = useMemo(() => {
+        if (userCanSubmitTheProject()) {
+            // user who can submit the project, should always be able to edit the project
+            return false;
+        }
+        return !isProjectInDevelopment(project) || !userCanSubmitTheProject();
+    }, [project, loggedInUser])
+
 
     const renderApprovers = (approvers: string[]) => {
         if (approvers.length == 0) {
@@ -251,7 +258,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                 <Row className="mt-4">
                     {userCanSubmitTheProject() ?
                         <>
-                            <ButtonGroup>
+                            <div>
                                 {isProjectInDevelopment(project) ?
                                     <Button icon="tick" intent="danger" large={true}
                                         loading={submittingForm}
@@ -264,10 +271,20 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                 }
 
                                 {isProjectSubmitted(project) ?
-                                    <AnchorButton intent="danger" href={`/projects/${diff.a._id}/approval`} large={true} icon="arrow-right">See Approval Page</AnchorButton>
+                                    <>
+                                        <Button large={true} icon="edit" intent="danger" className="me-2"
+                                            loading={submittingForm}
+                                            disabled={selectedApprovers.length == 0}
+                                            onClick={e => submitButtonClicked()}
+                                        >
+                                            Edit Submitted Project
+                                        </Button>
+
+                                        <AnchorButton intent="none" href={`/projects/${diff.a._id}/approval`} large={true} icon="arrow-right">See Approval Page</AnchorButton>
+                                    </>
                                     : null
                                 }
-                            </ButtonGroup>
+                            </div>
 
                             {submitError ? <p className="error">ERROR: {submitError}</p> : null}
                         </>
