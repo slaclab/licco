@@ -9,7 +9,7 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: string;
+    status: "development" | "submitted" | "approved";
     approvers?: string[];
     approved_by?: string[];
     approved_time?: Date;

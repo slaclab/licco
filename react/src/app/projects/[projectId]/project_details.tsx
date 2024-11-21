@@ -4,7 +4,7 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectSubmitted, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -250,9 +250,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             });
     }
 
-    const isProjectSubmitted = project?.status === "submitted";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != ""
-    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter
+    const isProjectInDevelopment = project?.status === "development";
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
+    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
     const isEditedTable = editedDevice != undefined;
 
     return (
@@ -264,7 +264,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable}`}>
                     <thead>
                         <tr>
-                            <th colSpan={6}>
+                            <th colSpan={isProjectInDevelopment ? 6 : 5}>
                                 {!project ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
@@ -340,7 +340,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         />
                                         <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
                                             href={`/projects/${project._id}/submit-for-approval`}
-                                            disabled={isProjectSubmitted}
+                                            disabled={!isProjectInDevelopment}
                                         />
 
                                         {isUserAProjectApprover(project, currentlyLoggedInUser) ?
@@ -363,7 +363,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th></th>
                         </tr>
                         <tr>
-                            {isProjectSubmitted ? null : <th></th>}
+                            {isProjectInDevelopment ? <th></th> : null}
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
                             <th onClick={e => changeSortOrder('fg')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
@@ -561,7 +561,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
-                {isProjectSubmitted(project) ? null :
+                {isProjectInDevelopment(project) ?
                     <td>
                         <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
                             onClick={(e) => onEdit(device)}
@@ -570,6 +570,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                             onClick={(e) => onCopyFft(device)}
                         />
                     </td>
+                    : null
                 }
 
                 <td>{device.fc}</td>
@@ -749,19 +750,17 @@ const DeviceDataEditTableRow: React.FC<{
 
     return (
         <tr>
-            {isProjectSubmitted(project) ? null :
-                <td>
-                    <Button icon="tick" minimal={true} small={true} loading={isSubmitting}
-                        title="Submit your edits"
-                        disabled={!allFieldsAreValid}
-                        onClick={(e) => submitChanges()}
-                    />
+            <td>
+                <Button icon="tick" minimal={true} small={true} loading={isSubmitting}
+                    title="Submit your edits"
+                    disabled={!allFieldsAreValid}
+                    onClick={(e) => submitChanges()}
+                />
 
-                    <Button icon="cross" minimal={true} small={true} title="Discard your edits"
-                        onClick={(e) => onEditDone(createDeviceWithChanges(), "cancel")}
-                    />
-                </td>
-            }
+                <Button icon="cross" minimal={true} small={true} title="Discard your edits"
+                    onClick={(e) => onEditDone(createDeviceWithChanges(), "cancel")}
+                />
+            </td>
 
             <td>{device.fc}</td>
             <td>{device.fg}</td>
