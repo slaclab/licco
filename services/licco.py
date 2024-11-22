@@ -800,12 +800,39 @@ def svc_submit_for_approval(prjid):
             approvers.append(approver)
 
     userid = context.security.get_current_user_id()
+    old_prj = get_project(prjid)
     status, errormsg, prj = submit_project_for_approval(prjid, userid, approvers)
-    if status:
-        # send notification to approvers
-        project_name = prj["name"]
-        project_id = prj["_id"]
-        context.notifier.add_project_approvers([approvers], project_name, project_id)
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+
+    # project was submitted successfully
+    # send notifications to approvers
+    project_id = prj["_id"]
+    project_name = prj["name"]
+    if old_prj["status"] == "development":
+        # this is the first time the user has submitted the project for approval, therefore we send emails to everyone
+        context.notifier.add_project_approvers(approvers, project_name, project_id)
+    else:
+        # the user has edited the project (changed the approvers), therefore
+        # we have to make a diff of approvers and only inform the ones that
+        # changed (new approvers and removed approvers)
+        old_approvers = set(old_prj["approvers"])
+        new_approvers = []
+        deleted_approvers = []
+
+        for a in approvers:
+            if a not in old_approvers:
+                new_approvers.append(a)
+        for a in old_approvers:
+            if a not in approvers:
+                deleted_approvers.append(a)
+
+        # send notifications if any
+        if new_approvers:
+            context.notifier.add_project_approvers(new_approvers, project_name, project_id)
+        if deleted_approvers:
+            context.notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
+
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 

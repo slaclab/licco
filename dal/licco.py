@@ -752,21 +752,22 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     Set the status to submitted
     """
     prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    project_name = prj["name"]
     if not prj:
-        return False, f"Cannot find project for {prjid}", None
+        return False, f"Cannot find project for '{project_name}'", None
 
     # check if the user has a permissions for submitting a project
     # TODO: check for admin users?
     user_is_allowed_to_edit = userid == prj["owner"] or userid in prj["editors"]
     if not user_is_allowed_to_edit:
-        return False, f"User {userid} is not allowed to submit a project"
+        return False, f"User {userid} is not allowed to submit a project '{project_name}'"
 
     approvers = list(set(approvers))
     approvers.sort()
 
     # validate a list of approvers
     if len(approvers) == 0:
-        return False, f"Project {prjid} should have at least 1 approver", None
+        return False, f"Project '{project_name}' should have at least 1 approver", None
     for a in approvers:
         if not a:
             return False, f"Invalid project approver: '{a}'"
@@ -775,30 +776,9 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     if prj["owner"] in approvers:
         return False, f"A project owner {userid} is not allowed to also be a project approver", None
 
-    edit_project = prj["status"] == "submitted"
-    if edit_project:
-        old_approvers = set(prj["approvers"])
-        new_approvers = []
-        deleted_approvers = []
-
-        for a in approvers:
-            if a not in old_approvers:
-                new_approvers.append(a)
-        for a in old_approvers:
-            if a not in approvers:
-                deleted_approvers.append(a)
-
-        licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-            "status": "submitted", "submitter": userid, "approvers": approvers,
-            "submitted_time": datetime.datetime.utcnow()}})
-
-        # TODO: send emails to new and deleted users if any
-
-        updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
-        return True, "", updated_project_info
-
-    if prj["status"] != "development":
-        return False, f"Project {prjid} is not in development status", None
+    status = prj["status"]
+    if status != "development" and status != "submitted":
+        return False, f"Project '{project_name}' is not in development or submitted status", None
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                          "status": "submitted", "submitter": userid, "approvers": approvers, "submitted_time": datetime.datetime.utcnow()}})

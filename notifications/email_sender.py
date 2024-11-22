@@ -17,10 +17,33 @@ class EmailSenderInterface:
                    plain_text_content: str = "", send_as_separate_emails: bool = True):
         pass
 
+class EmailSenderMock(EmailSenderInterface):
+    """Mock email sender implementation that only prints the content into console.
+    It's only used during development to avoid sending hundreds of test emails to
+    unsuspecting users from the database.
+    """
+    def send_email(self, from_user: str, to_users: List[str], subject: str, content: str,
+                   plain_text_content: str = "", send_as_separate_emails: bool = True):
+        print("")
+        print("----------------------------------------------------------------")
+        print("From:   ", from_user)
+        to_field = ",".join(to_users)
+        if send_as_separate_emails:
+            to_field += " (sent as separate_emails)"
+        print("To:     ", to_field)
+        print("Subject:", subject)
+        print("")
+        print(content)
+
+        if plain_text_content:
+            print(" --- plain text ---")
+            print(plain_text_content)
+        print("-----------------------------------------------------------------")
+        print("")
 
 class EmailSettings:
     def __init__(self, url: str, port: int, username: str, password: str,
-                 username_to_email_service: str = "",
+                 username_to_email_service_url: str = "",
                  email_send_as_ssl: bool = False):
         if not url:
             raise ValueError("Email url should not be empty")
@@ -37,7 +60,7 @@ class EmailSettings:
         self.password = password
         # url of a service that turns licco username into an email
         # (only used in production)
-        self.username_to_email_service = username_to_email_service
+        self.username_to_email_service = username_to_email_service_url
         # send as SMTP_SSL or SMTP_StartTLS
         self.email_send_as_ssl = email_send_as_ssl
 
@@ -89,7 +112,9 @@ class EmailSender(EmailSenderInterface):
             # users will be able to see who received an email (they are all listed in 'To' field)
             email = self._create_email(from_user, to_users, subject, content, plain_text_content)
             emails_to_send.append(email)
-        self._send_emails(emails_to_send)
+        errors = self._send_emails(emails_to_send)
+        if errors:
+            logger.error("Failed to send emails: ", errors)
 
     def _create_email(self, from_user: str, to_users: List[str],
                       subject: str, html_content: str, plain_text_content: str = ""):
@@ -109,26 +134,32 @@ class EmailSender(EmailSenderInterface):
         email.attach(html_text)
         return email
 
-    def _send_emails(self, emails: List[Message]):
+    def _send_emails(self, emails: List[Message]) -> List[Exception]:
         if self.settings.email_send_as_ssl:
             with smtplib.SMTP_SSL(self.settings.url, self.settings.port, context=self.context) as server:
                 server.login(self.settings.username, self.settings.password)
-                # TODO: this should run in the background, to avoid blocking the email sender
-                # use a sending thread and a concurrent queue.
-                #
-                # TODO: how to handle failures in this case? If one email could not be send
-                # that should not terminate the sending of the rest of the emails
+                # If sending an email to a certain account has failed for some reason (account doesn't exist)
+                # that should not stop sending the rest of the emails.
+                exceptions = []
                 for e in emails:
-                    server.send_message(e)
-                return
+                    try:
+                        server.send_message(e)
+                    except Exception as ex:
+                        exceptions.append(ex)
+                return exceptions
 
         with smtplib.SMTP(self.settings.url, self.settings.port) as server:
             server.ehlo()
             server.starttls(context=self.context)
             server.ehlo()
             server.login(self.settings.username, self.settings.password)
+            exceptions = []
             for e in emails:
-                server.send_message(e)
+                try:
+                    server.send_message(e)
+                except Exception as ex:
+                    exceptions.append(ex)
+            return exceptions
 
     @staticmethod
     def convert_usernames_to_emails(service_url, usernames: List[str]) -> List[str]:
