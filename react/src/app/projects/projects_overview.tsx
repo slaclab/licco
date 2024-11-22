@@ -6,7 +6,7 @@ import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
@@ -36,6 +36,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
         fetchAllProjectsInfo()
             .then((projects) => {
                 setProjectData(projects);
+                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to load projects data: " + e.error;
                 setError(msg);
@@ -186,10 +187,15 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
-                                                    <AnchorButton icon="user" title="Submit this project for approval"
-                                                        href={`/projects/${project._id}/submit-for-approval`}
-                                                        minimal={true} small={true}
-                                                    />
+
+                                                    {/* only show the submit for approval button to project editors */}
+                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ? 
+                                                        <AnchorButton icon="user" title="Submit this project for approval"
+                                                            href={`/projects/${project._id}/submit-for-approval`}
+                                                            minimal={true} small={true}
+                                                        />
+                                                        : null
+                                                    }
 
                                                     <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}

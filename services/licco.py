@@ -795,6 +795,7 @@ def svc_submit_for_approval(prjid):
     else:
         # TODO: DEPRECATED: old gui approved project this way
         # Once old GUI is removed, this else statement should go away as well
+        # We should remove the "GET" option as well: only POST should be used (or PUT)
         approver = request.args.get("approver", None)
         if approver:
             approvers.append(approver)
@@ -812,6 +813,9 @@ def svc_submit_for_approval(prjid):
     if old_prj["status"] == "development":
         # this is the first time the user has submitted the project for approval, therefore we send emails to everyone
         context.notifier.add_project_approvers(approvers, project_name, project_id)
+        # notify the project editors that their project was submitted for approval
+        project_editors = list(set([prj["owner"]] + prj["editors"]))
+        context.notifier.project_submitted_for_approval(project_editors, project_name, project_id)
     else:
         # the user has edited the project (changed the approvers), therefore
         # we have to make a diff of approvers and only inform the ones that
@@ -832,6 +836,9 @@ def svc_submit_for_approval(prjid):
             context.notifier.add_project_approvers(new_approvers, project_name, project_id)
         if deleted_approvers:
             context.notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
+
+        # TODO: should we also notify the project editors that the project approvers were updated?
+
 
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
@@ -866,8 +873,8 @@ def svc_approve_project(prjid):
     owner = prj["owner"]
     editors = prj["editors"]
     approvers = prj["approvers"]
-    notified_user_emails = list(set([owner] + editors + approvers))
-    context.notifier.project_approval_approved(notified_user_emails, project_name, prjid)
+    notified_users = list(set([owner] + editors + approvers))
+    context.notifier.project_approval_approved(notified_users, project_name, prjid)
 
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 

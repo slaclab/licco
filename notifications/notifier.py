@@ -91,6 +91,14 @@ class Notifier:
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_ids, subject, content)
 
+    def project_submitted_for_approval(self, notified_user_ids: List[str], project_name: str, project_id: str):
+        subject = f"Project {project_name} was submitted for approval"
+        content = create_notification_msg("project_approval_submitted", "html",
+                                          project_name=project_name,
+                                          project_url=self._create_project_url(project_id),
+                                          admin_email=self.admin_email)
+        self.send_email_notification(notified_user_ids, subject, content)
+
     def project_approval_approved(self, notified_user_ids: List[str], project_name: str, project_id: str):
         subject = f"Project {project_name} was approved"
         content = create_notification_msg("project_approval_approved", "html",
