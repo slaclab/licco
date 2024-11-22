@@ -1,3 +1,4 @@
+import { toUnixSeconds } from "../utils/date_utils";
 import { Fetch } from "../utils/fetching";
 
 export interface ProjectInfo {
@@ -8,34 +9,91 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: string;
-    approver?: string;
+    status: "development" | "submitted" | "approved";
+    approvers?: string[];
+    approved_by?: string[];
+    approved_time?: Date;
     submitted_time?: Date;
     submitter?: string;
+    notes: string[];
 }
+
+// Determines if the user is an approver of the chosen project. The user is considered an approver if:
+//
+// - the project was submitted for approval and the logged in user was selected as an approver 
+// - the currently logged in user is a super approver (or admin)
+export function isUserAProjectApprover(project: ProjectInfo, username: string): boolean {
+    if (isProjectSubmitted(project)) {
+        if (project.approvers?.includes(username) || username == '') {
+            return true;
+        }
+    }
+    return false;
+}
+
+const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
 
 // fetch data about all projects
 export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
     const projects = await Fetch.get<ProjectInfo[]>("/ws/projects/");
-    projects.forEach(p => projectTransformTimeIntoDates(p))
-    return projects;
+    let pArr = [];
+    for (let p of projects) {
+        if (p.name !== MASTER_PROJECT_NAME) {
+            pArr.push(p);
+            continue;
+        }
+        // it's master project, it should only be visibile if it's approved
+        if (isProjectApproved(p)) {
+            pArr.push(p)
+        }
+    }
+    pArr.forEach(p => transformProjectForFrontendUse(p))
+    return pArr;
+}
+
+export async function fetchMasterProjectInfo(): Promise<ProjectInfo | undefined> {
+    const project = await Fetch.get<ProjectInfo>("/ws/approved/");
+    if (!project) {
+        // there is no master project. This can only happen on a fresh database
+        return undefined;
+    }
+    transformProjectForFrontendUse(project);
+    return project;
 }
 
 export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> {
     return Fetch.get<ProjectInfo>(`/ws/projects/${projectId}/`)
         .then(data => {
-            projectTransformTimeIntoDates(data);
+            transformProjectForFrontendUse(data);
             return data;
         });
 }
 
-export function projectTransformTimeIntoDates(project: ProjectInfo) {
+
+// fetch all available approvers 
+export async function fetchProjectApprovers(projectOwner?: string): Promise<string[]> {
+    return Fetch.get<string[]>('/ws/approvers/')
+        .then(approvers => {
+            if (projectOwner) {
+                return approvers.filter(username => username != projectOwner);
+            }
+            return approvers;
+        })
+}
+
+export function transformProjectForFrontendUse(project: ProjectInfo) {
     project.creation_time = new Date(project.creation_time);
     if (project.edit_time) {
         project.edit_time = new Date(project.edit_time);
     }
     if (project.submitted_time) {
-        project.submitted_time = new Date(project.submitted_time)
+        project.submitted_time = new Date(project.submitted_time);
+    }
+    if (project.approved_time) {
+        project.approved_time = new Date(project.approved_time);
+    }
+    if (project.notes == undefined) {
+        project.notes = [];
     }
 }
 
@@ -80,7 +138,7 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBack
     return data;
 }
 
-interface deviceDetailFields {
+export interface deviceDetailFields {
     tc_part_no: string;
     comments: string;
     state: string;
@@ -96,12 +154,33 @@ interface deviceDetailFields {
     ray_trace?: number;
 }
 
-export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
+export const ProjectDevicePositionKeys: (keyof deviceDetailFields)[] = [
     'nom_ang_x', 'nom_ang_y', 'nom_ang_z',
     'nom_dim_x', 'nom_dim_y', 'nom_dim_z',
     'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
+]
+
+export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
+    ...ProjectDevicePositionKeys,
     'ray_trace'
 ]
+
+
+// compare every value field for a change 
+export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
+    let key: keyof ProjectDeviceDetails;
+    for (key in a) {
+        if (key == "id" || key == "fc" || key == "fg") { // ignored 
+            continue;
+        }
+
+        if (a[key] != b[key]) {
+            // there is a difference in value
+            return true;
+        }
+    }
+    return false;
+}
 
 export async function fetchProjectFfts(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
@@ -198,6 +277,18 @@ interface fftDiffBackend {
     ot: string | number;  // other's project value
 }
 
+export interface Tag {
+    _id: string,
+    prj: string,
+    name: string,
+    time: Date
+}
+
+export interface ImportResult {
+    log_name: string,
+    status_str: string
+}
+
 function parseFftFieldsFromDiff(diff: fftDiffBackend): { id: string, field: string } {
     let [id, ...rest] = diff.key.split(".",);
     let nameOfField = rest.join(".");
@@ -288,4 +379,34 @@ export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise
             let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));
             return frontendData;
         })
+}
+
+export async function approveProject(projectId: string): Promise<ProjectInfo> {
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/approve_project`)
+        .then((project) => {
+            transformProjectForFrontendUse(project);
+            return project;
+        })
+}
+
+export async function rejectProject(projectId: string, rejectionMsg: string): Promise<ProjectInfo> {
+    let d = { "reason": rejectionMsg };
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/reject_project`, { body: JSON.stringify(d) })
+        .then(project => {
+            transformProjectForFrontendUse(project);
+            return project;
+        })
+}
+
+export function submitForApproval(projectId: string, approvers: string[], approveUntil?: Date): Promise<ProjectInfo> {
+    let data = {
+        'approvers': approvers,
+        'approve_until': approveUntil ? toUnixSeconds(approveUntil) : 0,
+    }
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval`, { body: JSON.stringify(data) })
+}
+
+// returns the username of the currently logged in user
+export function whoAmI(): Promise<string> {
+    return Fetch.get<string>(`/ws/users/WHOAMI/`);
 }

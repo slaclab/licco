@@ -1,0 +1,12 @@
+.userNote {
+    padding: 0.2rem 0.5rem;
+    margin-top: 0.5rem;
+    max-width: 70ch;
+    background-color: #edeff2;
+    border: 1px solid #d1d1d1;
+}
+
+.userNote *:nth-last-child(1) {
+    padding-bottom: 0;
+    margin-bottom: 0;
+}

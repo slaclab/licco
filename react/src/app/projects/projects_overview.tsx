@@ -1,26 +1,30 @@
-import { Button, ButtonGroup, Icon, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, ButtonGroup, Collapse, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
+import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, projectTransformTimeIntoDates } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectApprovalDialog, ProjectComparisonDialog } from "./projects_overview_dialogs";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
+import styles from './projects_overview.module.css';
 
 export const ProjectsOverview: React.FC = ({ }) => {
     const [projectData, setProjectData] = useState<ProjectInfo[]>([]);
     const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
+    const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
 
     // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
-    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     // sorting
@@ -68,35 +72,55 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
     const projectDataDisplayed = useMemo(() => {
         // approved projects should always be pinned to the top of the table 
-        let approvedProjects = projectData.filter(p => isProjectApproved(p));
-        let displayedData = projectData.filter(p => !isProjectApproved(p));
+        let approvedProjects: ProjectInfo[] = [];
+        let projectsToApprove: ProjectInfo[] = [];
+        let displayedData: ProjectInfo[] = [];
+
+        for (let p of projectData) {
+            if (isProjectApproved(p)) {
+                approvedProjects.push(p);
+                continue;
+            }
+
+            if (isUserAProjectApprover(p, currentlyLoggedInUser)) {
+                projectsToApprove.push(p);
+                continue;
+            }
+
+            displayedData.push(p);
+        }
 
         // sort data according to selected filter
         switch (sortByColumn.column) {
             case 'created':
                 approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 break;
             case 'edit':
                 approvedProjects.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.edit_time, b.edit_time, sortByColumn.sortDesc));
                 break;
             case 'name':
                 approvedProjects.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.name, b.name, sortByColumn.sortDesc));
                 break;
             case 'owner':
                 approvedProjects.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortString(a.owner, b.owner, sortByColumn.sortDesc));
                 break;
             default:
                 approvedProjects.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
+                projectsToApprove.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
                 displayedData.sort((a, b) => sortDate(a.creation_time, b.creation_time, sortByColumn.sortDesc));
         }
 
-        let projects: ProjectInfo[] = [...approvedProjects, ...displayedData];
+        let projects: ProjectInfo[] = [...approvedProjects, ...projectsToApprove, ...displayedData];
         return projects;
-    }, [projectData, sortByColumn]);
+    }, [projectData, currentlyLoggedInUser, sortByColumn]);
 
 
     if (err) {
@@ -135,6 +159,12 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
                                         <ButtonGroup minimal={true}>
+                                            {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                                <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
+                                                    href={`/projects/${project._id}/approval`}
+                                                />
+                                                : null
+                                            }
                                             <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
                                                 onClick={e => {
                                                     setSelectedProject(project);
@@ -156,22 +186,29 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
+                                                    <AnchorButton icon="user" title="Submit this project for approval"
+                                                        href={`/projects/${project._id}/submit-for-approval`}
+                                                        minimal={true} small={true}
+                                                    />
 
-                                                    <Button icon="user" title="Submit this project for approval"
+                                                    <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
-                                                            setIsApprovalDialogOpen(true);
+                                                            setIsImportDialogOpen(true);
                                                         }}
                                                     />
-
-                                                    <Button icon="export" title="Upload data to this project" minimal={true} small={true} />
                                                 </>
                                                 : null
                                             }
 
-                                            <Button icon="import" title="Download this project" minimal={true} small={true} />
-
+                                            <Button icon="import" title="Download a copy of this project"
+                                                minimal={true} small={true}
+                                                onClick={(e) => {
+                                                    setSelectedProject(project);
+                                                    setIsExportDialogOpen(true);
+                                                }}
+                                            />
                                         </ButtonGroup>
                                     </td>
                                     <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
@@ -179,7 +216,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     <td>{formatToLiccoDateTime(project.creation_time)}</td>
                                     <td>{formatToLiccoDateTime(project.edit_time)}</td>
                                     <td>{project.description}</td>
-                                    <td></td>
+                                    <td><CollapsibleProjectNotes notes={project.notes} /></td>
                                 </tr>
                             )
                         })
@@ -200,7 +237,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
-                    projectTransformTimeIntoDates(newProject);
+                    transformProjectForFrontendUse(newProject);
                     let newData = [...projectData, newProject];
                     setProjectData(newData);
                     setIsAddProjectDialogOpen(false)
@@ -218,31 +255,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     project={selectedProject}
                     availableProjects={projectData}
                     onClose={() => setIsComparisonDialogOpen(false)}
-                />
-                : null
-            }
-
-            {selectedProject && isApprovalDialogOpen ?
-                <ProjectApprovalDialog
-                    isOpen={isApprovalDialogOpen}
-                    projectTitle={selectedProject.name}
-                    projectId={selectedProject._id}
-                    projectOwner={selectedProject.owner}
-                    onClose={() => setIsApprovalDialogOpen(false)}
-                    onSubmit={(approvedProject) => {
-                        // replace an existing project with a new one
-                        projectTransformTimeIntoDates(approvedProject);
-                        let updatedProjects = [];
-                        for (let p of projectData) {
-                            if (p._id !== approvedProject._id) {
-                                updatedProjects.push(p);
-                                continue;
-                            }
-                            updatedProjects.push(approvedProject);
-                        }
-                        setProjectData(updatedProjects);
-                        setIsApprovalDialogOpen(false);
-                    }}
                 />
                 : null
             }
@@ -289,6 +301,54 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 : null
             }
 
+            {selectedProject && isExportDialogOpen ?
+                <ProjectExportDialog
+                    isOpen={isExportDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsExportDialogOpen(false);
+                    }}
+                    onSubmit={() => {
+                        setIsExportDialogOpen(false);
+                    }
+                    }
+                />
+                : null
+            }
+            {selectedProject && isImportDialogOpen ?
+                <ProjectImportDialog
+                    isOpen={isImportDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setIsImportDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+        </>
+    )
+}
+
+
+export const CollapsibleProjectNotes: React.FC<{ notes: string[], defaultNoNoteMsg?: React.ReactNode, defaultOpen?: boolean }> = ({ notes, defaultNoNoteMsg = <>/</>, defaultOpen = false }) => {
+    const [showingNotes, setShowingNotes] = useState(defaultOpen);
+
+    if (notes.length == 0) {
+        return <>{defaultNoNoteMsg}</>
+    }
+
+    return (
+        <>
+            <Button small={true} onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
+            <Collapse isOpen={showingNotes} keepChildrenMounted={true}>
+                {notes.map((note, i) => {
+                    return (
+                        <div key={i} className={styles.userNote}>
+                            <MultiLineText text={note} />
+                        </div>
+                    )
+                })}
+            </Collapse>
         </>
     )
 }

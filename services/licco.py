@@ -8,7 +8,7 @@ import os
 import fnmatch
 import re
 from io import BytesIO, StringIO
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple, Dict
 
 import pytz
@@ -55,6 +55,9 @@ KEYMAP = {
 }
 KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
 
+def logAndAbortJson(error_msg, ret_status=500):
+    logger.error(error_msg)
+    return {'status': False, 'errormsg': error_msg, 'value': None}, ret_status
 
 def logAndAbort(error_msg, ret_status=500):
     logger.error(error_msg)
@@ -116,6 +119,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
     project_ffts = get_project_ffts(prjid)
 
     # Iterate through parameter fft set
+    errormsg = ""
     for fft in ffts:
         if "_id" not in fft:
             # REVIEW: the database layer should return the kind of structure that you
@@ -166,7 +170,7 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
             update_status = {k: update_status[k]+results[k]
                              for k in update_status.keys()}
 
-    # BUG: error message is not declared anywhere, so it will always be None or set to the last value
+    # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
     # that comes out of fft update loop
     return True, errormsg, update_status
 
@@ -274,6 +278,22 @@ def svc_get_users():
     users = get_all_users()
     return JSONEncoder().encode({"success": True, "value": users})
 
+
+@licco_ws_blueprint.route("/users/<username>/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_logged_in_user(username):
+    """
+    Get the user related data
+    """
+    if username == "WHOAMI":
+        # get the currently logged in user data
+        logged_in_user = context.security.get_current_user_id()
+        return JSONEncoder().encode({"success": True, "value": logged_in_user})
+
+    # get the specified user data (for now we don't have any, so we just return username)
+    return JSONEncoder().encode({"success": True, "value": username})
+
+
 @licco_ws_blueprint.route("/approvers/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_users_with_approve_privilege():
@@ -311,7 +331,8 @@ def svc_get_currently_approved_project():
     logged_in_user = context.security.get_current_user_id()
     prj = get_currently_approved_project()
     if not prj:
-        return JSONEncoder().encode({"success": False, "value": None})
+         # no currently approved project (this can happen when the project is submitted for the first time)
+        return JSONEncoder().encode({"success": True, "value": None})
     prj_ffts = get_project_ffts(prj["_id"])
     prj["ffts"] = prj_ffts
     return JSONEncoder().encode({"success": True, "value": prj})
@@ -578,7 +599,8 @@ def svc_import_project(prjid):
         except UnicodeDecodeError as e:
             error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
             logger.debug(error_msg)
-            return {"status_str": error_msg, "log_name": None}
+            response_value = {"status_str": error_msg, "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
 
     with StringIO(filestring) as fp:
         fp.seek(0)
@@ -597,8 +619,8 @@ def svc_import_project(prjid):
         if not req_headers:
             error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
             logger.debug(error_msg)
-            return {"status_str": error_msg, "log_name": None}
-
+            response_value = {"status_str": error_msg, "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
         # Set reader at beginning of header row
         fp.seek(loc)
         reader = csv.DictReader(fp)
@@ -620,7 +642,8 @@ def svc_import_project(prjid):
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
-            return {"status_str": "Import Error: No data detected in import file.", "log_name": None}
+            response_value = {"status_str": "Import Error: No data detected in import file.", "log_name": None}
+            return JSONEncoder().encode({"success": False, "value": response_value})
 
     log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
@@ -704,7 +727,8 @@ def svc_import_project(prjid):
     imp_log.info(status_str)
     imp_log.removeHandler(imp_handler)
     imp_handler.close()
-    return {"status_str": status_str, "log_name": log_name}
+    response_value = {"status_str": status_str, "log_name": log_name}
+    return JSONEncoder().encode({"success": True, "value": response_value})
 
 
 @licco_ws_blueprint.route("/projects/<report>/download/", methods=["GET", "POST"])
@@ -720,6 +744,7 @@ def svc_download_report(report):
     try:
         repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
+
     except FileNotFoundError:
         return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None})
 
@@ -762,14 +787,25 @@ def svc_submit_for_approval(prjid):
     """
     Submit a project for approval
     """
-    approver = request.args.get("approver", None)
+    approvers = []
+    if request.json:
+        approvers = request.json.get("approvers", [])
+        if len(approvers) == 0:
+            return JSONEncoder().encode({"success": False, "errormsg": "At least 1 approver is expected"})
+    else:
+        # TODO: DEPRECATED: old gui approved project this way
+        # Once old GUI is removed, this else statement should go away as well
+        approver = request.args.get("approver", None)
+        if approver:
+            approvers.append(approver)
+
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = submit_project_for_approval(prjid, userid, approver)
+    status, errormsg, prj = submit_project_for_approval(prjid, userid, approvers)
     if status:
+        # send notification to approvers
         project_name = prj["name"]
         project_id = prj["_id"]
-        approver_username = approver
-        context.notifier.add_project_approvers([approver_username], project_name, project_id)
+        context.notifier.add_project_approvers([approvers], project_name, project_id)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -781,32 +817,32 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
-    # See if approval confitions are good
-    status, errormsg, prj = approve_project(prjid, userid)
-    if status is True:
-        approved = get_currently_approved_project()
-        if not approved:
-            return {"success": False, "errormsg": errormsg}
-    else:
+    # See if approval conditions are good
+    status, all_approved, errormsg, prj = approve_project(prjid, userid)
+    if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
-    # merge project in to previously approved project
-    current_ffts = get_project_ffts(prjid)
-    status, errormsg, update_status = update_ffts_in_project(approved["_id"], current_ffts)
-    updated_ffts = get_project_ffts(prjid)
-    logger.debug(errormsg)
-    logger.debug(update_status)
 
-    if status and False:
-        # TODO: only send a notification when all approvers approved the project
-        # Approvers are part of another branch that has to be merged before this one
-        project_name = prj["name"]
-        owner = prj["owner"]
-        editors = prj["editors"]
-        approvers = prj["approvers"]
-        notified_user_emails = list(set([owner] + editors + approvers))
-        context.notifier.project_approval_approved(notified_user_emails, project_name, prjid)
+    if not all_approved:
+        # successful approval, but we are still waiting for some approvers
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": updated_ffts})
+    # all users approved
+    # copy ffts to the master project.
+    # FUTURE: This should be done in approve_project method, but can't due to circular imports
+    approved_project = get_currently_approved_project()
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid))
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
+
+    # send email notifications that the project was approved
+    project_name = prj["name"]
+    owner = prj["owner"]
+    editors = prj["editors"]
+    approvers = prj["approvers"]
+    notified_user_emails = list(set([owner] + editors + approvers))
+    context.notifier.project_approval_approved(notified_user_emails, project_name, prjid)
+
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
@@ -818,12 +854,22 @@ def svc_reject_project(prjid):
     """
     userid = context.security.get_current_user_id()
     reason = request.args.get("reason", None)
+    if not reason and request.json:
+        reason = request.json.get("reason")
+
     if not reason:
-        return logAndAbort("Please provide a reason for why this project is not being approved")
+        return logAndAbortJson("Please provide a reason for why this project is not being approved")
+
+    # TODO: notes should probably be stored in a format (user: <username>, date: datetime, content: "")
+    # so we can avoid rendering them when they are no longer relevant.
+    #
+    # add current user and datetime to the original reason
+    now = datetime.now(tz=timezone.utc)
+    licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
+    reason = f"{userid} ({licco_datetime}):\n{reason}"
 
     status, errormsg, prj = reject_project(prjid, userid, reason)
-    if status and False:
-        # TODO: enable once approving branch is merged into main
+    if status:
         project_id = prj["_id"]
         project_name = prj["name"]
         owner = prj["owner"]
