@@ -160,7 +160,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
                                         <ButtonGroup minimal={true}>
-                                            {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                            {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status === "submitted") ?
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
                                                     href={`/projects/${project._id}/approval`}
                                                 />
