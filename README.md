@@ -16,7 +16,7 @@ see: https://confluence.slac.stanford.edu/display/PCDS/Validated+Machine+Configu
     - Update and activate submodule
 - Install javascript packages from within react folder
     - `cd react`
-    - `npm install`
+    - `npm install` OR copy over a node_modules folder installed on a machine with the same build requirements
 - Start front end REACT development server 
     - `npm run dev`
 - Run backend in debug mode with gunicorn server in another terminal/session
