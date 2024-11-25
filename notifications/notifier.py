@@ -20,6 +20,12 @@ _NOTIFICATION_TEMPLATES = {
         <p>You have been removed from project "{project_name}" in the Machine Configuration Database as Project Approver.</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
+    "inform_editors_of_approver_update": {
+        "html": inspect.cleandoc("""
+        <p>Automated Message - Please Do Not Reply</p>
+        <p>The approvers for <a href="{project_url}">{project_name}</a> have changed.<br/>Current approvers: {approvers}</p>
+        <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
+    },
     "project_approval_submitted": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
@@ -29,7 +35,8 @@ _NOTIFICATION_TEMPLATES = {
     "project_approval_rejected": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
-        <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been rejected by {user_who_rejected}.</p>
+        <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been rejected by {user_who_rejected}.<br/>Reason:</p>
+        <p>{reason}</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
     "project_approval_approved": {
@@ -91,6 +98,15 @@ class Notifier:
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_ids, subject, content)
 
+    def inform_editors_of_approver_change(self, notified_user_ids: List[str], project_name: str, project_id: str, current_approvers: List[str]):
+        subject = f"Approvers have been updated for the project {project_name}"
+        content = create_notification_msg("inform_editors_of_approver_update", "html",
+                                          project_url=self._create_project_url(project_id),
+                                          project_name=project_name,
+                                          approvers=current_approvers,
+                                          admin_email=self.admin_email)
+        self.send_email_notification(notified_user_ids, subject, content)
+
     def project_submitted_for_approval(self, notified_user_ids: List[str], project_name: str, project_id: str):
         subject = f"Project {project_name} was submitted for approval"
         content = create_notification_msg("project_approval_submitted", "html",
@@ -108,12 +124,13 @@ class Notifier:
         self.send_email_notification(notified_user_ids, subject, content)
 
     def project_approval_rejected(self, notified_user_ids: List[str], project_name: str, project_id: str,
-                                  user_who_rejected: str):
+                                  user_who_rejected: str, reason: str):
         subject = f"Project {project_name} was rejected"
         content = create_notification_msg("project_approval_rejected", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
                                           user_who_rejected=user_who_rejected,
+                                          reason=reason,
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_ids, subject, content)
 

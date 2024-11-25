@@ -837,6 +837,11 @@ def svc_submit_for_approval(prjid):
         if deleted_approvers:
             context.notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
 
+        if new_approvers or deleted_approvers:
+            # notify project editors of approver changes
+            users = list(set([prj["owner"]] + prj["editors"]))
+            context.notifier.inform_editors_of_approver_change(users, project_name, project_id, approvers)
+
         # TODO: should we also notify the project editors that the project approvers were updated?
 
 
@@ -900,9 +905,8 @@ def svc_reject_project(prjid):
     # add current user and datetime to the original reason
     now = datetime.now(tz=timezone.utc)
     licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
-    reason = f"{userid} ({licco_datetime}):\n{reason}"
-
-    status, errormsg, prj = reject_project(prjid, userid, reason)
+    formatted_reason = f"{userid} ({licco_datetime}):\n{reason}"
+    status, errormsg, prj = reject_project(prjid, userid, formatted_reason)
     if status:
         project_id = prj["_id"]
         project_name = prj["name"]
@@ -911,7 +915,8 @@ def svc_reject_project(prjid):
         approvers = prj["approvers"]
         project_approver_emails = list(set([owner] + editors + approvers))
         user_who_rejected = userid
-        context.notifier.project_approval_rejected(project_approver_emails, project_name, project_id, user_who_rejected)
+        context.notifier.project_approval_rejected(project_approver_emails, project_name, project_id,
+                                                   user_who_rejected, reason)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
