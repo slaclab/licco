@@ -1,3 +1,4 @@
+import inspect
 import json
 import logging
 import smtplib
@@ -24,22 +25,30 @@ class EmailSenderMock(EmailSenderInterface):
     """
     def send_email(self, from_user: str, to_users: List[str], subject: str, content: str,
                    plain_text_content: str = "", send_as_separate_emails: bool = True):
-        print("")
-        print("----------------------------------------------------------------")
-        print("From:   ", from_user)
+        content = self._create_email(from_user, to_users, subject, content, plain_text_content, send_as_separate_emails)
+        logger.info(f"\n{content}")
+
+    def _create_email(self, from_user: str, to_users: List[str], subject: str, content: str,
+                   plain_text_content: str = "", send_as_separate_emails: bool = True):
         to_field = ",".join(to_users)
         if send_as_separate_emails:
             to_field += " (sent as separate_emails)"
-        print("To:     ", to_field)
-        print("Subject:", subject)
-        print("")
-        print(content)
 
+        plain_text = ""
         if plain_text_content:
-            print(" --- plain text ---")
-            print(plain_text_content)
-        print("-----------------------------------------------------------------")
-        print("")
+            plain_text += "\n\n" + inspect.cleandoc(f"""
+            ---- plain text ----
+            {plain_text_content}
+        """)
+
+        msg = (f"-----------------------------------------------------------------\n"
+               f"From:    {from_user}\n"
+               f"To:      {to_field}\n"
+               f"Subject: {subject}\n"
+               f"\n"
+               f"{content}{plain_text}\n"
+               f"-----------------------------------------------------------------")
+        return msg
 
 class EmailSettings:
     def __init__(self, url: str, port: int, username: str, password: str,
