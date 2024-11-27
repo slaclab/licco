@@ -274,6 +274,25 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             minimal={true} small={true}
                                             onClick={(e) => { setIsExportDialogOpen(true) }}
                                         />
+                                        <Button icon="bring-data" title="Download filtered data"
+                                            minimal={true} small={true}
+                                            disabled={!isFilterApplied}
+                                            onClick={e => {
+                                                // create the csv document from filtered devices
+                                                let data = `FC,Fungible,TC_part_no,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
+                                                for (let device of fftDataDisplay) {
+                                                    data += `${device.fc},${device.fg},${device.tc_part_no},${device.state},${device.comments},${device.nom_loc_z ?? ''},${device.nom_loc_x ?? ''},${device.nom_loc_y ?? ''},${device.nom_dim_z ?? ''},${device.nom_dim_x ?? ''},${device.nom_dim_y ?? ''},${device.nom_ang_z ?? ''},${device.nom_ang_x ?? ''},${device.nom_ang_y ?? ''},${device.ray_trace ?? ''}\n`;
+                                                }
+
+                                                let blob = new Blob([data], { type: "text/plain" });
+                                                let url = window.URL.createObjectURL(blob);
+                                                let a = document.createElement('a');
+                                                a.href = url;
+                                                const now = new Date().toISOString();
+                                                a.download = `${project.name}_${now}_filtered.csv`;
+                                                a.click();
+                                            }}
+                                        />
                                         <Button icon="export" title="Upload data to this project"
                                             minimal={true} small={true}
                                             onClick={(e) => { setIsImportDialogOpen(true) }}
