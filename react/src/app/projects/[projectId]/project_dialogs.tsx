@@ -537,6 +537,12 @@ export const TagSelectionDialog: React.FC<{
     if (isOpen) {
       Fetch.get<Tag[]>(`/ws/projects/${projectId}/tags/`)
         .then((projectTags) => {
+          projectTags.forEach(t => {
+            if (t.time) {
+              t.time = new Date(t.time);
+            }
+          })
+
           if (projectTags && projectTags.length) {
             setAllTags(projectTags);
             const tags = [DEFAULT_TAG, ...projectTags.map((p) => p.name)];
