@@ -912,12 +912,13 @@ def store_project_approval(prjid: str, project_submitter: str):
         "switch_time": datetime.datetime.utcnow()
     })
 
-def get_projects_approval_history():
+def get_projects_approval_history(limit: int = 100):
     """
     Get the history of project approvals
     """
     hist = list(licco_db[line_config_db_name]["switch"].aggregate([
         {"$sort": {"switch_time": -1}},
+        {"$limit": limit},
         {"$lookup": {"from": "projects", "localField": "prj",
                      "foreignField": "_id", "as": "prjobj"}},
         {"$unwind": "$prjobj"},

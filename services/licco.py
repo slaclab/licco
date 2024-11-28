@@ -933,4 +933,4 @@ def svc_get_projects_approval_history():
     """
     Get the approval history of projects in the system
     """
-    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history()})
+    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history(limit=100)})
