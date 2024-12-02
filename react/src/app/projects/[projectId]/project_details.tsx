@@ -4,15 +4,16 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
+import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
 import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
+import { mapLen } from "@/app/utils/data_structure_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import styles from './project_details.module.css';
 
-type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments">);
+type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
 
 /**
  * Helper function for sorting device details based on the clicked table column header
@@ -91,6 +92,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+
+    const [isFftCommentViewerOpen, setIsFftCommentViewerOpen] = useState(false);
+    const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
+
     const [currentFFT, setCurrentFFT] = useState<ProjectFFT>({ _id: "", fc: "", fg: "" });
     const [errorAlertMsg, setErrorAlertMsg] = useState<ReactNode>('');
 
@@ -394,8 +399,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     onCopyFft={(device) => {
                                         setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
                                         setIsCopyFFTDialogOpen(true);
-                                    }
-                                    }
+                                    }}
+                                    onUserComment={(device) => {
+                                        setCommentDevice(device);
+                                        setIsFftCommentViewerOpen(true);
+                                    }}
                                 />
                             }
 
@@ -479,6 +487,31 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 /> : null}
 
+            {project && commentDevice ?
+                <FFTCommentViewerDialog isOpen={isFftCommentViewerOpen}
+                    project={project}
+                    device={commentDevice}
+                    onClose={() => {
+                        setCommentDevice(undefined);
+                        setIsFftCommentViewerOpen(false);
+                    }}
+                    onCommentAdd={(updatedDevice) => {
+                        // TODO: this is repeated multiple times, extract into method at some point
+                        let updatedFftData = [];
+                        for (let fft of fftData) {
+                            if (fft.id != updatedDevice.id) {
+                                updatedFftData.push(fft);
+                                continue;
+                            }
+                            updatedFftData.push(updatedDevice);
+                        }
+                        setFftData(updatedFftData);
+                        setCommentDevice(updatedDevice);
+                    }
+                    }
+                />
+                : null}
+
             {project ?
                 <ProjectHistoryDialog
                     currentProject={project}
@@ -555,7 +588,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
     return value.toFixed(7);
 }
 
-const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft }) => {
+const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft, onUserComment }) => {
 // we have to cache each table row, as once we have lots of rows in a table editing text fields within
 // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
@@ -569,6 +602,13 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                         <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
                             onClick={(e) => onCopyFft(device)}
                         />
+
+                        {device.discussion.length > 0 ?
+                            <Button icon="chat" minimal={true} small={true} title={"See user comments"}
+                                onClick={(e) => onUserComment(device)}
+                            />
+                            : null
+                        }
                     </td>
                     : null
                 }
@@ -607,7 +647,9 @@ const DeviceDataEditTableRow: React.FC<{
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
 }> = ({ project, device, availableFftStates, onEditDone }) => {
     const [editError, setEditError] = useState('');
-    const [isSubmitting, setSubmitting] = useState<boolean>(false);
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+    const [valueChanges, setValueChanges] = useState<Record<string, any>>({});
 
     interface EditField {
         key: (keyof ProjectDeviceDetails);
@@ -667,20 +709,6 @@ const DeviceDataEditTableRow: React.FC<{
         return num;
     }
 
-    const createDeviceWithChanges = (): ProjectDeviceDetails => {
-        let copyDevice = structuredClone(device);
-        for (let editField of editableDeviceFields) {
-            let field = editField.key;
-            let device = copyDevice as any;
-            if (editField.type == "number") {
-                device[field] = numberOrDefault(editField.value[0], undefined);
-            } else {
-                device[field] = editField.value[0] || '';
-            }
-        }
-        return copyDevice;
-    }
-
 
     let errStates = editableDeviceFields.map(f => f.err[0]);
     const allFieldsAreValid = useMemo(() => {
@@ -695,13 +723,27 @@ const DeviceDataEditTableRow: React.FC<{
     }, [...errStates])
 
 
-    const submitChanges = () => {
+    const createDeviceWithChanges = (): ProjectDeviceDetails => {
+        let copyDevice = structuredClone(device);
+        for (let editField of editableDeviceFields) {
+            let field = editField.key;
+            let device = copyDevice as any;
+            if (editField.type == "number") {
+                device[field] = numberOrDefault(editField.value[0], undefined);
+            } else {
+                device[field] = editField.value[0] || '';
+            }
+        }
+        return copyDevice;
+    }
+
+    const getValueChanges = (device: ProjectDeviceDetails): Record<string, any> => {
         let deviceWithChanges = createDeviceWithChanges();
 
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
         let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
-        fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc");
+        fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc" && field != "discussion");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             let value = deviceWithChanges[field];
@@ -719,9 +761,13 @@ const DeviceDataEditTableRow: React.FC<{
                 changes[field] = value;
             }
         }
+        return { deviceWithChanges, changes };
+    }
 
-        if (changes.length == 0) {
-            // nothing to sync 
+    const submitChanges = () => {
+        const { changes, deviceWithChanges } = getValueChanges(device);
+        if (mapLen(changes) === 0) { // nothing to sync
+            onEditDone(deviceWithChanges, 'cancel');
             return;
         }
 
@@ -733,19 +779,8 @@ const DeviceDataEditTableRow: React.FC<{
             return;
         }
 
-        setSubmitting(true);
-        syncDeviceUserChanges(project._id, deviceWithChanges.id, changes)
-            .then((response) => {
-                // TODO: for some reason server returns data for all devices again
-                // when we don't really need it. We just update our changed device
-                onEditDone(deviceWithChanges, "ok");
-            }).catch((e: JsonErrorMsg) => {
-                let msg = `Failed to sync user device changes: ${e.error}`;
-                console.error(msg, e);
-                setEditError(msg);
-            }).finally(() => {
-                setSubmitting(false);
-            })
+        setValueChanges(changes);
+        setConfirmDialogOpen(true);
     }
 
     return (
@@ -783,6 +818,28 @@ const DeviceDataEditTableRow: React.FC<{
             })
             }
 
+
+            {project && confirmDialogOpen ?
+                <ProjectEditConfirmDialog
+                    isOpen={confirmDialogOpen}
+                    valueChanges={valueChanges}
+                    project={project}
+                    device={device}
+                    onClose={() => {
+                        // we just close the dialog, the user has to click the 'x' icon in the edit row
+                        // to cancel the editing process
+                        setConfirmDialogOpen(false);
+                    }}
+                    onSubmit={(backendDevice) => {
+                        // the user confirmed the changes, and the device data was submitted 
+                        // close the dialog and stop editing this row.
+                        setConfirmDialogOpen(false);
+                        onEditDone(backendDevice, 'ok');
+                    }}
+                />
+                : null
+            }
+
             {editError ?
                 <Alert
                     className="alert-default"
@@ -798,6 +855,7 @@ const DeviceDataEditTableRow: React.FC<{
         </tr>
     )
 }
+
 
 
 const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {

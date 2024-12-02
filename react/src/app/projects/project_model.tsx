@@ -152,6 +152,14 @@ export interface deviceDetailFields {
     nom_loc_y?: number;
     nom_loc_z?: number;
     ray_trace?: number;
+    discussion: ChangeComment[];
+}
+
+// used for displaying comment threads
+interface ChangeComment {
+    author: string;
+    time: Date;
+    comment: string;
 }
 
 export const ProjectDevicePositionKeys: (keyof deviceDetailFields)[] = [
@@ -226,6 +234,12 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
     let d = device as any;
     for (let k of ProjectDeviceDetailsNumericKeys) {
         d[k] = numberOrDefault(d[k], undefined);
+    }
+
+    if (device.discussion) {
+        for (let comment of device.discussion) {
+            comment.time = new Date(comment.time);
+        }
     }
 }
 
@@ -340,6 +354,15 @@ export async function syncDeviceUserChanges(projectId: string, fftId: string, ch
     // undefined values are not serialized, hence deleting a field (field == undefined) should be replaced with an empty string
     let data = { body: JSON.stringify(changes, (k, v) => v === undefined ? '' : v) };
     return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, data);
+}
+
+export async function addDeviceComment(projectId: string, fftId: string, comment: string): Promise<ProjectDeviceDetails> {
+    let changes = { 'discussion': comment };
+    return syncDeviceUserChanges(projectId, fftId, changes)
+        .then(data => {
+            let device = data[fftId]
+            return deviceDetailsBackendToFrontend(device);
+        })
 }
 
 

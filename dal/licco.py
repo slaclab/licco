@@ -558,6 +558,17 @@ fcattrs = {
         "label": "Must Ray Trace",
         "desc": "Must Ray Trace",
         "required": False
+    },
+    "discussion": {
+        # NOTE: everytime the user changes a device value, a discussion comment is added to the database
+        # as a separate document. On load, however, we have to parse all the comments into an structured
+        # array of all comments for that specific device.
+        "name": "discussion",
+        "type": "text",
+        "fromstr": str,
+        "label": "Discussion",
+        "desc": "User discussion about the device value change",
+        "required": False,
     }
 }
 
@@ -620,9 +631,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
+
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", insert_count
+
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
@@ -630,11 +643,13 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
             insert_count["fail"] += 1
             error_str = f"Wrong type - {attrname}, {attrval}"
             break
+
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             error_str = f"Value out of range - {attrname}, {attrval}"
             break
+
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
             all_inserts.append({
