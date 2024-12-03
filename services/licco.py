@@ -545,6 +545,36 @@ def svc_update_fc_in_project(prjid, fftid):
     fc = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
+@context.security.authentication_required
+def svc_add_fft_comment(prjid, fftid):
+    """
+    Endpoint for adding a comment into a device fft, despite the project not being in a development mode
+    (approval comments and discussions should always be available, regardless of the project status)
+    """
+    update = request.json
+    comment = update.get('comment')
+    if comment is None:
+        return logAndAbortJson("Comment field does not exist", ret_status=400)
+    comment = comment.strip()
+    if comment == "":
+        return logAndAbortJson("Comment should not be empty", ret_status=400)
+
+    new_comment = {'discussion': comment}
+    status, msg = validate_import_headers(new_comment, prjid, fftid)
+    if not status:
+        return JSONEncoder().encode({"success": False, "errormsg": msg})
+
+    # TODO: is everyone allowed to comment, or just the editors and approvers?
+    userid = context.security.get_current_user_id()
+    status, errormsg, results = update_fft_in_project(prjid, fftid, new_comment, userid)
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+
+    fc = get_project_ffts(prjid)
+    val = fc[fftid]
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": val})
+
 
 @licco_ws_blueprint.route(
     "/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])

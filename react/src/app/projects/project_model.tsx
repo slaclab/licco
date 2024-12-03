@@ -357,12 +357,11 @@ export async function syncDeviceUserChanges(projectId: string, fftId: string, ch
 }
 
 export async function addDeviceComment(projectId: string, fftId: string, comment: string): Promise<ProjectDeviceDetails> {
-    let changes = { 'discussion': comment };
-    return syncDeviceUserChanges(projectId, fftId, changes)
-        .then(data => {
-            let device = data[fftId]
+    const data = { 'comment': comment };
+    return Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectId}/fcs/${fftId}/comment`, { body: JSON.stringify(data) })
+        .then(device => {
             return deviceDetailsBackendToFrontend(device);
-        })
+        });
 }
 
 

@@ -799,13 +799,12 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
             <Button className="mt-1" intent="primary" loading={isSubmitting}
               onClick={e => addAComment()}>Add Comment</Button>
           </ButtonGroup>
+          {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
         </FormGroup>
 
         <hr className="mt-4 mb-3" />
 
         {userNotes}
-
-        {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
       </DialogBody>
       <DialogFooter actions={
         <>
