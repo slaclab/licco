@@ -997,8 +997,10 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     if not otr:
         return False, f"Cannot find project for {other_prjid}", None
 
-    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
-    thfcs = get_project_attributes(licco_db[line_config_db_name], other_prjid)
+    # we don't want to diff comments, hence we filter them out by setting the timestamp far into the future
+    no_comment_timestamp = datetime.datetime.now() + datetime.timedelta(days=365 * 100)
+    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid, commentAfterTimestamp=no_comment_timestamp)
+    thfcs = get_project_attributes(licco_db[line_config_db_name], other_prjid, commentAfterTimestamp=no_comment_timestamp)
 
     myflat = __flatten__(myfcs)
     thflat = __flatten__(thfcs)

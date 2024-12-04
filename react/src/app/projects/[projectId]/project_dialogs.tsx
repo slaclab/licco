@@ -793,7 +793,7 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
       <DialogBody useOverflowScrollContainer>
 
         <FormGroup label="Add a comment:">
-          <TextArea fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
+          <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
 
           <ButtonGroup className="d-flex justify-content-end">
             <Button className="mt-1" intent="primary" loading={isSubmitting}

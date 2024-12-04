@@ -8,7 +8,7 @@ from pymongo.errors import PyMongoError
 
 logger = logging.getLogger(__name__)
 
-def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimestamp=None):
+def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
     project = propdb["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
         logger.error("Cannot find project for id %s", projectid)
@@ -56,9 +56,13 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
         details[fft_id][field_name] = field_val
 
     # fetch and aggregate comments for all ffts
+    commentFilter = {"$match": {"$and": [{"key": "discussion"}]}}
+    if commentAfterTimestamp:
+        commentFilter["$match"]["$and"].append({"time": {"$gt": commentAfterTimestamp}})
+
     comments = [x for x in propdb["projects_history"].aggregate([
         mtch,
-        {"$match": {"$and": [{"key": "discussion"}]}},
+        commentFilter,
         {"$sort": {"time": -1}},
         {"$project": {
             "prj": "$prj",

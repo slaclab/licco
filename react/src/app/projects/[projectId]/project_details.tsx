@@ -394,7 +394,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.id} project={project} device={device} disabled={disableRow}
+                                return <DeviceDataTableRow key={device.id}
+                                    project={project} device={device} currentUser={currentlyLoggedInUser}
+                                    disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
                                         setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
@@ -588,7 +590,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
     return value.toFixed(7);
 }
 
-const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, disabled, onEdit, onCopyFft, onUserComment }) => {
+const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onUserComment }) => {
 // we have to cache each table row, as once we have lots of rows in a table editing text fields within
 // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
@@ -596,6 +598,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
             <tr className={disabled ? 'table-disabled' : ''}>
                 {isProjectInDevelopment(project) ?
                     <td>
+                        {/* TODO: once notifications branch is merged in, we have to restrict the user actions */}
                         <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
                             onClick={(e) => onEdit(device)}
                         />
@@ -603,12 +606,9 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                             onClick={(e) => onCopyFft(device)}
                         />
 
-                        {device.discussion.length > 0 ?
-                            <Button icon="chat" minimal={true} small={true} title={"See user comments"}
-                                onClick={(e) => onUserComment(device)}
-                            />
-                            : null
-                        }
+                        <Button icon="chat" minimal={true} small={true} title={"See user comments"}
+                            onClick={(e) => onUserComment(device)}
+                        />
                     </td>
                     : null
                 }
@@ -634,7 +634,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.ray_trace ?? null}</td>
             </tr>
         )
-    }, [project, device, disabled])
+    }, [project, device, currentUser, disabled])
     return row;
 }
 
