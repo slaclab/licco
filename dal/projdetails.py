@@ -77,6 +77,7 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
     for c in comments:
         field_name = "discussion"
         fft_id = str(c["fft"])
+        comment_id = str(c["_id"])
         user = c["user"]
         timestamp = c["time"]
         val = c["val"]
@@ -87,7 +88,7 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
             continue
 
         comments = device.get(field_name, [])
-        comments.append({'author': user, 'time': timestamp, 'comment': val})
+        comments.append({'id': comment_id, 'author': user, 'time': timestamp, 'comment': val})
         details[fft_id][field_name] = comments
 
     for device in details.values():

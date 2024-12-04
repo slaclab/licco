@@ -696,7 +696,6 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
         // TODO: for some reason server returns data for all devices again
         // when we don't really need it. We just update our changed device
         // We should really just return the last device...
-        console.log(response);
         let d = response[device.id];
         if (!d) { // this should never happen, we should always get back this device
           throw new Error(`Synced device (${device.fc}-${device.fg}, id=${device.id}) was not found in server response: this should never happen`);
@@ -730,7 +729,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
         <hr className="mt-4 mb-3" />
 
         <FormGroup label="Reason for the update:">
-          <TextArea value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
+          <TextArea autoFocus={true} value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
         </FormGroup>
 
         <CollapsibleProjectNotes

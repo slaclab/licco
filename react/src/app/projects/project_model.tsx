@@ -157,6 +157,7 @@ export interface deviceDetailFields {
 
 // used for displaying comment threads
 interface ChangeComment {
+    id: string;
     author: string;
     time: Date;
     comment: string;

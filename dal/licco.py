@@ -316,6 +316,32 @@ def delete_fft(fftid):
     licco_db[line_config_db_name]["ffts"].delete_one({"_id": fftid})
     return True, "", None
 
+def delete_fft_comment(user_id, comment_id):
+    comment = licco_db[line_config_db_name]["projects_history"].find_one({"_id": ObjectId(comment_id)})
+    if not comment:
+        return False, f"Comment with id {comment_id} does not exist"
+
+    # check permissions for deletion
+    project = get_project(comment["prj"])
+    status = project["status"]
+    project_is_in_correct_state = status == "development" or status == "submitted"
+    if not project_is_in_correct_state:
+        name = project["name"]
+        return False, f"Comment {comment_id} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
+
+    # project is in a correct state
+    # check if the user has permissions for deleting a comment
+    allowed_to_delete = False
+    allowed_to_delete |= comment["user"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
+    allowed_to_delete |= project["owner"] == user_id   # project owner is always allowed to delete project comments
+    # TODO: check for admin user as well once we have user roles
+
+    if not allowed_to_delete:
+        return False, f"You are not allowed to delete comment {comment_id}"
+
+    licco_db[line_config_db_name]["projects_history"].delete_one({"_id": ObjectId(comment_id)})
+    return True, ""
+
 
 def create_new_project(name, description, userid):
     """
@@ -1033,41 +1059,54 @@ def clone_project(prjid, name, description, userid, new=False):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    if new != True:
-        prj = licco_db[line_config_db_name]["projects"].find_one(
-            {"_id": ObjectId(prjid)})
+    if not new:
+        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
         if not prj:
             return False, f"Cannot find project for {prjid}", None
 
-    otr = licco_db[line_config_db_name]["projects"].find_one({"name": name})
-    if otr:
+    # check if a project with this name already exists
+    existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
+    if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    newprj = create_new_project(name, description, userid)
-    if not newprj:
+    new_project = create_new_project(name, description, userid)
+    if not new_project:
         return False, "Created a project but could not get the object from the database", None
 
-    if new == True:
-        return True, "", newprj
+    if new:
+        return True, "", new_project
 
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 
-    modification_time = newprj["creation_time"]
+    modification_time = new_project["creation_time"]
     all_inserts = []
     for fftid, attrs in myfcs.items():
         del attrs["fft"]
         for attrname, attrval in attrs.items():
-            all_inserts.append({
-                "prj": newprj["_id"],
-                "fft": ObjectId(fftid),
-                "key": attrname,
-                "val": attrval,
-                "user": userid,
-                "time": modification_time
-            })
+            if attrname == "discussion":
+                # when cloning a project, we also want to clone all the comments
+                # discussion is returned as an array and therefore needs special handling
+                for comment in attrval:
+                    all_inserts.append({
+                        "prj": new_project["_id"],
+                        "fft": ObjectId(fftid),
+                        "key": attrname,
+                        "val": comment['comment'],
+                        "user": comment['author'],
+                        "time": modification_time,
+                    })
+            else:
+                all_inserts.append({
+                    "prj": new_project["_id"],
+                    "fft": ObjectId(fftid),
+                    "key": attrname,
+                    "val": attrval,
+                    "user": userid,
+                    "time": modification_time
+                })
     licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
 
-    return True, "", newprj
+    return True, "", new_project
 
 
 def create_empty_project(name, description, logged_in_user):
