@@ -26,7 +26,7 @@ export function Navigation() {
         <Navbar className={styles.navbar}>
             <Navbar.Group align={Alignment.LEFT}>
                 <Navbar.Heading>
-                    <Anchor href="/" style={{ fontSize: "1.3rem", textDecoration: "none", fontWeight: "bold" }}>
+                    <Anchor href={createLink("/")} style={{ fontSize: "1.3rem", textDecoration: "none", fontWeight: "bold" }}>
                         {/* <img className={styles.logo} src="/assets/licco-logo.png" alt="Licco logo" /> */}
                         Machine Configuration Database
                     </Anchor>
