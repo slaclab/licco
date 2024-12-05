@@ -316,6 +316,30 @@ def delete_fft(fftid):
     licco_db[line_config_db_name]["ffts"].delete_one({"_id": fftid})
     return True, "", None
 
+
+def add_fft_comment(user_id, project_id, fftid, comment):
+    if not comment:
+        return False, f"Comment should not be empty", None
+
+    project = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
+    project_name = project["name"]
+    status = project["status"]
+
+    allowed_to_comment = False
+    allowed_to_comment |= user_id == project["owner"]
+    allowed_to_comment |= user_id in project["editors"]
+
+    if status == "submitted":
+        allowed_to_comment |= user_id in project["approvers"]
+
+    if not allowed_to_comment:
+        return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
+
+    new_comment = {'discussion': comment}
+    status, errormsg, results = update_fft_in_project(project_id, fftid, new_comment, user_id)
+    return status, errormsg, results
+
+
 def delete_fft_comment(user_id, comment_id):
     comment = licco_db[line_config_db_name]["projects_history"].find_one({"_id": ObjectId(comment_id)})
     if not comment:

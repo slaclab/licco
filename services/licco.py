@@ -27,7 +27,8 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
+    delete_fft_comment, add_fft_comment
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -560,20 +561,37 @@ def svc_add_fft_comment(prjid, fftid):
     if comment == "":
         return logAndAbortJson("Comment should not be empty", ret_status=400)
 
-    new_comment = {'discussion': comment}
-    status, msg = validate_import_headers(new_comment, prjid, fftid)
-    if not status:
-        return JSONEncoder().encode({"success": False, "errormsg": msg})
-
-    # TODO: is everyone allowed to comment, or just the editors and approvers?
     userid = context.security.get_current_user_id()
-    status, errormsg, results = update_fft_in_project(prjid, fftid, new_comment, userid)
+    status, errormsg, results = add_fft_comment(userid, prjid, fftid, comment)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
 
+    # TODO: refactor: we should be able to get just one specific device (and not fetch all devices everytime we want one)
     fc = get_project_ffts(prjid)
     val = fc[fftid]
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": val})
+
+
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["DELETE"])
+@context.security.authentication_required
+def svc_remove_fft_comment(prjid, fftid):
+    """Remove a specific fft device comment or a set of comments"""
+    comment_ids = request.json().get('comments')
+    if not comment_ids:
+        return logAndAbortJson("Comment field should not be empty")
+
+    errors = []
+    for comment_id in comment_ids:
+        deleted, errormsg = delete_fft_comment(prjid, comment_id)
+        if not deleted:
+            errors.append(errormsg)
+
+    if len(errors) != 0:
+        err = "\n".join(errors)
+        msg = f"There were errors while deleting comments: {err}"
+        return JSONEncoder().encode({"success": False, "errormsg": msg})
+
+    return JSONEncoder().encode({"success": True, "errormsg": ""})
 
 
 @licco_ws_blueprint.route(
@@ -914,13 +932,11 @@ def svc_clone_project(prjid):
     userid = context.security.get_current_user_id()
     newprjdetails = request.json
     if not newprjdetails["name"] or not newprjdetails["description"]:
-        return JSONEncoder().encode(
-            {"success": False, "errormsg": "Please specify a project name and description"})
+        return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
 
     # Set new to true if a new project is requested
     new = (prjid == "NewBlankProjectClone")
-    status, erorrmsg, newprj = clone_project(
-        prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
+    status, erorrmsg, newprj = clone_project(prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 
