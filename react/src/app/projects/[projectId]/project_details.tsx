@@ -1,5 +1,6 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
+import { createLink } from "@/app/utils/path_utils";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -339,7 +340,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             onClick={(e) => setIsProjectHistoryDialogOpen(true)}
                                         />
                                         <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
-                                            href={`/projects/${project._id}/submit-for-approval`}
+                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
                                             disabled={!isProjectInDevelopment}
                                         />
 
@@ -347,7 +348,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             <>
                                                 <Divider />
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
-                                                    href={`/projects/${project._id}/approval`}
+                                                    href={createLink(`/projects/${project._id}/approval`)}
                                                 />
                                             </>
                                             : null
