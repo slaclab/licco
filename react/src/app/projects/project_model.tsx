@@ -24,11 +24,15 @@ export interface ProjectInfo {
 // - the currently logged in user is a super approver (or admin)
 export function isUserAProjectApprover(project: ProjectInfo, username: string): boolean {
     if (isProjectSubmitted(project)) {
-        if (project.approvers?.includes(username) || username == '') {
+        if (project.approvers?.includes(username)) {
             return true;
         }
     }
     return false;
+}
+
+export function isUserAProjectEditor(project: ProjectInfo, username: string): boolean {
+    return project.owner === username || project.editors.includes(username);
 }
 
 const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";

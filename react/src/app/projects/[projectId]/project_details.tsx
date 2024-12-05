@@ -4,7 +4,7 @@ import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FilterFFTDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -145,7 +145,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         fetchProjectInfo(projectId)
-            .then(data => setProject(data))
+            .then(data => {
+                setProject(data);
+                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
+            })
             .catch((e: JsonErrorMsg) => {
                 console.error("Failed to load required project data", e);
                 setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -343,7 +346,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             disabled={!isProjectInDevelopment}
                                         />
 
-                                        {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                        {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
                                             <>
                                                 <Divider />
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
