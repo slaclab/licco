@@ -5,7 +5,7 @@ import { Container } from "react-bootstrap";
 import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
-import { createLink } from "../utils/path_utils";
+import { createLink } from "@/app/utils/path_utils";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";

@@ -2,7 +2,7 @@ import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileIn
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { createLink } from "../utils/path_utils";
+import { createLink } from "@/app/utils/path_utils";
 import { sortString } from "../utils/sort_utils";
 import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
 

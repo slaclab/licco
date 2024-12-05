@@ -4,7 +4,7 @@ import { Alignment, AnchorButton, Navbar } from '@blueprintjs/core';
 import { usePathname } from 'next/navigation';
 import { Anchor } from 'react-bootstrap';
 import styles from './navbar.module.css';
-import { createLink } from "../utils/path_utils";
+import { createLink } from "@/app/utils/path_utils";
 
 const links = [
     { link: createLink('/'), label: 'Projects' },
