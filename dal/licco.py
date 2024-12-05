@@ -321,7 +321,7 @@ def add_fft_comment(user_id, project_id, fftid, comment):
     if not comment:
         return False, f"Comment should not be empty", None
 
-    project = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
+    project = get_project(project_id)
     project_name = project["name"]
     status = project["status"]
 
@@ -335,7 +335,11 @@ def add_fft_comment(user_id, project_id, fftid, comment):
     if not allowed_to_comment:
         return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
 
-    new_comment = {'discussion': comment}
+    new_comment = {'discussion': [{
+        'author': user_id,
+        'comment': comment,
+        'time': datetime.datetime.utcnow(),
+    }]}
     status, errormsg, results = update_fft_in_project(project_id, fftid, new_comment, user_id)
     return status, errormsg, results
 
@@ -644,12 +648,10 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
     insert_count = {"success": 0, "fail": 0, "ignored": 0}
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", insert_count
-    fft = licco_db[line_config_db_name]["ffts"].find_one(
-        {"_id": ObjectId(fftid)})
+    fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", insert_count
 
@@ -658,14 +660,12 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
         # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
         # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
         # (cca 150-300 ms per query).
-        current_attrs = get_project_attributes(
-            licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
+        current_attrs = get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
         modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
     # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find(
-        {}).sort([("time", -1)]).limit(1))
+    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_count
@@ -680,6 +680,29 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     fft_edits = set()
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
+            continue
+
+        # special handling of discussion comments fields
+        if attrname == "discussion" and isinstance(attrval, list):
+            old_comments = current_attrs.get(attrname, [])
+            old_comment_ids = [x['id'] for x in old_comments]
+
+            for comment in attrval:
+                comment_id = comment.get("id", "")
+                if comment_id and comment_id in old_comment_ids:
+                    # this comment already exists, hence we don't copy it
+                    continue
+
+                author = comment['author']
+                newval = comment['comment']
+                all_inserts.append({
+                    "prj": ObjectId(prjid),
+                    "fft": ObjectId(fftid),
+                    "key": attrname,
+                    "val": newval,
+                    "user": author,
+                    "time": modification_time
+                })
             continue
 
         attrmeta = fcattrs[attrname]

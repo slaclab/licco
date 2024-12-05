@@ -103,7 +103,7 @@ def create_imp_msg(fft, status, errormsg=None):
     return msg
 
 
-def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dict[str, int]]:
+def update_ffts_in_project(prjid, ffts, def_logger=None, remove_discussion_comments = False) -> Tuple[bool, str, Dict[str, int]]:
     """
     Insert multiple FFTs into a project
     """
@@ -161,6 +161,11 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
         # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
         # querying the current project attributes once and passing it to the update routine
         current_attributes = project_ffts.get(str(fftid), {})
+        if remove_discussion_comments:
+            # discussion comment will not be copied/updated
+            if fcupdate.get('discussion', None):
+                del fcupdate['discussion']
+
         status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid,
                                                           current_project_attributes=current_attributes)
         # Have smarter error handling here for different exit conditions
@@ -542,6 +547,14 @@ def svc_update_fc_in_project(prjid, fftid):
     status, msg = validate_import_headers(fcupdate, prjid, fftid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
+
+    discussion = fcupdate.get('discussion', '')
+    if discussion:
+        # our fft update expects an array of discussion comments hence the transform into an array of objects
+        fcupdate['discussion'] = [{
+            'author': userid,
+            'comment': discussion
+        }]
     status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid)
     fc = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
@@ -873,7 +886,8 @@ def svc_approve_project(prjid):
     # copy ffts to the master project.
     # FUTURE: This should be done in approve_project method, but can't due to circular imports
     approved_project = get_currently_approved_project()
-    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid))
+    # Master project should not inherit old discussion comments from a submitted project, hence the removal flag
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid), remove_discussion_comments=True)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 

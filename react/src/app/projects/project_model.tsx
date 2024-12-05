@@ -179,7 +179,7 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key == "id" || key == "fc" || key == "fg") { // ignored 
+        if (key == "id" || key == "fc" || key == "fg" || key == "discussion") { // ignored 
             continue;
         }
 
