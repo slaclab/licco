@@ -856,6 +856,8 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
                                                             "status": "approved", "approved_time": datetime.datetime.utcnow()}})
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    store_project_approval(prjid, prj["submitter"])
+
     updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
     return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
@@ -903,12 +905,20 @@ def get_currently_approved_project():
         return prj
     return None
 
-def get_projects_approval_history():
+def store_project_approval(prjid: str, project_submitter: str):
+    licco_db[line_config_db_name]["switch"].insert_one({
+        "prj": ObjectId(prjid),
+        "requestor_uid": project_submitter,
+        "switch_time": datetime.datetime.utcnow()
+    })
+
+def get_projects_approval_history(limit: int = 100):
     """
     Get the history of project approvals
     """
     hist = list(licco_db[line_config_db_name]["switch"].aggregate([
         {"$sort": {"switch_time": -1}},
+        {"$limit": limit},
         {"$lookup": {"from": "projects", "localField": "prj",
                      "foreignField": "_id", "as": "prjobj"}},
         {"$unwind": "$prjobj"},
