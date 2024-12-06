@@ -147,6 +147,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                             </th>
                             <th onClick={(e) => sortOrderChanged('name')}>Name {renderTableSortButtonIfAny('name')}</th>
                             <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderTableSortButtonIfAny('owner')}</th>
+                            <th>Editors</th>
                             <th onClick={(e) => sortOrderChanged('created')}>Created {renderTableSortButtonIfAny('created')}</th>
                             <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderTableSortButtonIfAny('edit')}</th>
                             <th>Description</th>
@@ -213,6 +214,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     </td>
                                     <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
                                     <td>{project.owner}</td>
+                                    <td>{project.editors.join(",")}</td>
                                     <td>{formatToLiccoDateTime(project.creation_time)}</td>
                                     <td>{formatToLiccoDateTime(project.edit_time)}</td>
                                     <td>{project.description}</td>

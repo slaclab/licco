@@ -303,6 +303,14 @@ def svc_get_users_with_approve_privilege():
     users = get_users_with_privilege("approve")
     return JSONEncoder().encode({"success": True, "value": users})
 
+@licco_ws_blueprint.route("/editors/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_users_with_edit_privilege():
+    """
+    Get the users in the system who have the edit privilege
+    """
+    users = get_users_with_privilege("edit")
+    return JSONEncoder().encode({"success": True, "value": users})
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
 @context.security.authentication_required

@@ -182,8 +182,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
     const submit = () => {
         let data = { "name": projectName, "description": projectDescription }
         setIsSubmitting(true);
-        let clonedName = "NewBlankProjectClone"
-        Fetch.post<ProjectInfo>(`/ws/projects/${clonedName}/`, { body: JSON.stringify(data) })
+        Fetch.post<ProjectInfo>(`/ws/projects/${project._id}/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
                 transformProjectForFrontendUse(clonedProject);
                 onSubmit(clonedProject);
