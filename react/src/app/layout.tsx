@@ -3,6 +3,7 @@ import '@blueprintjs/core/lib/css/blueprint.css';
 import '@blueprintjs/icons/lib/css/blueprint-icons.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import type { Metadata } from "next";
+import { createLink } from "@/app/utils/path_utils";
 import "./globals.css";
 
 
@@ -20,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/assets/favicons/favicon.png" type="image/png" />
+        <link rel="icon" href={createLink("/assets/favicons/favicon.png")} type="image/png" />
       </head>
       <body>
         {children}
