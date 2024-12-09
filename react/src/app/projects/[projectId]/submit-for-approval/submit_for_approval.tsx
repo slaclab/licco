@@ -45,7 +45,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
             .then((data) => {
                 setProject(data.projectInfo);
                 setDiff(data.diff);
-                setLoggedInUser(loggedInUser);
+                setLoggedInUser(data.whoami);
 
                 // submitter or editor can't be an approver, that's why the currently logged in user should never appear in the list
                 // of all available approvers
@@ -158,7 +158,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
             .then(updatedProject => {
                 setProject(updatedProject);
             }).catch((e: JsonErrorMsg) => {
-                let msg = "Failed to edit the project editors: " + e.error
+                let msg = "Failed to edit the project editors: " + e.error;
                 console.error(msg, e);
                 setEditEditorsError(msg);
             }).finally(() => {
@@ -221,7 +221,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                         onChange={newEditors => setSelectedEditors(newEditors)}
                                     />
 
-                                    <Button intent="danger" icon="edit" disabled={disableEditActions}
+                                    <Button intent="danger" icon="edit" loading={submittingForm} disabled={disableEditActions}
                                         onClick={(e) => editButtonClicked()}>
                                         Update Editors
                                     </Button>

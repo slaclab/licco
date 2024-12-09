@@ -383,12 +383,10 @@ def svc_update_project(prjid):
     """
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
-    if not prjdetails.get("name", None):
-        return JSONEncoder().encode({"success": False, "errormsg": "Name cannot be empty"})
-    if not prjdetails.get("description", None):
-        return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
+    status, err = update_project_details(logged_in_user, prjid, prjdetails)
+    if not status:
+        return JSONEncoder().encode({"success": False, "errormsg": err})
 
-    update_project_details(prjid, prjdetails)
     return JSONEncoder().encode({"success": True, "value": get_project(prjid)})
 
 

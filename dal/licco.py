@@ -1062,13 +1062,56 @@ def create_empty_project(name, description, logged_in_user):
     return get_project(prjid)
 
 
-def update_project_details(prjid, prjdetails):
+def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
     """
     Just update the project name ands description
     """
-    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {
-                                                         "$set": {"name": prjdetails["name"], "description": prjdetails["description"]}})
-    return True
+    project = get_project(prjid)
+    user_has_permission_to_edit = project["owner"] == userid or userid in project["editors"]
+    if not user_has_permission_to_edit:
+        name = project["name"]
+        return False, f"You have no permissions to edit a project '{name}'"
+
+    if len(prjdetails) == 0:
+        return False, f"Project update should not be empty"
+
+    update = {}
+    for key, val in prjdetails.items():
+        if key == "name":
+            if not val:
+                return False, f"Name cannot be empty"
+            update["name"] = val
+        elif key == "description":
+            if not val:
+                return False, f"Description cannot be empty"
+            update["description"] = val
+        elif key == "editors":
+            if not isinstance(val, list):
+                return False, f"Editors field should be an array"
+
+            all_editors = get_users_with_privilege("edit")
+            for user in val:
+                if user not in all_editors:
+                    return False, f"User '{user}' is not allowed to be an editor"
+            # all users are valid (or the list is empty)
+            update["editors"] = val
+        elif key == "approvers":
+            if not isinstance(val, list):
+                return False, f"Approvers field should be an array"
+
+            all_approvers = get_users_with_privilege("approve")
+            for user in val:
+                if user not in all_approvers:
+                    return False, f"User '{user}' is not allowed to be an approver"
+            # all users are valid (or the list is empty)
+            update["approvers"] = val
+        else:
+            return False, f"Invalid update field '{key}'"
+
+    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
+
+    # TODO: send notifications to editors and approvers once the notification branch is merged in
+    return True, ""
 
 
 def get_tags_for_project(prjid):
