@@ -1,7 +1,7 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { createLink } from "@/app/utils/path_utils";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
+import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
@@ -256,6 +256,23 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             });
     }
 
+    const createCsvStringFromDevices = (devices: ProjectDeviceDetails[]): string => {
+        // render field or empty if it's undefined
+        const r = (field: any) => {
+            if (field == undefined || field == null) {
+                return '';
+            }
+            return field;
+        }
+
+        // create the csv document from filtered devices
+        let data = `FC,Fungible,TC_part_no,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
+        for (let device of devices) {
+            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.state)},${r(device.comments)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_dim_z)},${r(device.nom_dim_x)},${r(device.nom_dim_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)}\n`;
+        }
+        return data;
+    }
+
     const isProjectInDevelopment = project?.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
@@ -284,12 +301,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             minimal={true} small={true}
                                             disabled={!isFilterApplied}
                                             onClick={e => {
-                                                // create the csv document from filtered devices
-                                                let data = `FC,Fungible,TC_part_no,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
-                                                for (let device of fftDataDisplay) {
-                                                    data += `${device.fc},${device.fg},${device.tc_part_no},${device.state},${device.comments},${device.nom_loc_z ?? ''},${device.nom_loc_x ?? ''},${device.nom_loc_y ?? ''},${device.nom_dim_z ?? ''},${device.nom_dim_x ?? ''},${device.nom_dim_y ?? ''},${device.nom_ang_z ?? ''},${device.nom_ang_x ?? ''},${device.nom_ang_y ?? ''},${device.ray_trace ?? ''}\n`;
-                                                }
-
+                                                let data = createCsvStringFromDevices(fftDataDisplay)
                                                 let blob = new Blob([data], { type: "text/plain" });
                                                 let url = window.URL.createObjectURL(blob);
                                                 let a = document.createElement('a');
