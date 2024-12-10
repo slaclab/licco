@@ -1,3 +1,4 @@
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, ButtonGroup, Collapse, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -162,7 +163,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                         <ButtonGroup minimal={true}>
                                             {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status === "submitted") ?
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
-                                                    href={`/projects/${project._id}/approval`}
+                                                    href={createLink(`/projects/${project._id}/approval`)}
                                                 />
                                                 : null
                                             }
@@ -189,9 +190,9 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                     />
 
                                                     {/* only show the submit for approval button to project editors */}
-                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ? 
+                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ?
                                                         <AnchorButton icon="user" title="Submit this project for approval"
-                                                            href={`/projects/${project._id}/submit-for-approval`}
+                                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
                                                             minimal={true} small={true}
                                                         />
                                                         : null

@@ -2,6 +2,7 @@ import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileIn
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
+import { createLink } from "@/app/utils/path_utils";
 import { sortString } from "../utils/sort_utils";
 import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
 
@@ -544,7 +545,7 @@ export const ProjectComparisonDialog: React.FC<{ isOpen: boolean, project: Proje
                 <>
                     <Button onClick={(e) => onClose()}>Close</Button>
                     <AnchorButton
-                        href={`/projects/${project._id}/diff?with=${selectedProject._id}`}
+                        href={createLink(`/projects/${project._id}/diff?with=${selectedProject._id}`)}
                         intent="primary"
                         disabled={selectedProjectName == DEFAULT_PROJECT || selectedProjectName == project.name}
                     >Compare Projects</AnchorButton>

@@ -7,6 +7,7 @@ import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
+import { FFTCommentViewerDialog } from "../project_dialogs";
 import styles from './project_diff.module.css';
 
 // displays the diff tables between two projects
@@ -58,7 +59,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th colSpan={3} className="text-center">Nominal Dimension (meters)</th>
                 <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
                 <th></th>
-                <th>Approval</th>
+                <th></th>
             </tr>
             <tr>
                 <th>FC</th>
@@ -88,6 +89,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 // just for displaying data
 export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
+    const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
 
     const createProjectLink = (project: ProjectInfo, type: 'a' | 'b') => {
         const color = type == 'a' ? Colors.RED2 : Colors.BLUE2;
@@ -103,6 +105,10 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             case "listOfIdenticalDevices": return <>{diff.identical.length} devices in {createProjectLink(diff.a, 'a')}</>
         }
     }, [diff, type])
+
+    const renderDiscussionButton = (device: ProjectDeviceDetails) => {
+        return <Button icon="chat" minimal={true} onClick={e => setCommentDevice(device)}>({device.discussion.length})</Button>
+    }
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
         const formatValueIfNumber = (val: any, field: keyof ProjectDeviceDetails) => {
@@ -171,13 +177,13 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
                 <td>{renderField(devices.a, devices.b, 'nom_ang_y')}</td>
 
                 <td>{renderField(devices.a, devices.b, 'ray_trace')}</td>
-                <td></td>
+                <td>{renderDiscussionButton(devices.a)}</td>
             </tr>
             )
         })
     }
 
-    const renderDataRows = (data: ProjectDeviceDetails[]) => {
+    const renderDataRows = (data: ProjectDeviceDetails[], renderDiscussion: boolean = true) => {
         return data.map(d => {
             return (
                 <tr key={d.id}>
@@ -198,9 +204,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
                     <td>{formatDevicePositionNumber(d.nom_ang_z)}</td>
                     <td>{formatDevicePositionNumber(d.nom_ang_x)}</td>
                     <td>{formatDevicePositionNumber(d.nom_ang_y)}</td>
-
                     <td>{d.ray_trace}</td>
-                    <td></td>
+                    <td>{renderDiscussion ? renderDiscussionButton(d) : null}</td>
                 </tr>
             )
         })
@@ -209,7 +214,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
     const renderTableBody = () => {
         switch (type) {
             case 'new': return renderDataRows(diff.new);
-            case 'missing': return renderDataRows(diff.missing);
+            case 'missing': return renderDataRows(diff.missing, false);
             case 'updated': return renderDiffRows(diff.updated);
             case 'identical': return renderDataRows(diff.identical);
             case 'listOfIdenticalDevices': return renderDataRows(diff.identical);
@@ -225,6 +230,15 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
             case 'listOfIdenticalDevices': return diff.identical.length == 0
         }
     }, [diff]);
+
+    const replaceDeviceDiscussion = (newDevice: ProjectDeviceDetails, devices: ProjectDeviceDetails[]) => {
+        for (let device of devices) {
+            if (device.id == newDevice.id) {
+                device.discussion = newDevice.discussion;
+                return
+            }
+        }
+    }
 
     const noDevicesDisplay = () => {
         if (type == 'listOfIdenticalDevices') {
@@ -263,6 +277,30 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
                     </div>
                 }
             </Collapse>
+
+            {commentDevice ?
+                <FFTCommentViewerDialog
+                    project={diff.a}
+                    isOpen={commentDevice != undefined}
+                    device={commentDevice}
+                    onClose={() => setCommentDevice(undefined)}
+                    onCommentAdd={newDevice => {
+                        setCommentDevice(commentDevice);
+
+                        // replace the discussion field of the right device
+                        replaceDeviceDiscussion(newDevice, diff.identical);
+                        replaceDeviceDiscussion(newDevice, diff.missing);
+                        replaceDeviceDiscussion(newDevice, diff.new);
+                        for (let devices of diff.updated) {
+                            if (devices.a.id == newDevice.id) {
+                                devices.a.discussion = newDevice.discussion
+                                break
+                            }
+                        }
+                    }}
+                />
+                : null
+            }
         </div>
     )
 }

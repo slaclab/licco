@@ -1,9 +1,11 @@
 import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner } from "@blueprintjs/core";
+import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted } from "../project_model";
+import { ButtonGroup } from "react-bootstrap";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { CollapsibleProjectNotes } from "../projects_overview";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -537,6 +539,12 @@ export const TagSelectionDialog: React.FC<{
     if (isOpen) {
       Fetch.get<Tag[]>(`/ws/projects/${projectId}/tags/`)
         .then((projectTags) => {
+          projectTags.forEach(t => {
+            if (t.time) {
+              t.time = new Date(t.time);
+            }
+          })
+
           if (projectTags && projectTags.length) {
             setAllTags(projectTags);
             const tags = [DEFAULT_TAG, ...projectTags.map((p) => p.name)];
@@ -621,3 +629,194 @@ export const TagSelectionDialog: React.FC<{
     </Dialog>
   );
 };
+
+
+// dialog for confirming the changed values and adding comments to value change
+export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, valueChanges, onClose, onSubmit }) => {
+  const [dialogErr, setDialogErr] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [comment, setComment] = useState('');
+
+  useEffect(() => {
+    // clear error from the previous time when dialog was opened 
+    setDialogErr('');
+  }, [])
+
+  const projectChangeTable = useMemo(() => {
+    if (valueChanges.length == 0) {
+      return <NonIdealState icon="clean" title="No Value Changes" description={`There were no value changes for device ${device.fc}-${device.fg}`} />
+    }
+
+    const values = Object.entries(valueChanges);
+    const d = device as any;
+    return (
+      <>
+        <b>{device.fc}-{device.fg} Changes:</b>
+        <table className="table table-sm table-bordered table-striped">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th className="text-nowrap">Current Value</th>
+              <th></th>
+              <th className="text-nowrap">New Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.map((entry) => {
+              return (
+                <tr key={entry[0]}>
+                  <td>{entry[0]}</td>
+                  <td>{d[entry[0]]}</td>
+                  <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
+                  <td>{entry[1]}</td>
+                </tr>
+              )
+            }
+            )}
+          </tbody>
+        </table>
+      </>
+    )
+  }, [valueChanges, device])
+
+  const submit = () => {
+    setDialogErr('');
+    setIsSubmitting(true);
+
+    // If we store just the user comment, then when another user is reviewing the comments it's not
+    // clear to them what has changed (they only see the users's comment). For this reason we should
+    // append the changed values at the end of the comment 
+    let fieldsThatChanged = Object.keys(valueChanges);
+    let changeComment = comment;
+    if (fieldsThatChanged.length > 0) {
+      changeComment += "\n\n--- Changes: ---\n";
+      let d = device as any;
+      for (let field of fieldsThatChanged) {
+        changeComment += `${field}: ${d[field] ?? ''} -> ${valueChanges[field] ?? ''}\n`;
+      }
+    }
+
+    valueChanges['discussion'] = changeComment;
+    syncDeviceUserChanges(project._id, device.id, valueChanges)
+      .then((response) => {
+        // TODO: for some reason server returns data for all devices again
+        // when we don't really need it. We just update our changed device
+        // We should really just return the last device...
+        let d = response[device.id];
+        if (!d) { // this should never happen, we should always get back this device
+          throw new Error(`Synced device (${device.fc}-${device.fg}, id=${device.id}) was not found in server response: this should never happen`);
+        }
+
+        let backendDevice = deviceDetailsBackendToFrontend(d);
+        onSubmit(backendDevice);
+      }).catch((e: JsonErrorMsg) => {
+        let msg = `Failed to sync user device changes: ${e.error}`;
+        console.error(msg, e);
+        setDialogErr(msg);
+      }).finally(() => {
+        setIsSubmitting(false);
+      });
+  }
+
+  const userNotes: string[] = useMemo(() => {
+    return device.discussion.map((d) => {
+      let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;
+      return text;
+    });
+  }, [device.discussion]);
+
+  return (
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Save Changes for ${device.fc}-${device.fg}?`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
+      <DialogBody useOverflowScrollContainer>
+        {projectChangeTable}
+
+        {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
+
+        <hr className="mt-4 mb-3" />
+
+        <FormGroup label="Reason for the update:">
+          <TextArea autoFocus={true} value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
+        </FormGroup>
+
+        <CollapsibleProjectNotes
+          defaultOpen={true}
+          notes={userNotes}
+          defaultNoNoteMsg={<p style={{ color: Colors.GRAY1 }}>There are no user comments for this device</p>}
+        />
+      </DialogBody>
+      <DialogFooter actions={
+        <>
+          <Button onClick={e => onClose()}>Close</Button>
+          <Button intent="primary" onClick={e => submit()} loading={isSubmitting} disabled={comment.trim().length == 0}>Save Changes</Button>
+        </>
+      }>
+      </DialogFooter>
+    </Dialog >
+  )
+}
+
+export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, onClose, onCommentAdd }) => {
+  const [dialogErr, setDialogErr] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [comment, setComment] = useState('');
+
+  const userNotes = useMemo(() => {
+    let notes = device.discussion.map((d) => {
+      let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;
+      return text;
+    });
+
+    return <CollapsibleProjectNotes
+      defaultOpen={true}
+      notes={notes}
+      defaultNoNoteMsg={<p style={{ color: Colors.GRAY1 }}>There are no comments</p>}
+    />
+  }, [device.discussion]);
+
+  const addAComment = () => {
+    setDialogErr('');
+
+    if (comment.trim().length == 0) {
+      setDialogErr("Comment field should not be empty");
+      return;
+    }
+
+    setIsSubmitting(true);
+    addDeviceComment(project._id, device.id, comment)
+      .then(updatedDevice => {
+        setComment('');
+        onCommentAdd(updatedDevice);
+      }).catch((e: JsonErrorMsg) => {
+        setDialogErr("Error while uploading a new comment: " + e.error);
+      }).finally(() => {
+        setIsSubmitting(false);
+      });
+  }
+
+  return (
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Comments for ${device.fc}-${device.fg}`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
+      <DialogBody useOverflowScrollContainer>
+
+        <FormGroup label="Add a comment:">
+          <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
+
+          <ButtonGroup className="d-flex justify-content-end">
+            <Button className="mt-1" intent="primary" loading={isSubmitting}
+              onClick={e => addAComment()}>Add Comment</Button>
+          </ButtonGroup>
+          {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
+        </FormGroup>
+
+        <hr className="mt-4 mb-3" />
+
+        {userNotes}
+      </DialogBody>
+      <DialogFooter actions={
+        <>
+          <Button onClick={e => onClose()}>Close</Button>
+        </>
+      }>
+      </DialogFooter>
+    </Dialog >
+  )
+}

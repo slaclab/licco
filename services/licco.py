@@ -27,7 +27,8 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     create_new_fft, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
-    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time
+    get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
+    delete_fft_comment, add_fft_comment
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -102,7 +103,7 @@ def create_imp_msg(fft, status, errormsg=None):
     return msg
 
 
-def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dict[str, int]]:
+def update_ffts_in_project(prjid, ffts, def_logger=None, remove_discussion_comments = False) -> Tuple[bool, str, Dict[str, int]]:
     """
     Insert multiple FFTs into a project
     """
@@ -160,6 +161,11 @@ def update_ffts_in_project(prjid, ffts, def_logger=None) -> Tuple[bool, str, Dic
         # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
         # querying the current project attributes once and passing it to the update routine
         current_attributes = project_ffts.get(str(fftid), {})
+        if remove_discussion_comments:
+            # discussion comment will not be copied/updated
+            if fcupdate.get('discussion', None):
+                del fcupdate['discussion']
+
         status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid,
                                                           current_project_attributes=current_attributes)
         # Have smarter error handling here for different exit conditions
@@ -541,9 +547,64 @@ def svc_update_fc_in_project(prjid, fftid):
     status, msg = validate_import_headers(fcupdate, prjid, fftid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
+
+    discussion = fcupdate.get('discussion', '')
+    if discussion:
+        # our fft update expects an array of discussion comments hence the transform into an array of objects
+        fcupdate['discussion'] = [{
+            'author': userid,
+            'comment': discussion
+        }]
     status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid)
     fc = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
+@context.security.authentication_required
+def svc_add_fft_comment(prjid, fftid):
+    """
+    Endpoint for adding a comment into a device fft, despite the project not being in a development mode
+    (approval comments and discussions should always be available, regardless of the project status)
+    """
+    update = request.json
+    comment = update.get('comment')
+    if comment is None:
+        return logAndAbortJson("Comment field does not exist", ret_status=400)
+    comment = comment.strip()
+    if comment == "":
+        return logAndAbortJson("Comment should not be empty", ret_status=400)
+
+    userid = context.security.get_current_user_id()
+    status, errormsg, results = add_fft_comment(userid, prjid, fftid, comment)
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+
+    # TODO: refactor: we should be able to get just one specific device (and not fetch all devices everytime we want one)
+    fc = get_project_ffts(prjid)
+    val = fc[fftid]
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": val})
+
+
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["DELETE"])
+@context.security.authentication_required
+def svc_remove_fft_comment(prjid, fftid):
+    """Remove a specific fft device comment or a set of comments"""
+    comment_ids = request.json().get('comments')
+    if not comment_ids:
+        return logAndAbortJson("Comment field should not be empty")
+
+    errors = []
+    for comment_id in comment_ids:
+        deleted, errormsg = delete_fft_comment(prjid, comment_id)
+        if not deleted:
+            errors.append(errormsg)
+
+    if len(errors) != 0:
+        err = "\n".join(errors)
+        msg = f"There were errors while deleting comments: {err}"
+        return JSONEncoder().encode({"success": False, "errormsg": msg})
+
+    return JSONEncoder().encode({"success": True, "errormsg": ""})
 
 
 @licco_ws_blueprint.route(
@@ -869,7 +930,8 @@ def svc_approve_project(prjid):
     # copy ffts to the master project.
     # FUTURE: This should be done in approve_project method, but can't due to circular imports
     approved_project = get_currently_approved_project()
-    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid))
+    # Master project should not inherit old discussion comments from a submitted project, hence the removal flag
+    status, errormsg, update_status = update_ffts_in_project(approved_project["_id"], get_project_ffts(prjid), remove_discussion_comments=True)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
@@ -946,13 +1008,11 @@ def svc_clone_project(prjid):
     userid = context.security.get_current_user_id()
     newprjdetails = request.json
     if not newprjdetails["name"] or not newprjdetails["description"]:
-        return JSONEncoder().encode(
-            {"success": False, "errormsg": "Please specify a project name and description"})
+        return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
 
     # Set new to true if a new project is requested
     new = (prjid == "NewBlankProjectClone")
-    status, erorrmsg, newprj = clone_project(
-        prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
+    status, erorrmsg, newprj = clone_project(prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 
@@ -995,4 +1055,4 @@ def svc_get_projects_approval_history():
     """
     Get the approval history of projects in the system
     """
-    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history()})
+    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history(limit=100)})

@@ -1,5 +1,6 @@
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, TextArea } from "@blueprintjs/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -174,7 +175,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                                         </ul>
 
                                         {userIsEditor ?
-                                            <AnchorButton small={true} href={`/projects/${project._id}/submit-for-approval`}>
+                                            <AnchorButton small={true} href={createLink(`/projects/${project._id}/submit-for-approval`)}>
                                                 Edit Approvers
                                             </AnchorButton>
                                             : null
