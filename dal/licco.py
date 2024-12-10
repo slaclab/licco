@@ -16,6 +16,7 @@ from pymongo import ASCENDING, DESCENDING
 from context import licco_db
 
 from .projdetails import get_project_attributes, get_all_project_changes
+from .utils import diff_arrays
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -1180,7 +1181,8 @@ def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
     Just update the project name ands description
     """
     project = get_project(prjid)
-    user_has_permission_to_edit = project["owner"] == userid or userid in project["editors"]
+    project_owner = project["owner"]
+    user_has_permission_to_edit = project_owner == userid or userid in project["editors"]
     if not user_has_permission_to_edit:
         name = project["name"]
         return False, f"You have no permissions to edit a project '{name}'"
@@ -1203,19 +1205,35 @@ def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
                 return False, f"Editors field should be an array"
 
             all_editors = get_users_with_privilege("edit")
+            not_allowed_editors = []
             for user in val:
                 if user not in all_editors:
-                    return False, f"User '{user}' is not allowed to be an editor"
+                    not_allowed_editors.append(user)
+
+            if len(not_allowed_editors) > 0:
+                not_allowed_users = ", ".join(not_allowed_editors)
+                return False, f"Users [{not_allowed_users}] are not allowed to be editors"
+
             # all users are valid (or the list is empty)
-            update["editors"] = val
+            new_editors = val
+            update["editors"] = new_editors
+            old_editors = project["editors"]
+            diff = diff_arrays(old_editors, new_editors)
+            print(diff)
+            # TODO: send notifications
         elif key == "approvers":
             if not isinstance(val, list):
                 return False, f"Approvers field should be an array"
 
             all_approvers = get_users_with_privilege("approve")
+            not_allowed_approvers = []
             for user in val:
-                if user not in all_approvers:
-                    return False, f"User '{user}' is not allowed to be an approver"
+                if user == project_owner or user not in all_approvers:
+                    not_allowed_approvers.append(user)
+
+            if len(not_allowed_approvers) > 0:
+                not_allowed_users = ", ".join(not_allowed_approvers)
+                return False, f"Users [{not_allowed_users}] are not allowed to be approvers"
             # all users are valid (or the list is empty)
             update["approvers"] = val
         else:
