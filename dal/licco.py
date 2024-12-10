@@ -16,6 +16,7 @@ from pymongo import ASCENDING, DESCENDING
 from context import licco_db
 
 from .projdetails import get_project_attributes, get_all_project_changes
+from .utils import diff_arrays
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -1175,13 +1176,73 @@ def create_empty_project(name, description, logged_in_user):
     return get_project(prjid)
 
 
-def update_project_details(prjid, prjdetails):
+def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
     """
     Just update the project name ands description
     """
-    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {
-                                                         "$set": {"name": prjdetails["name"], "description": prjdetails["description"]}})
-    return True
+    project = get_project(prjid)
+    project_owner = project["owner"]
+    user_has_permission_to_edit = project_owner == userid or userid in project["editors"]
+    if not user_has_permission_to_edit:
+        name = project["name"]
+        return False, f"You have no permissions to edit a project '{name}'"
+
+    if len(prjdetails) == 0:
+        return False, f"Project update should not be empty"
+
+    update = {}
+    for key, val in prjdetails.items():
+        if key == "name":
+            if not val:
+                return False, f"Name cannot be empty"
+            update["name"] = val
+        elif key == "description":
+            if not val:
+                return False, f"Description cannot be empty"
+            update["description"] = val
+        elif key == "editors":
+            if not isinstance(val, list):
+                return False, f"Editors field should be an array"
+
+            all_editors = get_users_with_privilege("edit")
+            not_allowed_editors = []
+            for user in val:
+                if user not in all_editors:
+                    not_allowed_editors.append(user)
+
+            if len(not_allowed_editors) > 0:
+                not_allowed_users = ", ".join(not_allowed_editors)
+                return False, f"Users [{not_allowed_users}] are not allowed to be editors"
+
+            # all users are valid (or the list is empty)
+            new_editors = val
+            update["editors"] = new_editors
+            old_editors = project["editors"]
+            diff = diff_arrays(old_editors, new_editors)
+            print(diff)
+            # TODO: send notifications
+        elif key == "approvers":
+            if not isinstance(val, list):
+                return False, f"Approvers field should be an array"
+
+            all_approvers = get_users_with_privilege("approve")
+            not_allowed_approvers = []
+            for user in val:
+                if user == project_owner or user not in all_approvers:
+                    not_allowed_approvers.append(user)
+
+            if len(not_allowed_approvers) > 0:
+                not_allowed_users = ", ".join(not_allowed_approvers)
+                return False, f"Users [{not_allowed_users}] are not allowed to be approvers"
+            # all users are valid (or the list is empty)
+            update["approvers"] = val
+        else:
+            return False, f"Invalid update field '{key}'"
+
+    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
+
+    # TODO: send notifications to editors and approvers once the notification branch is merged in
+    return True, ""
 
 
 def get_tags_for_project(prjid):
