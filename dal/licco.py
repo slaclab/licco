@@ -317,6 +317,60 @@ def delete_fft(fftid):
     return True, "", None
 
 
+def add_fft_comment(user_id, project_id, fftid, comment):
+    if not comment:
+        return False, f"Comment should not be empty", None
+
+    project = get_project(project_id)
+    project_name = project["name"]
+    status = project["status"]
+
+    allowed_to_comment = False
+    allowed_to_comment |= user_id == project["owner"]
+    allowed_to_comment |= user_id in project["editors"]
+
+    if status == "submitted":
+        allowed_to_comment |= user_id in project["approvers"]
+
+    if not allowed_to_comment:
+        return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
+
+    new_comment = {'discussion': [{
+        'author': user_id,
+        'comment': comment,
+        'time': datetime.datetime.utcnow(),
+    }]}
+    status, errormsg, results = update_fft_in_project(project_id, fftid, new_comment, user_id)
+    return status, errormsg, results
+
+
+def delete_fft_comment(user_id, comment_id):
+    comment = licco_db[line_config_db_name]["projects_history"].find_one({"_id": ObjectId(comment_id)})
+    if not comment:
+        return False, f"Comment with id {comment_id} does not exist"
+
+    # check permissions for deletion
+    project = get_project(comment["prj"])
+    status = project["status"]
+    project_is_in_correct_state = status == "development" or status == "submitted"
+    if not project_is_in_correct_state:
+        name = project["name"]
+        return False, f"Comment {comment_id} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
+
+    # project is in a correct state
+    # check if the user has permissions for deleting a comment
+    allowed_to_delete = False
+    allowed_to_delete |= comment["user"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
+    allowed_to_delete |= project["owner"] == user_id   # project owner is always allowed to delete project comments
+    # TODO: check for admin user as well once we have user roles
+
+    if not allowed_to_delete:
+        return False, f"You are not allowed to delete comment {comment_id}"
+
+    licco_db[line_config_db_name]["projects_history"].delete_one({"_id": ObjectId(comment_id)})
+    return True, ""
+
+
 def create_new_project(name, description, userid):
     """
     Create a new project belonging to the specified user.
@@ -558,6 +612,17 @@ fcattrs = {
         "label": "Must Ray Trace",
         "desc": "Must Ray Trace",
         "required": False
+    },
+    "discussion": {
+        # NOTE: everytime the user changes a device value, a discussion comment is added to the database
+        # as a separate document. On load, however, we have to parse all the comments into an structured
+        # array of all comments for that specific device.
+        "name": "discussion",
+        "type": "text",
+        "fromstr": str,
+        "label": "Discussion",
+        "desc": "User discussion about the device value change",
+        "required": False,
     }
 }
 
@@ -583,12 +648,10 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
     insert_count = {"success": 0, "fail": 0, "ignored": 0}
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", insert_count
-    fft = licco_db[line_config_db_name]["ffts"].find_one(
-        {"_id": ObjectId(fftid)})
+    fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", insert_count
 
@@ -597,14 +660,12 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
         # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
         # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
         # (cca 150-300 ms per query).
-        current_attrs = get_project_attributes(
-            licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
+        current_attrs = get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
         modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
     # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find(
-        {}).sort([("time", -1)]).limit(1))
+    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_count
@@ -620,9 +681,34 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     for attrname, attrval in fcupdate.items():
         if attrname == "fft":
             continue
+
+        # special handling of discussion comments fields
+        if attrname == "discussion" and isinstance(attrval, list):
+            old_comments = current_attrs.get(attrname, [])
+            old_comment_ids = [x['id'] for x in old_comments]
+
+            for comment in attrval:
+                comment_id = comment.get("id", "")
+                if comment_id and comment_id in old_comment_ids:
+                    # this comment already exists, hence we don't copy it
+                    continue
+
+                author = comment['author']
+                newval = comment['comment']
+                all_inserts.append({
+                    "prj": ObjectId(prjid),
+                    "fft": ObjectId(fftid),
+                    "key": attrname,
+                    "val": newval,
+                    "user": author,
+                    "time": modification_time
+                })
+            continue
+
         attrmeta = fcattrs[attrname]
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", insert_count
+
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
@@ -630,11 +716,13 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
             insert_count["fail"] += 1
             error_str = f"Wrong type - {attrname}, {attrval}"
             break
+
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
             insert_count["fail"] += 1
             error_str = f"Value out of range - {attrname}, {attrval}"
             break
+
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
             all_inserts.append({
@@ -856,6 +944,8 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
                                                             "status": "approved", "approved_time": datetime.datetime.utcnow()}})
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    store_project_approval(prjid, prj["submitter"])
+
     updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
     return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
@@ -903,12 +993,20 @@ def get_currently_approved_project():
         return prj
     return None
 
-def get_projects_approval_history():
+def store_project_approval(prjid: str, project_submitter: str):
+    licco_db[line_config_db_name]["switch"].insert_one({
+        "prj": ObjectId(prjid),
+        "requestor_uid": project_submitter,
+        "switch_time": datetime.datetime.utcnow()
+    })
+
+def get_projects_approval_history(limit: int = 100):
     """
     Get the history of project approvals
     """
     hist = list(licco_db[line_config_db_name]["switch"].aggregate([
         {"$sort": {"switch_time": -1}},
+        {"$limit": limit},
         {"$lookup": {"from": "projects", "localField": "prj",
                      "foreignField": "_id", "as": "prjobj"}},
         {"$unwind": "$prjobj"},
@@ -982,8 +1080,10 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     if not otr:
         return False, f"Cannot find project for {other_prjid}", None
 
-    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
-    thfcs = get_project_attributes(licco_db[line_config_db_name], other_prjid)
+    # we don't want to diff comments, hence we filter them out by setting the timestamp far into the future
+    no_comment_timestamp = datetime.datetime.now() + datetime.timedelta(days=365 * 100)
+    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid, commentAfterTimestamp=no_comment_timestamp)
+    thfcs = get_project_attributes(licco_db[line_config_db_name], other_prjid, commentAfterTimestamp=no_comment_timestamp)
 
     myflat = __flatten__(myfcs)
     thflat = __flatten__(thfcs)
@@ -1016,41 +1116,54 @@ def clone_project(prjid, name, description, userid, new=False):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    if new != True:
-        prj = licco_db[line_config_db_name]["projects"].find_one(
-            {"_id": ObjectId(prjid)})
+    if not new:
+        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
         if not prj:
             return False, f"Cannot find project for {prjid}", None
 
-    otr = licco_db[line_config_db_name]["projects"].find_one({"name": name})
-    if otr:
+    # check if a project with this name already exists
+    existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
+    if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    newprj = create_new_project(name, description, userid)
-    if not newprj:
+    new_project = create_new_project(name, description, userid)
+    if not new_project:
         return False, "Created a project but could not get the object from the database", None
 
-    if new == True:
-        return True, "", newprj
+    if new:
+        return True, "", new_project
 
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
 
-    modification_time = newprj["creation_time"]
+    modification_time = new_project["creation_time"]
     all_inserts = []
     for fftid, attrs in myfcs.items():
         del attrs["fft"]
         for attrname, attrval in attrs.items():
-            all_inserts.append({
-                "prj": newprj["_id"],
-                "fft": ObjectId(fftid),
-                "key": attrname,
-                "val": attrval,
-                "user": userid,
-                "time": modification_time
-            })
+            if attrname == "discussion":
+                # when cloning a project, we also want to clone all the comments
+                # discussion is returned as an array and therefore needs special handling
+                for comment in attrval:
+                    all_inserts.append({
+                        "prj": new_project["_id"],
+                        "fft": ObjectId(fftid),
+                        "key": attrname,
+                        "val": comment['comment'],
+                        "user": comment['author'],
+                        "time": modification_time,
+                    })
+            else:
+                all_inserts.append({
+                    "prj": new_project["_id"],
+                    "fft": ObjectId(fftid),
+                    "key": attrname,
+                    "val": attrval,
+                    "user": userid,
+                    "time": modification_time
+                })
     licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
 
-    return True, "", newprj
+    return True, "", new_project
 
 
 def create_empty_project(name, description, logged_in_user):

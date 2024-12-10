@@ -163,6 +163,15 @@ export interface deviceDetailFields {
     nom_loc_y?: number;
     nom_loc_z?: number;
     ray_trace?: number;
+    discussion: ChangeComment[];
+}
+
+// used for displaying comment threads
+interface ChangeComment {
+    id: string;
+    author: string;
+    time: Date;
+    comment: string;
 }
 
 export const ProjectDevicePositionKeys: (keyof deviceDetailFields)[] = [
@@ -181,7 +190,7 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key == "id" || key == "fc" || key == "fg") { // ignored 
+        if (key == "id" || key == "fc" || key == "fg" || key == "discussion") { // ignored 
             continue;
         }
 
@@ -237,6 +246,12 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
     let d = device as any;
     for (let k of ProjectDeviceDetailsNumericKeys) {
         d[k] = numberOrDefault(d[k], undefined);
+    }
+
+    if (device.discussion) {
+        for (let comment of device.discussion) {
+            comment.time = new Date(comment.time);
+        }
     }
 }
 
@@ -351,6 +366,14 @@ export async function syncDeviceUserChanges(projectId: string, fftId: string, ch
     // undefined values are not serialized, hence deleting a field (field == undefined) should be replaced with an empty string
     let data = { body: JSON.stringify(changes, (k, v) => v === undefined ? '' : v) };
     return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, data);
+}
+
+export async function addDeviceComment(projectId: string, fftId: string, comment: string): Promise<ProjectDeviceDetails> {
+    const data = { 'comment': comment };
+    return Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectId}/fcs/${fftId}/comment`, { body: JSON.stringify(data) })
+        .then(device => {
+            return deviceDetailsBackendToFrontend(device);
+        });
 }
 
 

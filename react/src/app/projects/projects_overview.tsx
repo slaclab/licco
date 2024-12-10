@@ -5,6 +5,7 @@ import { Container } from "react-bootstrap";
 import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
+import { createLink } from "@/app/utils/path_utils";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
@@ -162,7 +163,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                         <ButtonGroup minimal={true}>
                                             {isUserAProjectApprover(project, currentlyLoggedInUser) ?
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
-                                                    href={`/projects/${project._id}/approval`}
+                                                    href={createLink(`/projects/${project._id}/approval`)}
                                                 />
                                                 : null
                                             }
@@ -188,7 +189,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                         }}
                                                     />
                                                     <AnchorButton icon="user" title="Submit this project for approval"
-                                                        href={`/projects/${project._id}/submit-for-approval`}
+                                                        href={createLink(`/projects/${project._id}/submit-for-approval`)}
                                                         minimal={true} small={true}
                                                     />
 

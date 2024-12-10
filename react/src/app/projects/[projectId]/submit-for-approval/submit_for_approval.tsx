@@ -2,6 +2,7 @@ import { DividerWithText } from "@/app/components/divider";
 import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
 import { MultiChoiceSelector } from "@/app/components/selector";
 import { JsonErrorMsg } from "@/app/utils/fetching";
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Colors, NonIdealState } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
@@ -186,7 +187,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                     <tbody>
                         <tr>
                             <td>Project:</td>
-                            <td className="w-100"><a href={`/projects/${project._id}`} style={{ color: Colors.RED2 }}>{project.name}</a></td>
+                            <td className="w-100"><a href={createLink(`/projects/${project._id}`)} style={{ color: Colors.RED2 }}>{project.name}</a></td>
                         </tr>
                         <tr>
                             <td>Owner:</td>
@@ -276,7 +277,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                             Edit Submitted Project
                                         </Button>
 
-                                        <AnchorButton intent="none" href={`/projects/${diff.a._id}/approval`} large={true} icon="arrow-right">See Approval Page</AnchorButton>
+                                        <AnchorButton intent="none" href={createLink(`/projects/${diff.a._id}/approval`)} large={true} icon="arrow-right">See Approval Page</AnchorButton>
                                     </>
                                     : null
                                 }
