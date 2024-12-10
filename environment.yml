@@ -2,26 +2,26 @@ name: mcd_0_0_1
 channels:
   - defaults
 dependencies:
-  - bzip2=1.0.8=h80987f9_6
-  - ca-certificates=2024.9.24=hca03da5_0
-  - expat=2.6.3=h313beb8_0
-  - icu=73.1=h313beb8_0
-  - libcxx=14.0.6=h848a8c0_0
-  - libffi=3.4.4=hca03da5_1
-  - libuv=1.48.0=h80987f9_0
-  - ncurses=6.4=h313beb8_0
-  - nodejs=20.17.0=hcd26c06_0
-  - openssl=3.0.15=h80987f9_0
-  - pip=24.2=py312hca03da5_0
-  - python=3.12.7=h99e199e_0
-  - readline=8.2=h1a28f6b_0
-  - setuptools=75.1.0=py312hca03da5_0
-  - sqlite=3.45.3=h80987f9_0
-  - tk=8.6.14=h6ba3021_0
-  - tzdata=2024b=h04d1e81_0
-  - wheel=0.44.0=py312hca03da5_0
-  - xz=5.4.6=h80987f9_1
-  - zlib=1.2.13=h18a0788_1
+  - bzip2=1.0.8
+  - ca-certificates=2024.9.24
+  - expat=2.6.3
+  - icu=73.1
+  - libcxx=14.0.6
+  - libffi=3.4.4
+  - libuv=1.48.0
+  - ncurses=6.4
+  - nodejs=20.17.0
+  - openssl=3.0.15
+  - pip=24.2
+  - python=3.12.7
+  - readline=8.2
+  - setuptools=75.1.0
+  - sqlite=3.45.3
+  - tk=8.6.14
+  - tzdata=2024b
+  - wheel=0.44.0
+  - xz=5.4.6
+  - zlib=1.2.13
   - pip:
     - blinker==1.6.3
     - cachetools==5.3.2
@@ -42,4 +42,4 @@ dependencies:
     - requests==2.31.0
     - urllib3==2.0.7
     - werkzeug==3.0.1
-prefix: /opt/homebrew/anaconda3/envs/licco
+prefix: /opt/homebrew/anaconda3/envs/mcd_0_0_1
