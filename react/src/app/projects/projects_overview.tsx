@@ -158,6 +158,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     </thead>
                     <tbody>
                         {projectDataDisplayed.map((project) => {
+                            const allowProjectEdits = isUserAProjectEditor(project, currentlyLoggedInUser);
                             return (
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
@@ -184,23 +185,22 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                             {!isProjectSubmitted(project) && !isProjectApproved(project) ?
                                                 <>
                                                     <Button icon="edit" title="Edit this project" minimal={true} small={true}
+                                                        disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
 
-                                                    {/* only show the submit for approval button to project editors */}
-                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ?
-                                                        <AnchorButton icon="user" title="Submit this project for approval"
-                                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                                            minimal={true} small={true}
-                                                        />
-                                                        : null
-                                                    }
+                                                    <AnchorButton icon="user" title="Submit this project for approval"
+                                                        disabled={!allowProjectEdits}
+                                                        href={createLink(`/projects/${project._id}/submit-for-approval`)}
+                                                        minimal={true} small={true}
+                                                    />
 
                                                     <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}
+                                                        disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsImportDialogOpen(true);
