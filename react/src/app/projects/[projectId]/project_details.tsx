@@ -321,7 +321,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Divider />
 
-                                        <Button icon="add" title="Add a new FFT to Project" minimal={true} small={true}
+                                        <Button icon="add" title="Add a New Device to Project" minimal={true} small={true}
                                             onClick={e => setIsAddNewFftDialogOpen(true)}
                                         />
 
