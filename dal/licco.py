@@ -837,12 +837,12 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
 
 
-def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
+def submit_project_for_approval(project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
     """
     Submit a project for approval.
     Set the status to submitted
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
     project_name = prj["name"]
     if not prj:
         return False, f"Cannot find project for '{project_name}'", None
@@ -871,9 +871,39 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     if status != "development" and status != "submitted":
         return False, f"Project '{project_name}' is not in development or submitted status", None
 
+    # update editors (if necessary)
+    editors_update_ok, err = update_project_details(userid, project_id, {'editors': editors}, notifier)
+    if not editors_update_ok:
+        return editors_update_ok, err, None
+
+    # store approval metadata
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "submitted", "submitter": userid, "approvers": approvers, "submitted_time": datetime.datetime.utcnow()}})
-    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+        "status": "submitted", "submitter": userid, "approvers": approvers,
+        "submitted_time": datetime.datetime.utcnow()
+    }})
+
+    # send notifications (to the right approvers and project editors)
+    old_approvers = prj.get("approvers", [])
+    diff = diff_arrays(old_approvers, approvers)
+
+    new_approvers = diff.new
+    if new_approvers:
+        notifier.add_project_approvers(new_approvers, project_name, project_id)
+
+    deleted_approvers = diff.removed
+    if deleted_approvers:
+        notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
+
+    if prj["status"] == "development":
+        # project was submitted for the first time
+        project_editors = list(set([prj["owner"]] + editors))
+        notifier.project_submitted_for_approval(project_editors, project_name, project_id)
+    else:
+        # project was edited
+        project_editors = list(set([prj["owner"]] + editors))
+        notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
+
+    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
     return True, "", updated_project_info
 
 
