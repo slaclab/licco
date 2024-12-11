@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from functools import wraps
@@ -8,6 +7,7 @@ from bson import ObjectId
 from flask import abort
 
 from modules.flask_authnz.flask_authnz import FlaskAuthnz, MongoDBRoles, UserGroups
+from notifications.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +65,7 @@ class LiccoAuthnz(FlaskAuthnz):
 usergroups = UserGroups()
 roleslookup = MongoDBRoles(licco_db, usergroups, "lineconfigdb")
 security = LiccoAuthnz(roleslookup, "Licco")
+
+# notifier is constructed in start.py, due to problems with passing around app context and
+# its configuration. There is probably a better solution than this.
+notifier: Notifier = None

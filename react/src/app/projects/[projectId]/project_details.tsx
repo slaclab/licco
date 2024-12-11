@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -151,7 +151,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         fetchProjectInfo(projectId)
-            .then(data => setProject(data))
+            .then(data => {
+                setProject(data);
+                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
+            })
             .catch((e: JsonErrorMsg) => {
                 console.error("Failed to load required project data", e);
                 setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -380,7 +383,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             disabled={!isProjectInDevelopment}
                                         />
 
-                                        {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                        {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
                                             <>
                                                 <Divider />
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
@@ -623,8 +626,8 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 }
 
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onUserComment }) => {
-// we have to cache each table row, as once we have lots of rows in a table editing text fields within
-// becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    // we have to cache each table row, as once we have lots of rows in a table editing text fields within
+    // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>

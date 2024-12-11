@@ -1,3 +1,4 @@
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, ButtonGroup, Collapse, Icon, NonIdealState } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -5,9 +6,8 @@ import { Container } from "react-bootstrap";
 import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
-import { createLink } from "@/app/utils/path_utils";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, transformProjectForFrontendUse } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
@@ -37,6 +37,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
         fetchAllProjectsInfo()
             .then((projects) => {
                 setProjectData(projects);
+                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to load projects data: " + e.error;
                 setError(msg);
@@ -160,7 +161,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
                                         <ButtonGroup minimal={true}>
-                                            {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                            {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status === "submitted") ?
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
                                                     href={createLink(`/projects/${project._id}/approval`)}
                                                 />
@@ -187,10 +188,15 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
-                                                    <AnchorButton icon="user" title="Submit this project for approval"
-                                                        href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                                        minimal={true} small={true}
-                                                    />
+
+                                                    {/* only show the submit for approval button to project editors */}
+                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ?
+                                                        <AnchorButton icon="user" title="Submit this project for approval"
+                                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
+                                                            minimal={true} small={true}
+                                                        />
+                                                        : null
+                                                    }
 
                                                     <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}

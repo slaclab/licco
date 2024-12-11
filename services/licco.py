@@ -856,12 +856,56 @@ def svc_submit_for_approval(prjid):
     else:
         # TODO: DEPRECATED: old gui approved project this way
         # Once old GUI is removed, this else statement should go away as well
+        # We should remove the "GET" option as well: only POST should be used (or PUT)
         approver = request.args.get("approver", None)
         if approver:
             approvers.append(approver)
 
     userid = context.security.get_current_user_id()
+    old_prj = get_project(prjid)
     status, errormsg, prj = submit_project_for_approval(prjid, userid, approvers)
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+
+    # project was submitted successfully
+    # send notifications to approvers
+    project_id = prj["_id"]
+    project_name = prj["name"]
+    if old_prj["status"] == "development":
+        # this is the first time the user has submitted the project for approval, therefore we send emails to everyone
+        context.notifier.add_project_approvers(approvers, project_name, project_id)
+        # notify the project editors that their project was submitted for approval
+        project_editors = list(set([prj["owner"]] + prj["editors"]))
+        context.notifier.project_submitted_for_approval(project_editors, project_name, project_id)
+    else:
+        # the user has edited the project (changed the approvers), therefore
+        # we have to make a diff of approvers and only inform the ones that
+        # changed (new approvers and removed approvers)
+        old_approvers = set(old_prj["approvers"])
+        new_approvers = []
+        deleted_approvers = []
+
+        for a in approvers:
+            if a not in old_approvers:
+                new_approvers.append(a)
+        for a in old_approvers:
+            if a not in approvers:
+                deleted_approvers.append(a)
+
+        # send notifications if any
+        if new_approvers:
+            context.notifier.add_project_approvers(new_approvers, project_name, project_id)
+        if deleted_approvers:
+            context.notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
+
+        if new_approvers or deleted_approvers:
+            # notify project editors of approver changes
+            users = list(set([prj["owner"]] + prj["editors"]))
+            context.notifier.inform_editors_of_approver_change(users, project_name, project_id, approvers)
+
+        # TODO: should we also notify the project editors that the project approvers were updated?
+
+
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -891,6 +935,14 @@ def svc_approve_project(prjid):
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
+    # send email notifications that the project was approved
+    project_name = prj["name"]
+    owner = prj["owner"]
+    editors = prj["editors"]
+    approvers = prj["approvers"]
+    notified_users = list(set([owner] + editors + approvers))
+    context.notifier.project_approval_approved(notified_users, project_name, prjid)
+
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -915,8 +967,18 @@ def svc_reject_project(prjid):
     # add current user and datetime to the original reason
     now = datetime.now(tz=timezone.utc)
     licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
-    reason = f"{userid} ({licco_datetime}):\n{reason}"
-    status, errormsg, prj = reject_project(prjid, userid, reason)
+    formatted_reason = f"{userid} ({licco_datetime}):\n{reason}"
+    status, errormsg, prj = reject_project(prjid, userid, formatted_reason)
+    if status:
+        project_id = prj["_id"]
+        project_name = prj["name"]
+        owner = prj["owner"]
+        editors = prj["editors"]
+        approvers = prj["approvers"]
+        project_approver_emails = list(set([owner] + editors + approvers))
+        user_who_rejected = userid
+        context.notifier.project_approval_rejected(project_approver_emails, project_name, project_id,
+                                                   user_who_rejected, reason)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
