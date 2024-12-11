@@ -631,19 +631,23 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
-                {isProjectInDevelopment(project) ?
+                {project && isProjectInDevelopment(project) ?
                     <td>
-                        {/* TODO: once notifications branch is merged in, we have to restrict the user actions */}
-                        <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
-                            onClick={(e) => onEdit(device)}
-                        />
-                        <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
-                            onClick={(e) => onCopyFft(device)}
-                        />
+                        {isUserAProjectEditor(project, currentUser) ?
+                            <>
+                                <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
+                                    onClick={(e) => onEdit(device)}
+                                />
+                                <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
+                                    onClick={(e) => onCopyFft(device)}
+                                />
+                            </>
+                            : null
+                        }
 
                         <Button icon="chat" minimal={true} small={true} title={"See user comments"}
                             onClick={(e) => onUserComment(device)}
-                        />
+                        >({device.discussion.length})</Button>
                     </td>
                     : null
                 }

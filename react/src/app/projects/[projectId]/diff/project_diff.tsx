@@ -40,7 +40,6 @@ export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string
     return (
         <>
             <ProjectDiffTable diff={diff} type="new" />
-            <ProjectDiffTable diff={diff} type="missing" />
             <ProjectDiffTable diff={diff} type="updated" />
             <ProjectDiffTable diff={diff} type="identical" defaultOpen={false} />
         </>

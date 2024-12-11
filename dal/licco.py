@@ -908,6 +908,7 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
         #
         # once the project is approved, it goes back into the development status
         # we have only 1 approved project at a time, to which the ffts are copied
+        updated_project_data["owner"] = ""
         updated_project_data["status"] = "development"
         updated_project_data['approved_time'] = datetime.datetime.utcnow()
         # clean the project metadata as if it was freshly created project
