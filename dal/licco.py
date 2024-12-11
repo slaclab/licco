@@ -14,11 +14,13 @@ import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from context import licco_db
+from notifications.notifier import Notifier
 
 from .projdetails import get_project_attributes, get_all_project_changes
-from .utils import diff_arrays
 
 __author__ = 'mshankar@slac.stanford.edu'
+
+from .utils import diff_arrays
 
 line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
@@ -1156,7 +1158,7 @@ def create_empty_project(name, description, logged_in_user):
     return get_project(prjid)
 
 
-def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
+def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier: Notifier):
     """
     Just update the project name ands description
     """
@@ -1167,11 +1169,11 @@ def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
         name = project["name"]
         return False, f"You have no permissions to edit a project '{name}'"
 
-    if len(prjdetails) == 0:
+    if len(user_changes) == 0:
         return False, f"Project update should not be empty"
 
     update = {}
-    for key, val in prjdetails.items():
+    for key, val in user_changes.items():
         if key == "name":
             if not val:
                 return False, f"Name cannot be empty"
@@ -1195,33 +1197,29 @@ def update_project_details(userid, prjid, prjdetails: Dict[str, any]):
                 return False, f"Users [{not_allowed_users}] are not allowed to be editors"
 
             # all users are valid (or the list is empty)
-            new_editors = val
-            update["editors"] = new_editors
-            old_editors = project["editors"]
-            diff = diff_arrays(old_editors, new_editors)
-            print(diff)
-            # TODO: send notifications
-        elif key == "approvers":
-            if not isinstance(val, list):
-                return False, f"Approvers field should be an array"
-
-            all_approvers = get_users_with_privilege("approve")
-            not_allowed_approvers = []
-            for user in val:
-                if user == project_owner or user not in all_approvers:
-                    not_allowed_approvers.append(user)
-
-            if len(not_allowed_approvers) > 0:
-                not_allowed_users = ", ".join(not_allowed_approvers)
-                return False, f"Users [{not_allowed_users}] are not allowed to be approvers"
-            # all users are valid (or the list is empty)
-            update["approvers"] = val
+            updated_editors = val
+            update["editors"] = updated_editors
         else:
             return False, f"Invalid update field '{key}'"
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
 
-    # TODO: send notifications to editors and approvers once the notification branch is merged in
+    # send notifications if necessary
+    updated_editors = "editors" in user_changes
+    if notifier and updated_editors:
+        old_editors = project["editors"]
+        updated_editors = update["editors"]
+        diff = diff_arrays(old_editors, updated_editors)
+
+        removed_editors = diff.removed
+        new_editors = diff.new
+        project_name = project["name"]
+        project_id = project["_id"]
+        if new_editors:
+            notifier.add_project_editors(new_editors, project_name, project_id)
+        if removed_editors:
+            notifier.remove_project_editors(removed_editors, project_name, project_id)
+
     return True, ""
 
 
@@ -1229,12 +1227,10 @@ def get_tags_for_project(prjid):
     """
     Get the tags for the specified project
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
-    tags = list(licco_db[line_config_db_name]
-                ["tags"].find({"prj": ObjectId(prjid)}))
+    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags
 
 
@@ -1247,14 +1243,10 @@ def add_project_tag(prjid, tagname, asoftimestamp):
     if not prj:
         return False, f"Cannot find project for {prjid}", None
 
-    existing_tag = licco_db[line_config_db_name]["tags"].find_one({
-                                                                  "name": tagname, 
-                                                                  "prj": ObjectId(prjid)})
+    existing_tag = licco_db[line_config_db_name]["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
     if existing_tag:
         return False, f"Tag {tagname} already exists for project {prjid}", None
 
-    licco_db[line_config_db_name]["tags"].insert_one(
-        {"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
-    tags = list(licco_db[line_config_db_name]
-                ["tags"].find({"prj": ObjectId(prjid)}))
+    licco_db[line_config_db_name]["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
+    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags

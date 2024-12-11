@@ -389,7 +389,7 @@ def svc_update_project(prjid):
     """
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
-    status, err = update_project_details(logged_in_user, prjid, prjdetails)
+    status, err = update_project_details(logged_in_user, prjid, prjdetails, context.notifier)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": err})
 
@@ -908,9 +908,6 @@ def svc_submit_for_approval(prjid):
             # notify project editors of approver changes
             users = list(set([prj["owner"]] + prj["editors"]))
             context.notifier.inform_editors_of_approver_change(users, project_name, project_id, approvers)
-
-        # TODO: should we also notify the project editors that the project approvers were updated?
-
 
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 

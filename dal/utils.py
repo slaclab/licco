@@ -51,10 +51,10 @@ def escape_chars_for_mongo(attrname):
 
 
 class Difference:
-    def __init__(self, in_both: List[any], new: List[any], missing: List[any]):
+    def __init__(self, in_both: List[any], new: List[any], removed: List[any]):
         self.in_both = in_both
         self.new = new
-        self.missing = missing
+        self.removed = removed
 
     def __str__(self):
         return str(self.__dict__)
@@ -76,7 +76,7 @@ def diff_arrays(old_elements: List[any], new_elements: List[any]) -> Difference:
             new.append(e)
 
     for e in old_elements:
-        if e not in new:
+        if e not in new_elements:
             missing.append(e)
 
     return Difference(both, new, missing)
