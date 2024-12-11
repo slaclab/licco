@@ -132,6 +132,13 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         setSubmittingForm(true);
         setSubmitError('');
         setEditEditorsError('');
+
+        // We are sending editors together with a list of approvers, since it's possible that someone will update
+        // the editors and forget to click on the "Update Editors" button. Later on they will be wondering why
+        // the list of editors has not changed, when they have clearly submitted a project.
+        //
+        // While editors do not have much of a role while the project is in a submitted state,
+        // we want to avoid the potential confusion described above, hence we send both lists.
         submitForApproval(projectId, selectedEditors, selectedApprovers)
             .then(updatedProject => {
                 // update fields to show that the project was already approved
