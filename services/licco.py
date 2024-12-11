@@ -825,7 +825,8 @@ def svc_export_project(prjid):
             row_dict = {}
             fft_dict = prj_ffts[fft]
             for key in fft_dict:
-                if key == "fft":
+                # Check for keys we handle later, or dont want the end user downloading
+                if key in ["fft", "discussion"]:
                     continue
                 row_dict[KEYMAP_REVERSE[key]] = fft_dict[key]
             for key in fft_dict["fft"]:
