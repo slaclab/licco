@@ -1,11 +1,11 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
-import { createLink } from "@/app/utils/path_utils";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
+import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -151,7 +151,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         fetchProjectInfo(projectId)
-            .then(data => setProject(data))
+            .then(data => {
+                setProject(data);
+                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
+            })
             .catch((e: JsonErrorMsg) => {
                 console.error("Failed to load required project data", e);
                 setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -256,6 +259,23 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             });
     }
 
+    const createCsvStringFromDevices = (devices: ProjectDeviceDetails[]): string => {
+        // render field or empty if it's undefined
+        const r = (field: any) => {
+            if (field == undefined || field == null) {
+                return '';
+            }
+            return field;
+        }
+
+        // create the csv document from filtered devices
+        let data = `FC,Fungible,TC_part_no,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
+        for (let device of devices) {
+            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.state)},${r(device.comments)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_dim_z)},${r(device.nom_dim_x)},${r(device.nom_dim_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)}\n`;
+        }
+        return data;
+    }
+
     const isProjectInDevelopment = project?.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
@@ -279,6 +299,20 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         <Button icon="import" title="Download a copy of this project"
                                             minimal={true} small={true}
                                             onClick={(e) => { setIsExportDialogOpen(true) }}
+                                        />
+                                        <Button icon="bring-data" title="Download filtered data"
+                                            minimal={true} small={true}
+                                            disabled={!isFilterApplied}
+                                            onClick={e => {
+                                                let data = createCsvStringFromDevices(fftDataDisplay)
+                                                let blob = new Blob([data], { type: "text/plain" });
+                                                let url = window.URL.createObjectURL(blob);
+                                                let a = document.createElement('a');
+                                                a.href = url;
+                                                const now = new Date().toISOString();
+                                                a.download = `${project.name}_${now}_filtered.csv`;
+                                                a.click();
+                                            }}
                                         />
                                         <Button icon="export" title="Upload data to this project"
                                             minimal={true} small={true}
@@ -349,7 +383,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             disabled={!isProjectInDevelopment}
                                         />
 
-                                        {isUserAProjectApprover(project, currentlyLoggedInUser) ?
+                                        {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
                                             <>
                                                 <Divider />
                                                 <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
@@ -592,8 +626,8 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 }
 
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onUserComment }) => {
-// we have to cache each table row, as once we have lots of rows in a table editing text fields within
-// becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    // we have to cache each table row, as once we have lots of rows in a table editing text fields within
+    // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>

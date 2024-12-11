@@ -5,7 +5,7 @@ import { AnchorButton, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFo
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
-import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, rejectProject, whoAmI } from "../../project_model";
+import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, rejectProject, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
@@ -95,10 +95,22 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 return 'This project is already approved';
             }
 
-            if (!diff.a.approvers?.includes(loggedInUser)) {
-                return "/"
+            if (isUserAProjectEditor(diff.a, loggedInUser) && diff.a.status === "submitted") {
+                // project editors are only allowed to reject the project
+                return (
+                    <Button icon="cross-circle" large={true} intent="primary" disabled={isApproving}
+                        onClick={e => setIsRejectDialogOpen(true)}>
+                        Reject (keep master values)
+                    </Button>
+                )
             }
 
+            if (!isUserAProjectApprover(diff.a, loggedInUser)) {
+                // regular userse (not editors and not approvers) are not allowed to do any action
+                return "/";
+            }
+
+            // project approvers
             return (
                 <>
                 <ButtonGroup>
