@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -300,6 +300,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             minimal={true} small={true}
                                             onClick={(e) => { setIsExportDialogOpen(true) }}
                                         />
+
                                         <Button icon="bring-data" title="Download filtered data"
                                             minimal={true} small={true}
                                             disabled={!isFilterApplied}
@@ -314,14 +315,17 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                                 a.click();
                                             }}
                                         />
+
                                         <Button icon="export" title="Upload data to this project"
                                             minimal={true} small={true}
+                                            disabled={project.name === MASTER_PROJECT_NAME || !isUserAProjectEditor(project, currentlyLoggedInUser)}
                                             onClick={(e) => { setIsImportDialogOpen(true) }}
                                         />
 
                                         <Divider />
 
                                         <Button icon="add" title="Add a new FFT to Project" minimal={true} small={true}
+                                            disabled={project.name === MASTER_PROJECT_NAME || !isUserAProjectEditor(project, currentlyLoggedInUser)}
                                             onClick={e => setIsAddNewFftDialogOpen(true)}
                                         />
 

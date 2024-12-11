@@ -35,7 +35,7 @@ export function isUserAProjectEditor(project: ProjectInfo, username: string): bo
     return project.owner === username || project.editors.includes(username);
 }
 
-const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
+export const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
 
 // fetch data about all projects
 export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
