@@ -687,7 +687,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
     // clear to them what has changed (they only see the users's comment). For this reason we should
     // append the changed values at the end of the comment 
     let fieldsThatChanged = Object.keys(valueChanges);
-    let changeComment = comment;
+    let changeComment = comment.trim();
     if (fieldsThatChanged.length > 0) {
       changeComment += "\n\n--- Changes: ---\n";
       let d = device as any;
@@ -734,7 +734,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
 
         <hr className="mt-4 mb-3" />
 
-        <FormGroup label="Reason for the update:">
+        <FormGroup label="Reason for the update (optional):">
           <TextArea autoFocus={true} value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
         </FormGroup>
 
@@ -747,7 +747,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
       <DialogFooter actions={
         <>
           <Button onClick={e => onClose()}>Close</Button>
-          <Button intent="primary" onClick={e => submit()} loading={isSubmitting} disabled={comment.trim().length == 0}>Save Changes</Button>
+          <Button intent="primary" onClick={e => submit()} loading={isSubmitting}>Save Changes</Button>
         </>
       }>
       </DialogFooter>
