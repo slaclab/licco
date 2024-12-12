@@ -4,7 +4,7 @@ import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { CollapsibleProjectNotes } from "../projects_overview";
 
 
@@ -687,7 +687,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
     // clear to them what has changed (they only see the users's comment). For this reason we should
     // append the changed values at the end of the comment 
     let fieldsThatChanged = Object.keys(valueChanges);
-    let changeComment = comment;
+    let changeComment = comment.trim();
     if (fieldsThatChanged.length > 0) {
       changeComment += "\n\n--- Changes: ---\n";
       let d = device as any;
@@ -734,7 +734,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
 
         <hr className="mt-4 mb-3" />
 
-        <FormGroup label="Reason for the update:">
+        <FormGroup label="Reason for the update (optional):">
           <TextArea autoFocus={true} value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
         </FormGroup>
 
@@ -747,7 +747,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
       <DialogFooter actions={
         <>
           <Button onClick={e => onClose()}>Close</Button>
-          <Button intent="primary" onClick={e => submit()} loading={isSubmitting} disabled={comment.trim().length == 0}>Save Changes</Button>
+          <Button intent="primary" onClick={e => submit()} loading={isSubmitting}>Save Changes</Button>
         </>
       }>
       </DialogFooter>
@@ -755,7 +755,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
   )
 }
 
-export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, onClose, onCommentAdd }) => {
+export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, onClose, onCommentAdd }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');
@@ -797,15 +797,19 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
     <Dialog isOpen={isOpen} onClose={onClose} title={`Comments for ${device.fc}-${device.fg}`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
 
-        <FormGroup label="Add a comment:">
-          <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
+        {isUserAProjectEditor(project, user) || isUserAProjectApprover(project, user) ? 
+          <FormGroup label="Add a comment:">
+            <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
 
-          <ButtonGroup className="d-flex justify-content-end">
-            <Button className="mt-1" intent="primary" loading={isSubmitting}
-              onClick={e => addAComment()}>Add Comment</Button>
-          </ButtonGroup>
-          {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
-        </FormGroup>
+            <ButtonGroup className="d-flex justify-content-end">
+              <Button className="mt-1" intent="primary" loading={isSubmitting}
+                onClick={e => addAComment()}>Add Comment</Button>
+            </ButtonGroup>
+            {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
+          </FormGroup>
+          :
+          <NonIdealState icon="blocked-person" title="No Permissions" description={"You don't have permissions to add a comment"} />
+        }
 
         <hr className="mt-4 mb-3" />
 

@@ -921,7 +921,8 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
         if not approved_project:
             return False, False, "Failed to find an approved project: this is a programming bug", {}
         licco_db[line_config_db_name]["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
-                                                            "status": "approved", "approved_time": datetime.datetime.utcnow()}})
+            "owner": "", "status": "approved", "approved_time": datetime.datetime.utcnow()
+        }})
 
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
     store_project_approval(prjid, prj["submitter"])

@@ -297,7 +297,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
 
             <DividerWithText className="m-4" text={`Project ${project.name} diff with Master Project`} />
 
-            <ProjectDiffTables isLoading={loading} loadError={loadError} diff={diff} />
+            <ProjectDiffTables isLoading={loading} loadError={loadError} user={loggedInUser} diff={diff} />
         </>
     )
 }

@@ -1,8 +1,8 @@
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { createLink } from "@/app/utils/path_utils";
 import { sortString } from "../utils/sort_utils";
 import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
 
@@ -312,7 +312,7 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
 export const ProjectImportDialog: React.FC<{
     isOpen: boolean,
     project: ProjectInfo,
-    onClose: () => void,
+    onClose: (dataImported: boolean) => void,
 }> = ({ isOpen, project, onClose }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
@@ -411,6 +411,7 @@ export const ProjectImportDialog: React.FC<{
             </>
         )
     }
+
     const clearImportForm = () => {
         setImportResult('');
         setRobustReport('');
@@ -418,11 +419,16 @@ export const ProjectImportDialog: React.FC<{
         setSelectedFile(undefined);
         setDownloadButtonState(true);
         setFileButtonState(true);
-        onClose();
+    }
+
+    const closeDialog = () => {
+        const successfulImport = importResult != '';
+        clearImportForm();
+        onClose(successfulImport);
     }
 
     return (
-        <Dialog isOpen={isOpen} onClose={clearImportForm} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
+        <Dialog isOpen={isOpen} onClose={closeDialog} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
                 <Text> Upload a .csv to import the data into this project.</Text>
                 <FormGroup label="Select a file:">
@@ -440,7 +446,7 @@ export const ProjectImportDialog: React.FC<{
             </DialogBody>
             <DialogFooter actions={
                 <>
-                    <Button onClick={(e) => clearImportForm()} >Close</Button>
+                    <Button onClick={(e) => closeDialog()} >Close</Button>
                 </>
             } />
         </Dialog>

@@ -225,7 +225,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
         <>
             {isLoading ? null : summaryTable}
 
-            <ProjectDiffTables isLoading={isLoading} loadError={loadError} diff={diff} />
+            <ProjectDiffTables user={loggedInUser} isLoading={isLoading} loadError={loadError} diff={diff} />
 
             {diff ?
                 <RejectProjectDialog
