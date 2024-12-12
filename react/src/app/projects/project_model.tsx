@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { toUnixSeconds } from "../utils/date_utils";
-import { Fetch } from "../utils/fetching";
+import { Fetch, JsonErrorMsg } from "../utils/fetching";
 
 export interface ProjectInfo {
     _id: string;
@@ -436,4 +437,19 @@ export function submitForApproval(projectId: string, approvers: string[], approv
 // returns the username of the currently logged in user
 export function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);
+}
+
+export function whoAmIHook() {
+    const [user, setUser] = useState('');
+    const [userLoadingError, setUserLoadingError] = useState('');
+    useEffect(() => {
+        whoAmI()
+            .then(u => setUser(u))
+            .catch((e: JsonErrorMsg) => {
+                let msg = "Failed to fetch 'whoami' data: " + e.error;
+                console.error(msg, e);
+                setUserLoadingError(msg);
+            });
+    }, []);
+    return { user, userLoadingError };
 }

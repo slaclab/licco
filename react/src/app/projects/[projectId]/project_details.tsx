@@ -531,8 +531,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 /> : null}
 
             {project && commentDevice ?
-                <FFTCommentViewerDialog isOpen={isFftCommentViewerOpen}
+                <FFTCommentViewerDialog
+                    isOpen={isFftCommentViewerOpen}
                     project={project}
+                    user={currentlyLoggedInUser}
                     device={commentDevice}
                     onClose={() => {
                         setCommentDevice(undefined);

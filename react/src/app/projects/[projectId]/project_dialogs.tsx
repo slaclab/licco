@@ -4,7 +4,7 @@ import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { CollapsibleProjectNotes } from "../projects_overview";
 
 
@@ -755,7 +755,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
   )
 }
 
-export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, onClose, onCommentAdd }) => {
+export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, onClose, onCommentAdd }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');
@@ -797,15 +797,19 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
     <Dialog isOpen={isOpen} onClose={onClose} title={`Comments for ${device.fc}-${device.fg}`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
 
-        <FormGroup label="Add a comment:">
-          <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
+        {isUserAProjectEditor(project, user) || isUserAProjectApprover(project, user) ? 
+          <FormGroup label="Add a comment:">
+            <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
 
-          <ButtonGroup className="d-flex justify-content-end">
-            <Button className="mt-1" intent="primary" loading={isSubmitting}
-              onClick={e => addAComment()}>Add Comment</Button>
-          </ButtonGroup>
-          {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
-        </FormGroup>
+            <ButtonGroup className="d-flex justify-content-end">
+              <Button className="mt-1" intent="primary" loading={isSubmitting}
+                onClick={e => addAComment()}>Add Comment</Button>
+            </ButtonGroup>
+            {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
+          </FormGroup>
+          :
+          <NonIdealState icon="blocked-person" title="No Permissions" description={"You don't have permissions to add a comment"} />
+        }
 
         <hr className="mt-4 mb-3" />
 
