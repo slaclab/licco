@@ -276,10 +276,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         return data;
     }
 
-    const isProjectInDevelopment = project?.status === "development";
+    const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
     const isEditedTable = editedDevice != undefined;
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
 
     return (
         <HtmlPage>
@@ -318,14 +319,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Button icon="export" title="Upload data to this project"
                                             minimal={true} small={true}
-                                            disabled={project.name === MASTER_PROJECT_NAME || !isUserAProjectEditor(project, currentlyLoggedInUser)}
+                                            disabled={disableActionButtons}
                                             onClick={(e) => { setIsImportDialogOpen(true) }}
                                         />
 
                                         <Divider />
 
                                         <Button icon="add" title="Add a new Device to Project" minimal={true} small={true}
-                                            disabled={project.name === MASTER_PROJECT_NAME || !isUserAProjectEditor(project, currentlyLoggedInUser)}
+                                            disabled={disableActionButtons}
                                             onClick={e => setIsAddNewFftDialogOpen(true)}
                                         />
 
@@ -384,7 +385,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         />
                                         <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
                                             href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                            disabled={!isProjectInDevelopment}
+                                            disabled={disableActionButtons}
                                         />
 
                                         {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
