@@ -595,7 +595,20 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <ProjectImportDialog
                     isOpen={isImportDialogOpen}
                     project={project}
-                    onClose={() => setIsImportDialogOpen(false)}
+                    onClose={(dataImported) => {
+                        if (dataImported) {
+                            // clear filters and reload devices so that the user can see the imported devices right away 
+                            setFcFilter('')
+                            setFgFilter('');
+                            setStateFilter('');
+                            setAsOfTimestampFilter('');
+                            setShowFftSinceCreationFilter(false);
+                            updateQueryParams('', '', '', '');
+                            const showAllEntries = true;
+                            loadFFTData(projectId, showAllEntries);
+                        }
+                        setIsImportDialogOpen(false);
+                    }}
                 />
                 : null}
             {project ?
