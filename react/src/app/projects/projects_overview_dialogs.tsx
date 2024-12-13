@@ -1,22 +1,44 @@
+import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
+import { LoadingSpinner } from "../components/loading";
+import { MultiChoiceSelector } from "../components/selector";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
-import { createLink } from "@/app/utils/path_utils";
 import { sortString } from "../utils/sort_utils";
-import { ImportResult, ProjectApprovalHistory, ProjectInfo, transformProjectForFrontendUse } from "./project_model";
+import { ImportResult, ProjectApprovalHistory, ProjectInfo, fetchProjectEditors, transformProjectForFrontendUse } from "./project_model";
 
 
 // dialog for adding new projects
-export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: ProjectInfo[], onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, approvedProjects, onClose, onSubmit }) => {
+export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: ProjectInfo[], user: string, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, approvedProjects, user, onClose, onSubmit }) => {
     const DEFAULT_TEMPLATE = "Blank Project";
 
     const [selectedTemplate, setSelectedTemplate] = useState<string>(DEFAULT_TEMPLATE);
     const [projectName, setProjectName] = useState('');
     const [description, setDescription] = useState('');
+    const [editors, setEditors] = useState<string[]>([]);
+    const [allEditors, setAllEditors] = useState<string[]>([]);
 
     const [dialogError, setDialogError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        setIsLoading(true);
+        fetchProjectEditors(user)
+            .then(editors => {
+                setAllEditors(editors);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to download project editors: ${e.error}`;
+                setDialogError(msg);
+            }).finally(() => {
+                setIsLoading(false);
+            })
+    }, [isOpen]);
 
     const projectTemplates = useMemo(() => {
         return [DEFAULT_TEMPLATE, ...approvedProjects.map(p => p.name)];
@@ -40,7 +62,7 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
         }
 
         setIsSubmitting(true);
-        let body = { "name": projectName, "description": description }
+        let body = { "name": projectName, "description": description, "editors": editors }
         Fetch.post<ProjectInfo>(projectUrl, { body: JSON.stringify(body) })
             .then(newProjectInfo => {
                 onSubmit(newProjectInfo);
@@ -59,6 +81,10 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
 
     const disableSubmit = projectName.trim() == "" || description.trim() == ""
 
+    if (isLoading) {
+        return <LoadingSpinner isLoading={isLoading} title="Loading" />
+    }
+
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Create a New Project" autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
@@ -72,7 +98,7 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
                     />
                 </FormGroup>
 
-                <FormGroup label="Project Name:">
+                <FormGroup label="Project Name:" labelInfo="(required)">
                     <InputGroup id="project-name"
                         placeholder=""
                         value={projectName}
@@ -80,12 +106,16 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
                         onValueChange={(val: string) => setProjectName(val)} />
                 </FormGroup>
 
-                <FormGroup label="Description:">
+                <FormGroup label="Description:" labelInfo="(required)">
                     <InputGroup id="project-description"
                         placeholder=""
                         value={description}
                         onKeyUp={submitOnEnter}
                         onValueChange={(val: string) => setDescription(val)} />
+                </FormGroup>
+
+                <FormGroup label="Project Editors:" labelInfo="(optional)">
+                    <MultiChoiceSelector availableItems={allEditors} defaultSelectedItems={[]} defaultValue={"Please select an editor..."} renderer={e => e} onChange={e => setEditors(e)} />
                 </FormGroup>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
             </DialogBody>
@@ -164,24 +194,38 @@ export const CloneProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInf
 
 
 
-export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, project, onClose, onSubmit }) => {
+export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, user: string, onClose: () => void, onSubmit: (updatedProject: ProjectInfo) => void }> = ({ isOpen, project, user, onClose, onSubmit }) => {
     const [projectName, setProjectName] = useState('');
     const [projectDescription, setProjectDescription] = useState('');
+    const [projectEditors, setProjectEditors] = useState<string[]>([]);
+    const [allEditors, setAllEditors] = useState<string[]>([]);
 
+    const [loadingData, setLoadingData] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
-
 
     useEffect(() => {
         if (!isOpen) {
             return;
         }
-        setProjectName(project.name);
-        setProjectDescription(project.description);
+
+        setLoadingData(true);
+        fetchProjectEditors(project.owner)
+            .then(editors => {
+                setProjectName(project.name);
+                setProjectDescription(project.description);
+                setAllEditors(editors);
+                setProjectEditors(project.editors);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to load project editors: ${e.error}`;
+                setDialogError(msg)
+            }).finally(() => {
+                setLoadingData(false);
+            })
     }, [isOpen])
 
     const submit = () => {
-        let data = { "name": projectName, "description": projectDescription }
+        let data = { "name": projectName, "description": projectDescription, "editors": projectEditors }
         setIsSubmitting(true);
         Fetch.post<ProjectInfo>(`/ws/projects/${project._id}/`, { body: JSON.stringify(data) })
             .then((clonedProject) => {
@@ -193,6 +237,10 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
             }).finally(() => {
                 setIsSubmitting(false);
             })
+    }
+
+    if (loadingData) {
+        return <LoadingSpinner isLoading={loadingData} title="Loading Data" />
     }
 
     return (
@@ -212,6 +260,10 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
                         placeholder=""
                         value={projectDescription}
                         onValueChange={(val: string) => setProjectDescription(val)} />
+                </FormGroup>
+
+                <FormGroup label="Project Editors:" labelInfo="(optional)">
+                    <MultiChoiceSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={"Please select an editor..."} renderer={e => e} onChange={e => setProjectEditors(e)} />
                 </FormGroup>
 
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}

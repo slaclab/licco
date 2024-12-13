@@ -243,6 +243,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
             <AddProjectDialog
                 approvedProjects={projectDataDisplayed.filter(p => isProjectApproved(p))}
+                user={currentlyLoggedInUser}
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
@@ -289,6 +290,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 <EditProjectDialog
                     isOpen={isEditDialogOpen}
                     project={selectedProject}
+                    user={currentlyLoggedInUser}
                     onClose={() => {
                         setIsEditDialogOpen(false);
                     }}

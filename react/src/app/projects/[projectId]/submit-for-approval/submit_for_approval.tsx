@@ -58,8 +58,9 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
 
                 // remove already selected approvers and editors
                 if (data.projectInfo.approvers) {
-                    // only select approvers which are allowed to approve and are present in the current list of approvers
-                    let selectedApprovers = allApprovers.filter(a => data.projectInfo.approvers?.includes(a))
+                    // select approvers which are allowed to approve and who are not currently selected as editors
+                    let selectedEditors = data.projectInfo.editors ?? [];
+                    let selectedApprovers = allApprovers.filter(a => data.projectInfo.approvers?.includes(a) && !selectedEditors.includes(a));
                     setSelectedApprovers(selectedApprovers);
                 }
 

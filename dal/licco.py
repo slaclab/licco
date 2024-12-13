@@ -1125,30 +1125,44 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     return True, "", sorted(diff, key=lambda x: x["key"])
 
 
-def clone_project(prjid, name, description, userid, new=False):
+def clone_project(userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    if not new:
-        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
-        if not prj:
-            return False, f"Cannot find project for {prjid}", None
-
     # check if a project with this name already exists
     existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    new_project = create_new_project(name, description, userid)
-    if not new_project:
-        return False, "Created a project but could not get the object from the database", None
+    create_new_blank_project = prjid == "NewBlankProjectClone"
+    if not create_new_blank_project:
+        # we are copying an existing project, check if this project actually exists before creating a new project
+        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+        if not prj:
+            return False, f"Cannot find project for {prjid}", None
 
-    if new:
-        return True, "", new_project
+    created_project = create_new_project(name, description, userid)
+    if not created_project:
+        # this should never happen
+        return False, "Failed to create a new project", None
 
+    if create_new_blank_project:
+        if editors:  # update editors if any
+            status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+            if not status:
+                logger.error(f"Failed to update editors of a new project {prjid}: {err}")
+                # FUTURE: the project was created but editor update failed; we still have to return success
+                # as the project was created (it's just that the editors were not stored). This issue will
+                # be present until we wrap all our db calls into a transactions
+                #
+                # This code should be refactored in the future.
+                return True, "", created_project
+        created_project = get_project(created_project["_id"])
+        return True, "", created_project
+
+    # we are cloning an existing project
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
-
-    modification_time = new_project["creation_time"]
+    modification_time = created_project["creation_time"]
     all_inserts = []
     for fftid, attrs in myfcs.items():
         del attrs["fft"]
@@ -1158,7 +1172,7 @@ def clone_project(prjid, name, description, userid, new=False):
                 # discussion is returned as an array and therefore needs special handling
                 for comment in attrval:
                     all_inserts.append({
-                        "prj": new_project["_id"],
+                        "prj": created_project["_id"],
                         "fft": ObjectId(fftid),
                         "key": attrname,
                         "val": comment['comment'],
@@ -1167,7 +1181,7 @@ def clone_project(prjid, name, description, userid, new=False):
                     })
             else:
                 all_inserts.append({
-                    "prj": new_project["_id"],
+                    "prj": created_project["_id"],
                     "fft": ObjectId(fftid),
                     "key": attrname,
                     "val": attrval,
@@ -1176,7 +1190,17 @@ def clone_project(prjid, name, description, userid, new=False):
                 })
     licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
 
-    return True, "", new_project
+    if editors:
+        status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+        if not status:
+            # there was an error while updating editors
+            # see the explanation above why we still return success (True).
+            logger.error(f"Failed to update editors of a new project {prjid}: {err}")
+            return True, "", created_project
+
+    # load the project together with editors
+    created_project = get_project(created_project["_id"])
+    return True, "", created_project
 
 
 def create_empty_project(name, description, logged_in_user):

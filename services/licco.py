@@ -973,13 +973,15 @@ def svc_clone_project(prjid):
     Name and description of the new project specified as JSON
     """
     userid = context.security.get_current_user_id()
-    newprjdetails = request.json
-    if not newprjdetails["name"] or not newprjdetails["description"]:
+    project_data = request.json
+    project_name = project_data.get("name", "")
+    project_description = project_data.get("description", "")
+    project_editors = project_data.get("editors", [])
+
+    if not project_name or not project_description:
         return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
 
-    # Set new to true if a new project is requested
-    new = (prjid == "NewBlankProjectClone")
-    status, erorrmsg, newprj = clone_project(prjid, newprjdetails["name"], newprjdetails["description"], userid, new)
+    status, erorrmsg, newprj = clone_project(userid, prjid, project_name, project_description, project_editors, context.notifier)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 
