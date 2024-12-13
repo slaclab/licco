@@ -149,6 +149,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                             </th>
                             <th onClick={(e) => sortOrderChanged('name')}>Name {renderTableSortButtonIfAny('name')}</th>
                             <th onClick={(e) => sortOrderChanged('owner')}>Owner {renderTableSortButtonIfAny('owner')}</th>
+                            <th>Editors</th>
                             <th onClick={(e) => sortOrderChanged('created')}>Created {renderTableSortButtonIfAny('created')}</th>
                             <th onClick={(e) => sortOrderChanged('edit')}>Last Edit {renderTableSortButtonIfAny('edit')}</th>
                             <th>Description</th>
@@ -157,6 +158,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     </thead>
                     <tbody>
                         {projectDataDisplayed.map((project) => {
+                            const allowProjectEdits = isUserAProjectEditor(project, currentlyLoggedInUser);
                             return (
                                 <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
                                     <td>
@@ -183,23 +185,22 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                             {!isProjectSubmitted(project) && !isProjectApproved(project) ?
                                                 <>
                                                     <Button icon="edit" title="Edit this project" minimal={true} small={true}
+                                                        disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     />
 
-                                                    {/* only show the submit for approval button to project editors */}
-                                                    {isUserAProjectEditor(project, currentlyLoggedInUser) ?
-                                                        <AnchorButton icon="user" title="Submit this project for approval"
-                                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                                            minimal={true} small={true}
-                                                        />
-                                                        : null
-                                                    }
+                                                    <AnchorButton icon="user" title="Submit this project for approval"
+                                                        disabled={!allowProjectEdits}
+                                                        href={createLink(`/projects/${project._id}/submit-for-approval`)}
+                                                        minimal={true} small={true}
+                                                    />
 
                                                     <Button icon="export" title="Upload data to this project"
                                                         minimal={true} small={true}
+                                                        disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
                                                             setIsImportDialogOpen(true);
@@ -220,6 +221,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                     </td>
                                     <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
                                     <td>{project.owner}</td>
+                                    <td>{project.editors.join(", ")}</td>
                                     <td>{formatToLiccoDateTime(project.creation_time)}</td>
                                     <td>{formatToLiccoDateTime(project.edit_time)}</td>
                                     <td>{project.description}</td>
@@ -241,6 +243,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
             <AddProjectDialog
                 approvedProjects={projectDataDisplayed.filter(p => isProjectApproved(p))}
+                user={currentlyLoggedInUser}
                 isOpen={isAddProjectDialogOpen}
                 onClose={() => setIsAddProjectDialogOpen(false)}
                 onSubmit={(newProject) => {
@@ -287,6 +290,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 <EditProjectDialog
                     isOpen={isEditDialogOpen}
                     project={selectedProject}
+                    user={currentlyLoggedInUser}
                     onClose={() => {
                         setIsEditDialogOpen(false);
                     }}

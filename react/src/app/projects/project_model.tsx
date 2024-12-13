@@ -86,6 +86,17 @@ export async function fetchProjectApprovers(projectOwner?: string): Promise<stri
         })
 }
 
+export async function fetchProjectEditors(projectOwner?: string): Promise<string[]> {
+    return Fetch.get<string[]>('/ws/editors/')
+        .then(editors => {
+            if (projectOwner) {
+                return editors.filter(username => username != projectOwner);
+            }
+            return editors;
+        })
+}
+
+
 export function transformProjectForFrontendUse(project: ProjectInfo) {
     project.creation_time = new Date(project.creation_time);
     if (project.edit_time) {
@@ -426,16 +437,37 @@ export async function rejectProject(projectId: string, rejectionMsg: string): Pr
         })
 }
 
-export function submitForApproval(projectId: string, approvers: string[], approveUntil?: Date): Promise<ProjectInfo> {
+export function submitForApproval(projectId: string, editors: string[], approvers: string[], approveUntil?: Date): Promise<ProjectInfo> {
     let data = {
+        'editors': editors,
         'approvers': approvers,
         'approve_until': approveUntil ? toUnixSeconds(approveUntil) : 0,
     }
     return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/submit_for_approval`, { body: JSON.stringify(data) })
+        .then(project => {
+            transformProjectForFrontendUse(project);
+            return project;
+        });
+}
+
+export interface ProjectEditData {
+    // Note: all project fields are optional, since you could change just one of them.
+    name?: string; // project name
+    description?: string; // project description
+    editors?: string[];
+    approvers?: string[];
+}
+
+export function editProject(projectId: string, data: ProjectEditData): Promise<ProjectInfo> {
+    return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/`, { body: JSON.stringify(data) })
+        .then(project => {
+            transformProjectForFrontendUse(project);
+            return project;
+        });
 }
 
 // returns the username of the currently logged in user
-export function whoAmI(): Promise<string> {
+export async function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);
 }
 
