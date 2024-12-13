@@ -547,7 +547,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                     onConfirm={(e) => {
                         const fft = currentFFT
-                        console.log(fft);
                         removeFftsFromProject(project._id, [fft])
                             .then(() => {
                                 setCurrentFFT({ _id: '', fc: '', fg: '' });
