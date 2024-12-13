@@ -1,12 +1,12 @@
 import { DividerWithText } from "@/app/components/divider";
 import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
+import { MultiChoiceSelector } from "@/app/components/selector";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createLink } from "@/app/utils/path_utils";
-import { sortString } from "@/app/utils/sort_utils";
-import { AnchorButton, Button, Colors, ControlGroup, FormGroup, HTMLSelect, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, Colors, NonIdealState } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
-import { ProjectInfo, fetchProjectApprovers, fetchProjectInfo, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
+import { ProjectEditData, ProjectInfo, editProject, fetchProjectApprovers, fetchProjectEditors, fetchProjectInfo, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
@@ -17,52 +17,58 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     const [diff, setDiff] = useState<ProjectFftDiff>();
     const [loggedInUser, setLoggedInUser] = useState('');
 
-    // state 
-    const DEFAULT_USER = "Please select an approver...";
+    // approvers
     const [allApprovers, setAllApprovers] = useState<string[]>([]);
-    const [currentApprover, setCurrentApprover] = useState(DEFAULT_USER);
     const [selectedApprovers, setSelectedApprovers] = useState<string[]>([]);
+
+    // editors
+    const [allEditors, setAllEditors] = useState<string[]>([]);
+    const [selectedEditors, setSelectedEditors] = useState<string[]>([]);
+
+    // super approvers
     const [superApprovers, setSuperApprovers] = useState<string[]>([]);
 
     const [submittingForm, setSubmittingForm] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const [editEditorsError, setEditEditorsError] = useState('');
 
     const fetchData = async (projectId: string) => {
         let projectInfo = await fetchProjectInfo(projectId);
-        let availableApprovers = await fetchProjectApprovers(projectInfo.owner);
+        let whoami = await whoAmI();
+        let allApprovers = await fetchProjectApprovers(projectInfo.owner);
+        let allEditors = await fetchProjectEditors(projectInfo.owner);
         let diff = await fetchDiffWithMasterProject(projectId);
-        return { projectInfo, approvers: availableApprovers, diff };
+        return { projectInfo, whoami, allEditors, allApprovers, diff };
     }
 
     useEffect(() => {
         fetchData(projectId)
             .then((data) => {
-                // TODO: how do we find superapprovers that should be always present?
                 setProject(data.projectInfo);
                 setDiff(data.diff);
+                setLoggedInUser(data.whoami);
+
+                // submitter or editor can't be an approver, that's why the currently logged in user should never appear in the list
+                // of all available approvers
+                const allApprovers = data.allApprovers.filter(e => e != data.whoami);
+                setAllApprovers(allApprovers);
+
+                const allEditors = data.allEditors;
+                setAllEditors(allEditors);
+
+                // remove already selected approvers and editors
                 if (data.projectInfo.approvers) {
-                    setSelectedApprovers([...data.projectInfo.approvers])
+                    // select approvers which are allowed to approve and who are not currently selected as editors
+                    let selectedEditors = data.projectInfo.editors ?? [];
+                    let selectedApprovers = allApprovers.filter(a => data.projectInfo.approvers?.includes(a) && !selectedEditors.includes(a));
+                    setSelectedApprovers(selectedApprovers);
                 }
 
-                return whoAmI().then(loggedInUser => {
-                    let filteredApprovers = [];
-                    for (let approver of data.approvers) {
-                        // project editors, owners, or submitters should not be allowed
-                        // to approve the project
-                        if (diff?.a.owner === approver) {
-                            continue;
-                        }
-
-                        if (diff?.a.editors.includes(approver)) {
-                            continue;
-                        }
-
-                        filteredApprovers.push(approver);
-                    }
-                    // user who approves
-                    setAllApprovers(filteredApprovers);
-                    setLoggedInUser(loggedInUser);
-                });
+                if (data.projectInfo.editors) {
+                    // only select editors which are allowed to edit and are in the current list of editors
+                    let selectedEditors = allEditors.filter(a => data.projectInfo.editors?.includes(a));
+                    setSelectedEditors(selectedEditors);
+                }
             }).catch((e: JsonErrorMsg) => {
                 setLoadError(e.error);
             }).finally(() => {
@@ -70,39 +76,13 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
             });
     }, [projectId])
 
-    const addUser = (username: string) => {
-        let index = availableApprovers.indexOf(username);
-        if (index == availableApprovers.length - 1) {
-            // user is set as last element, find previous index
-            index--;
-        } else {
-            index++;
-        }
-        if (index >= 0 && index <= availableApprovers.length - 1) {
-            setCurrentApprover(availableApprovers[index])
-        } else {
-            setCurrentApprover(DEFAULT_USER);
-        }
-
-        let updatedApprovers = [...selectedApprovers, username];
-        updatedApprovers.sort((a, b) => sortString(a, b, false));
-        setSelectedApprovers(updatedApprovers);
-    }
-
-    const removeUser = (username: string) => {
-        let index = selectedApprovers.indexOf(username);
-        if (index < 0) { // this should never happen
-            return;
-        }
-        selectedApprovers.splice(index, 1);
-        setSelectedApprovers([...selectedApprovers]);
-    }
-
-    let availableApprovers = useMemo(() => {
-        let leftoverApprovers = allApprovers.filter(a => !selectedApprovers.includes(a));
-        return [DEFAULT_USER, ...leftoverApprovers];
-    }, [selectedApprovers, allApprovers])
-
+    let { availableApprovers, availableEditors } = useMemo(() => {
+        // approver can be someone who is not the currently selected editor
+        // editor is someone who is not the currently selected approver
+        let availableApprovers = allApprovers.filter(a => !selectedEditors.includes(a));
+        let availableEditors = allEditors.filter(a => !(selectedApprovers.includes(a)))
+        return { availableApprovers, availableEditors }
+    }, [allApprovers, selectedApprovers, allEditors, selectedEditors])
 
     const userCanSubmitTheProject = () => {
         if (!diff?.a) {
@@ -120,7 +100,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         return false;
     }
 
-    const disableActions = useMemo(() => {
+    const disableEditActions = useMemo(() => {
         if (userCanSubmitTheProject()) {
             // user who can submit the project, should always be able to edit the project
             return false;
@@ -129,26 +109,6 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     }, [project, loggedInUser])
 
 
-    const renderApprovers = (approvers: string[]) => {
-        if (approvers.length == 0) {
-            return <p style={{ color: Colors.GRAY1 }}>No Approvers Were Selected</p>
-        }
-
-        return (
-            <ul className="list-unstyled">
-                {approvers.map((approver) => {
-                    return <li key={approver}>
-                        <ControlGroup>
-                            <Button icon="cross" small={true} minimal={true}
-                                disabled={disableActions}
-                                onClick={(e) => removeUser(approver)} />
-                            {approver}
-                        </ControlGroup>
-                    </li>
-                })}
-            </ul>
-        )
-    }
 
     const renderSuperApprovers = (approvers: string[]) => {
         if (approvers.length == 0) {
@@ -171,16 +131,48 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         }
 
         setSubmittingForm(true);
-        submitForApproval(projectId, selectedApprovers)
+        setSubmitError('');
+        setEditEditorsError('');
+
+        // We are sending editors together with a list of approvers, since it's possible that someone will update
+        // the editors and forget to click on the "Update Editors" button. Later on they will be wondering why
+        // the list of editors has not changed, when they have clearly submitted a project.
+        //
+        // While editors do not have much of a role while the project is in a submitted state,
+        // we want to avoid the potential confusion described above, hence we send both lists.
+        submitForApproval(projectId, selectedEditors, selectedApprovers)
             .then(updatedProject => {
                 // update fields to show that the project was already approved
                 setProject(updatedProject);
-                setSubmitError('');
             }).catch((e: JsonErrorMsg) => {
                 setSubmitError(`Failed to submit a project for approval: ${e.error}`);
             }).finally(() => {
                 setSubmittingForm(false);
             })
+    }
+
+    const editButtonClicked = () => {
+        if (!project) {
+            // this should never happen
+            return;
+        }
+
+        setSubmittingForm(true);
+        setEditEditorsError('');
+
+        const editData: ProjectEditData = {
+            'editors': selectedEditors
+        }
+        editProject(projectId, editData)
+            .then(updatedProject => {
+                setProject(updatedProject);
+            }).catch((e: JsonErrorMsg) => {
+                let msg = "Failed to edit the project editors: " + e.error;
+                console.error(msg, e);
+                setEditEditorsError(msg);
+            }).finally(() => {
+                setSubmittingForm(false);
+            });
     }
 
 
@@ -193,8 +185,6 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     if (!project || !diff) {
         return <NonIdealState icon="clean" title="No Data Found" description={"No project data found"} />
     }
-
-    // TODO: check if the currently logged in user has permissions
 
     return (
         <>
@@ -227,26 +217,40 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                             </td>
                         </tr>
                         <tr>
+                            <td>Editors:</td>
+                            <td>
+                                <>
+                                    <MultiChoiceSelector
+                                        availableItems={availableEditors}
+                                        defaultSelectedItems={selectedEditors}
+                                        defaultValue={"Please select an editor..."}
+                                        renderer={(s) => s}
+                                        disabled={disableEditActions}
+                                        noSelectionMessage={"No Editors Were Selected"}
+                                        onChange={newEditors => setSelectedEditors(newEditors)}
+                                    />
+
+                                    <Button intent="danger" icon="edit" loading={submittingForm} disabled={disableEditActions}
+                                        onClick={(e) => editButtonClicked()}>
+                                        Update Editors
+                                    </Button>
+
+                                    {editEditorsError ? <p className="error">ERROR: {editEditorsError}</p> : null}
+                                </>
+                            </td>
+                        </tr>
+                        <tr>
                             <td>Approvers:</td>
                             <td>
-                                <FormGroup inline={false} className="m-0">
-                                    <ControlGroup>
-                                        <HTMLSelect
-                                            iconName="caret-down"
-                                            value={currentApprover}
-                                            options={availableApprovers}
-                                            autoFocus={true}
-                                            disabled={disableActions}
-                                            onChange={(e) => setCurrentApprover(e.target.value)}
-                                        />
-                                        <Button icon="add"
-                                            disabled={currentApprover === DEFAULT_USER || disableActions}
-                                            onClick={e => addUser(currentApprover)}>
-                                            Add
-                                        </Button>
-                                    </ControlGroup>
-                                    {renderApprovers(selectedApprovers)}
-                                </FormGroup>
+                                <MultiChoiceSelector
+                                    availableItems={availableApprovers}
+                                    defaultSelectedItems={selectedApprovers}
+                                    defaultValue={"Please select an approver..."}
+                                    renderer={(s) => s}
+                                    disabled={disableEditActions}
+                                    noSelectionMessage={"No Approvers Were Selected"}
+                                    onChange={newApprovers => setSelectedApprovers(newApprovers)}
+                                />
                             </td>
                         </tr>
                         <tr>

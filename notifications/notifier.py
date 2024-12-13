@@ -45,13 +45,13 @@ _NOTIFICATION_TEMPLATES = {
         <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been approved.</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
-    "add_editors": {
+    "add_editor": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
         <p>You have been added to project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database as Project Editor.</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}</p>""")
     },
-    "remove_editors": {
+    "remove_editor": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
         <p>You have been removed from project "{project_name}" in the Machine Configuration Database as Project Editor.</p>
@@ -81,6 +81,22 @@ class Notifier:
         self.licco_service_url = licco_service_url
         self.email_sender = email_sender
         self.admin_email = "XX@slac.stanford.edu"  # TODO: this should come from the configuration
+
+    def add_project_editors(self, new_editor_ids: List[str], project_name: str, project_id: str):
+        subject = f"You were selected as an editor for the project {project_name}"
+        content = create_notification_msg("add_editor", "html",
+                                          project_name=project_name,
+                                          project_url=self._create_project_url(project_id),
+                                          admin_email=self.admin_email)
+        self.send_email_notification(new_editor_ids, subject, content)
+
+    def remove_project_editors(self, removed_editor_ids: List[str], project_name: str, project_id: str):
+        subject = f"You were removed as an editor for the project {project_name}"
+        content = create_notification_msg("remove_editor", "html",
+                                          project_name=project_name,
+                                          project_url=self._create_project_url(project_id),
+                                          admin_email=self.admin_email)
+        self.send_email_notification(removed_editor_ids, subject, content)
 
     def add_project_approvers(self, notified_user_ids: List[str], project_name: str, project_id: str):
         subject = f"You were selected as an approver for the project {project_name}"

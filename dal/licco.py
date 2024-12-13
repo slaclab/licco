@@ -14,10 +14,13 @@ import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from context import licco_db
+from notifications.notifier import Notifier
 
 from .projdetails import get_project_attributes, get_all_project_changes
 
 __author__ = 'mshankar@slac.stanford.edu'
+
+from .utils import diff_arrays
 
 line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
@@ -834,6 +837,7 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
 
 
+
 def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
     project = get_project(prjid)
     if not project:
@@ -856,12 +860,12 @@ def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
         return False, f"Chosen ffts {fft_ids} do not exist"
     return True, ""
 
-def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
+def submit_project_for_approval(project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
     """
     Submit a project for approval.
     Set the status to submitted
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
     project_name = prj["name"]
     if not prj:
         return False, f"Cannot find project for '{project_name}'", None
@@ -890,9 +894,39 @@ def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     if status != "development" and status != "submitted":
         return False, f"Project '{project_name}' is not in development or submitted status", None
 
+    # update editors (if necessary)
+    editors_update_ok, err = update_project_details(userid, project_id, {'editors': editors}, notifier)
+    if not editors_update_ok:
+        return editors_update_ok, err, None
+
+    # store approval metadata
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-                                                         "status": "submitted", "submitter": userid, "approvers": approvers, "submitted_time": datetime.datetime.utcnow()}})
-    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+        "status": "submitted", "submitter": userid, "approvers": approvers,
+        "submitted_time": datetime.datetime.utcnow()
+    }})
+
+    # send notifications (to the right approvers and project editors)
+    old_approvers = prj.get("approvers", [])
+    diff = diff_arrays(old_approvers, approvers)
+
+    new_approvers = diff.new
+    if new_approvers:
+        notifier.add_project_approvers(new_approvers, project_name, project_id)
+
+    deleted_approvers = diff.removed
+    if deleted_approvers:
+        notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
+
+    if prj["status"] == "development":
+        # project was submitted for the first time
+        project_editors = list(set([prj["owner"]] + editors))
+        notifier.project_submitted_for_approval(project_editors, project_name, project_id)
+    else:
+        # project was edited
+        project_editors = list(set([prj["owner"]] + editors))
+        notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
+
+    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
     return True, "", updated_project_info
 
 
@@ -1115,30 +1149,44 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     return True, "", sorted(diff, key=lambda x: x["key"])
 
 
-def clone_project(prjid, name, description, userid, new=False):
+def clone_project(userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    if not new:
-        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
-        if not prj:
-            return False, f"Cannot find project for {prjid}", None
-
     # check if a project with this name already exists
     existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    new_project = create_new_project(name, description, userid)
-    if not new_project:
-        return False, "Created a project but could not get the object from the database", None
+    create_new_blank_project = prjid == "NewBlankProjectClone"
+    if not create_new_blank_project:
+        # we are copying an existing project, check if this project actually exists before creating a new project
+        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+        if not prj:
+            return False, f"Cannot find project for {prjid}", None
 
-    if new:
-        return True, "", new_project
+    created_project = create_new_project(name, description, userid)
+    if not created_project:
+        # this should never happen
+        return False, "Failed to create a new project", None
 
+    if create_new_blank_project:
+        if editors:  # update editors if any
+            status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+            if not status:
+                logger.error(f"Failed to update editors of a new project {prjid}: {err}")
+                # FUTURE: the project was created but editor update failed; we still have to return success
+                # as the project was created (it's just that the editors were not stored). This issue will
+                # be present until we wrap all our db calls into a transactions
+                #
+                # This code should be refactored in the future.
+                return True, "", created_project
+        created_project = get_project(created_project["_id"])
+        return True, "", created_project
+
+    # we are cloning an existing project
     myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
-
-    modification_time = new_project["creation_time"]
+    modification_time = created_project["creation_time"]
     all_inserts = []
     for fftid, attrs in myfcs.items():
         del attrs["fft"]
@@ -1148,7 +1196,7 @@ def clone_project(prjid, name, description, userid, new=False):
                 # discussion is returned as an array and therefore needs special handling
                 for comment in attrval:
                     all_inserts.append({
-                        "prj": new_project["_id"],
+                        "prj": created_project["_id"],
                         "fft": ObjectId(fftid),
                         "key": attrname,
                         "val": comment['comment'],
@@ -1157,7 +1205,7 @@ def clone_project(prjid, name, description, userid, new=False):
                     })
             else:
                 all_inserts.append({
-                    "prj": new_project["_id"],
+                    "prj": created_project["_id"],
                     "fft": ObjectId(fftid),
                     "key": attrname,
                     "val": attrval,
@@ -1166,7 +1214,17 @@ def clone_project(prjid, name, description, userid, new=False):
                 })
     licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
 
-    return True, "", new_project
+    if editors:
+        status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+        if not status:
+            # there was an error while updating editors
+            # see the explanation above why we still return success (True).
+            logger.error(f"Failed to update editors of a new project {prjid}: {err}")
+            return True, "", created_project
+
+    # load the project together with editors
+    created_project = get_project(created_project["_id"])
+    return True, "", created_project
 
 
 def create_empty_project(name, description, logged_in_user):
@@ -1178,25 +1236,79 @@ def create_empty_project(name, description, logged_in_user):
     return get_project(prjid)
 
 
-def update_project_details(prjid, prjdetails):
+def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier: Notifier):
     """
     Just update the project name ands description
     """
-    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {
-                                                         "$set": {"name": prjdetails["name"], "description": prjdetails["description"]}})
-    return True
+    project = get_project(prjid)
+    project_owner = project["owner"]
+    user_has_permission_to_edit = project_owner == userid or userid in project["editors"]
+    if not user_has_permission_to_edit:
+        name = project["name"]
+        return False, f"You have no permissions to edit a project '{name}'"
+
+    if len(user_changes) == 0:
+        return False, f"Project update should not be empty"
+
+    update = {}
+    for key, val in user_changes.items():
+        if key == "name":
+            if not val:
+                return False, f"Name cannot be empty"
+            update["name"] = val
+        elif key == "description":
+            if not val:
+                return False, f"Description cannot be empty"
+            update["description"] = val
+        elif key == "editors":
+            if not isinstance(val, list):
+                return False, f"Editors field should be an array"
+
+            all_editors = get_users_with_privilege("edit")
+            not_allowed_editors = []
+            for user in val:
+                if user not in all_editors:
+                    not_allowed_editors.append(user)
+
+            if len(not_allowed_editors) > 0:
+                not_allowed_users = ", ".join(not_allowed_editors)
+                return False, f"Users [{not_allowed_users}] are not allowed to be editors"
+
+            # all users are valid (or the list is empty)
+            updated_editors = val
+            update["editors"] = updated_editors
+        else:
+            return False, f"Invalid update field '{key}'"
+
+    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
+
+    # send notifications if necessary
+    updated_editors = "editors" in user_changes
+    if notifier and updated_editors:
+        old_editors = project["editors"]
+        updated_editors = update["editors"]
+        diff = diff_arrays(old_editors, updated_editors)
+
+        removed_editors = diff.removed
+        new_editors = diff.new
+        project_name = project["name"]
+        project_id = project["_id"]
+        if new_editors:
+            notifier.add_project_editors(new_editors, project_name, project_id)
+        if removed_editors:
+            notifier.remove_project_editors(removed_editors, project_name, project_id)
+
+    return True, ""
 
 
 def get_tags_for_project(prjid):
     """
     Get the tags for the specified project
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
-    tags = list(licco_db[line_config_db_name]
-                ["tags"].find({"prj": ObjectId(prjid)}))
+    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags
 
 
@@ -1209,14 +1321,10 @@ def add_project_tag(prjid, tagname, asoftimestamp):
     if not prj:
         return False, f"Cannot find project for {prjid}", None
 
-    existing_tag = licco_db[line_config_db_name]["tags"].find_one({
-                                                                  "name": tagname, 
-                                                                  "prj": ObjectId(prjid)})
+    existing_tag = licco_db[line_config_db_name]["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
     if existing_tag:
         return False, f"Tag {tagname} already exists for project {prjid}", None
 
-    licco_db[line_config_db_name]["tags"].insert_one(
-        {"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
-    tags = list(licco_db[line_config_db_name]
-                ["tags"].find({"prj": ObjectId(prjid)}))
+    licco_db[line_config_db_name]["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
+    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags

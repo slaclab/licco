@@ -4,6 +4,7 @@ Various small utilties.
 import json
 import math
 import collections
+from typing import List
 
 from bson import ObjectId
 from datetime import datetime, timezone
@@ -47,3 +48,35 @@ def escape_chars_for_mongo(attrname):
     For example, use something like so to find the param - db.runs.findOne({}, {"params.AMO:HFP:MMS:72\uFF0ERBV": 1})
     '''
     return attrname.replace(".", u"\uFF0E").replace("$", u"\uFF04")
+
+
+class Difference:
+    def __init__(self, in_both: List[any], new: List[any], removed: List[any]):
+        self.in_both = in_both
+        self.new = new
+        self.removed = removed
+
+    def __str__(self):
+        return str(self.__dict__)
+
+def diff_arrays(old_elements: List[any], new_elements: List[any]) -> Difference:
+    """
+    Make a diff between two arrays to find out which elements are new, which were deleted
+    and which elements are in both arrays.
+    """
+    old = set(old_elements)
+    both = []
+    new = []
+    missing = []
+
+    for e in new_elements:
+        if e in old:
+            both.append(e)
+        else:
+            new.append(e)
+
+    for e in old_elements:
+        if e not in new_elements:
+            missing.append(e)
+
+    return Difference(both, new, missing)
