@@ -834,6 +834,28 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
 
 
+def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
+    project = get_project(prjid)
+    if not project:
+        return False, f"Project {prjid} does not exist"
+    if project["status"] != "development":
+        return False, f"Project {project['name']} is not in a development state"
+
+    user_is_editor = userid == project["owner"] or userid in project["editors"]
+    if not user_is_editor:
+        return False, f"You are not an editor and therefore can't remove the project devices"
+
+    # this will delete every stored value (history of value changes and discussion comment for this device)
+    ids = [ObjectId(x) for x in fft_ids]
+    result = licco_db[line_config_db_name]["projects_history"].delete_many({"fft": {"$in": ids}})
+    if result.deleted_count == 0:
+        # this should never happen when using the GUI (the user can only delete a device if a device is displayed
+        # in a GUI (with a valid id) - there should always be at least one such document.
+        # Nevertheless, this situation can happen if someone decides to delete a device via a REST API
+        # while providing a list of invalid ids.
+        return True, f"Chosen ffts {fft_ids} do not exist"
+    return True, ""
+
 def submit_project_for_approval(prjid: str, userid: str, approvers: List[str]):
     """
     Submit a project for approval.

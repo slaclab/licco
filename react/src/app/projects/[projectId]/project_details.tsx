@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -88,6 +88,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isTagSelectionDialogOpen, setIsTagSelectionDialogOpen] = useState(false);
     const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
@@ -443,6 +444,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
                                         setIsCopyFFTDialogOpen(true);
                                     }}
+                                    onDeleteFft={(device) => {
+                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setIsDeleteDialogOpen(true);
+                                    }}
                                     onUserComment={(device) => {
                                         setCommentDevice(device);
                                         setIsFftCommentViewerOpen(true);
@@ -529,6 +534,40 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         setIsCopyFFTDialogOpen(false);
                     }}
                 /> : null}
+
+            {project ?
+                <Alert className="alert-default"
+                    intent="danger"
+                    cancelButtonText="Cancel"
+                    confirmButtonText="Delete"
+                    isOpen={isDeleteDialogOpen}
+                    onClose={e => {
+                        setCurrentFFT({ _id: '', fc: '', fg: '' });
+                        setIsDeleteDialogOpen(false);
+                    }}
+                    onConfirm={(e) => {
+                        const fft = currentFFT
+                        console.log(fft);
+                        removeFftsFromProject(project._id, [fft])
+                            .then(() => {
+                                setCurrentFFT({ _id: '', fc: '', fg: '' });
+                                setIsDeleteDialogOpen(false);
+
+                                // update data 
+                                let updatedFftData = fftData.filter(d => d.id != fft._id);
+                                setFftData(updatedFftData);
+                            }).catch((e: JsonErrorMsg) => {
+                                let msg = `Failed to delete a device ${currentFFT.fc}-${currentFFT.fg}: ${e.error}`;
+                                setErrorAlertMsg(msg);
+                            });
+                    }}
+                >
+                    <h5 className="alert-title"><Icon icon="trash" />Delete {currentFFT.fc}-{currentFFT.fg}?</h5>
+                    <p>Do you really want to delete a device <b>{currentFFT.fc}-{currentFFT.fg}</b> from a project <b>{project.name}</b>?</p>
+                    <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
+                </Alert>
+                : null
+            }
 
             {project && commentDevice ?
                 <FFTCommentViewerDialog
@@ -646,7 +685,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
     return value.toFixed(7);
 }
 
-const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onUserComment }) => {
+const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const row = useMemo(() => {
@@ -661,6 +700,9 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                                 />
                                 <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
                                     onClick={(e) => onCopyFft(device)}
+                                />
+                                <Button icon="trash" minimal={true} small={true} title={"Delete this device"}
+                                    onClick={(e) => onDeleteFft(device)}
                                 />
                             </>
                             : null
