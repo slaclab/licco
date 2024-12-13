@@ -210,7 +210,6 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                             <td>
                                 <>
                                     {diff.new.length} New <br />
-                                    {diff.missing.length > 0 ? <>{diff.missing.length} Missing <br /></> : null}
                                     {diff.updated.length} Updated <br />
                                     {diff.identical.length} Identical <br />
                                 </>
