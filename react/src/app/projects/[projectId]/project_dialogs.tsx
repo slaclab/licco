@@ -688,15 +688,15 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
     // append the changed values at the end of the comment 
     let fieldsThatChanged = Object.keys(valueChanges);
     let changeComment = comment.trim();
-    if (fieldsThatChanged.length > 0) {
+    if (changeComment && fieldsThatChanged.length > 0) {
       changeComment += "\n\n--- Changes: ---\n";
       let d = device as any;
       for (let field of fieldsThatChanged) {
         changeComment += `${field}: ${d[field] ?? ''} -> ${valueChanges[field] ?? ''}\n`;
       }
+      valueChanges['discussion'] = changeComment;
     }
 
-    valueChanges['discussion'] = changeComment;
     syncDeviceUserChanges(project._id, device.id, valueChanges)
       .then((response) => {
         // TODO: for some reason server returns data for all devices again
