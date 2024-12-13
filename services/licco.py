@@ -28,7 +28,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
     get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
-    delete_fft_comment, add_fft_comment
+    delete_fft_comment, add_fft_comment, remove_ffts_from_project
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -646,6 +646,18 @@ def svc_update_ffts_in_project(prjid):
     status, errormsg, update_status = update_ffts_in_project(prjid, ffts)
     fft = get_project_ffts(prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
+
+@licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])
+@project_writable
+@context.security.authentication_required
+def svc_remove_ffts_from_project(prjid):
+    """
+    Remove multiple ffts/devices from a project
+    """
+    userid = context.security.get_current_user_id()
+    fft_ids = request.json.get('ids', [])
+    status, errormsg = remove_ffts_from_project(userid, prjid, fft_ids)
+    return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/import/", methods=["POST"])

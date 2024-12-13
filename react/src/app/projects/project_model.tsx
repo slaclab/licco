@@ -420,6 +420,12 @@ export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise
         })
 }
 
+export function removeFftsFromProject(projectId: string, fft: ProjectFFT[]): Promise<void> {
+    let ids = fft.map(fft => fft._id);
+    let data = { 'ids': ids };
+    return Fetch.delete<void>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(data) })
+}
+
 export async function approveProject(projectId: string): Promise<ProjectInfo> {
     return Fetch.post<ProjectInfo>(`/ws/projects/${projectId}/approve_project`)
         .then((project) => {
