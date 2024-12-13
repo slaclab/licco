@@ -84,7 +84,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 continue;
             }
 
-            if (isUserAProjectApprover(p, currentlyLoggedInUser)) {
+            if (isUserAProjectApprover(p, currentlyLoggedInUser) || (p.status == "submitted" && isUserAProjectEditor(p, currentlyLoggedInUser))) {
                 projectsToApprove.push(p);
                 continue;
             }

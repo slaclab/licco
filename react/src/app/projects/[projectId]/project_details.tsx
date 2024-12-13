@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
@@ -276,10 +276,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         return data;
     }
 
-    const isProjectInDevelopment = project?.status === "development";
+    const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
     const isEditedTable = editedDevice != undefined;
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
 
     return (
         <HtmlPage>
@@ -300,6 +301,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             minimal={true} small={true}
                                             onClick={(e) => { setIsExportDialogOpen(true) }}
                                         />
+
                                         <Button icon="bring-data" title="Download filtered data"
                                             minimal={true} small={true}
                                             disabled={!isFilterApplied}
@@ -314,14 +316,17 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                                 a.click();
                                             }}
                                         />
+
                                         <Button icon="export" title="Upload data to this project"
                                             minimal={true} small={true}
+                                            disabled={disableActionButtons}
                                             onClick={(e) => { setIsImportDialogOpen(true) }}
                                         />
 
                                         <Divider />
 
-                                        <Button icon="add" title="Add a new FFT to Project" minimal={true} small={true}
+                                        <Button icon="add" title="Add a new Device to Project" minimal={true} small={true}
+                                            disabled={disableActionButtons}
                                             onClick={e => setIsAddNewFftDialogOpen(true)}
                                         />
 
@@ -367,6 +372,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         <Divider />
 
                                         <Button icon="tag-add" title="Create a tag" minimal={true} small={true}
+                                            disabled={disableActionButtons}
                                             onClick={(e) => { setIsTagCreationDialogOpen(true) }}
                                         />
                                         <Button icon="tags" title="Show assigned tags" minimal={true} small={true}
@@ -380,7 +386,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         />
                                         <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
                                             href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                            disabled={!isProjectInDevelopment}
+                                            disabled={disableActionButtons}
                                         />
 
                                         {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
@@ -525,8 +531,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 /> : null}
 
             {project && commentDevice ?
-                <FFTCommentViewerDialog isOpen={isFftCommentViewerOpen}
+                <FFTCommentViewerDialog
+                    isOpen={isFftCommentViewerOpen}
                     project={project}
+                    user={currentlyLoggedInUser}
                     device={commentDevice}
                     onClose={() => {
                         setCommentDevice(undefined);
@@ -589,7 +597,20 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <ProjectImportDialog
                     isOpen={isImportDialogOpen}
                     project={project}
-                    onClose={() => setIsImportDialogOpen(false)}
+                    onClose={(dataImported) => {
+                        if (dataImported) {
+                            // clear filters and reload devices so that the user can see the imported devices right away 
+                            setFcFilter('')
+                            setFgFilter('');
+                            setStateFilter('');
+                            setAsOfTimestampFilter('');
+                            setShowFftSinceCreationFilter(false);
+                            updateQueryParams('', '', '', '');
+                            const showAllEntries = true;
+                            loadFFTData(projectId, showAllEntries);
+                        }
+                        setIsImportDialogOpen(false);
+                    }}
                 />
                 : null}
             {project ?
@@ -631,19 +652,23 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>
-                {isProjectInDevelopment(project) ?
+                {project && isProjectInDevelopment(project) ?
                     <td>
-                        {/* TODO: once notifications branch is merged in, we have to restrict the user actions */}
-                        <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
-                            onClick={(e) => onEdit(device)}
-                        />
-                        <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
-                            onClick={(e) => onCopyFft(device)}
-                        />
+                        {isUserAProjectEditor(project, currentUser) ?
+                            <>
+                                <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
+                                    onClick={(e) => onEdit(device)}
+                                />
+                                <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
+                                    onClick={(e) => onCopyFft(device)}
+                                />
+                            </>
+                            : null
+                        }
 
                         <Button icon="chat" minimal={true} small={true} title={"See user comments"}
                             onClick={(e) => onUserComment(device)}
-                        />
+                        >({device.discussion.length})</Button>
                     </td>
                     : null
                 }

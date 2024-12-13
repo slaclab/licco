@@ -1,7 +1,7 @@
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
-import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo } from "../../project_model";
+import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, whoAmIHook } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
 import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
 
@@ -13,11 +13,12 @@ import styles from './project_diff.module.css';
 // displays the diff tables between two projects
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
     const { isLoading, loadError, diff } = fetchProjectDiffDataHook(projectIdA, projectIdB)
-    return <ProjectDiffTables isLoading={isLoading} loadError={loadError} diff={diff} />
+    const { user, userLoadingError } = whoAmIHook();
+    return <ProjectDiffTables isLoading={isLoading} loadError={loadError || userLoadingError} user={user} diff={diff} />
 }
 
 
-export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, diff?: ProjectFftDiff }> = ({ isLoading, loadError, diff }) => {
+export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, user: string, diff?: ProjectFftDiff }> = ({ isLoading, loadError, user, diff }) => {
     if (isLoading) {
         return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." className="mt-5" />
     }
@@ -34,15 +35,14 @@ export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string
         // user compared project 'a' to the same project
         // this can happen when we approve the project and the compared and approved projects are the same
         // in this case we just show the entire list of devices
-        return <ProjectDiffTable diff={diff} type="listOfIdenticalDevices" />
+        return <ProjectDiffTable user={user} diff={diff} type="listOfIdenticalDevices" />
     }
 
     return (
         <>
-            <ProjectDiffTable diff={diff} type="new" />
-            <ProjectDiffTable diff={diff} type="missing" />
-            <ProjectDiffTable diff={diff} type="updated" />
-            <ProjectDiffTable diff={diff} type="identical" defaultOpen={false} />
+            <ProjectDiffTable user={user} diff={diff} type="new" />
+            <ProjectDiffTable user={user} diff={diff} type="updated" />
+            <ProjectDiffTable user={user} diff={diff} type="identical" defaultOpen={false} />
         </>
     )
 }
@@ -87,7 +87,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 }
 
 // just for displaying data
-export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, type, defaultOpen = true }) => {
+export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, user, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
     const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
 
@@ -283,6 +283,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, type: 'new' | 'u
                     project={diff.a}
                     isOpen={commentDevice != undefined}
                     device={commentDevice}
+                    user={user}
                     onClose={() => setCommentDevice(undefined)}
                     onCommentAdd={newDevice => {
                         setCommentDevice(commentDevice);

@@ -363,7 +363,7 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
 export const ProjectImportDialog: React.FC<{
     isOpen: boolean,
     project: ProjectInfo,
-    onClose: () => void,
+    onClose: (dataImported: boolean) => void,
 }> = ({ isOpen, project, onClose }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [dialogError, setDialogError] = useState('');
@@ -408,7 +408,6 @@ export const ProjectImportDialog: React.FC<{
             .finally(() => {
                 setIsSubmitting(false);
             })
-
     }
 
     const importFileChosen = (e: any) => {
@@ -449,7 +448,8 @@ export const ProjectImportDialog: React.FC<{
 
         return (
             <>
-                <h5>Project: {project.name}</h5>
+                <h5>Upload Successful!</h5>
+                <h6>Project: {project.name}</h6>
                 <h6>Filename: {selectedFile.name}</h6>
                 <Text>
                     <div style={{ whiteSpace: 'pre-line' }}>
@@ -463,8 +463,23 @@ export const ProjectImportDialog: React.FC<{
         )
     }
 
+    const clearImportForm = () => {
+        setImportResult('');
+        setRobustReport('');
+        setDialogError('');
+        setSelectedFile(undefined);
+        setDownloadButtonState(true);
+        setFileButtonState(true);
+    }
+
+    const closeDialog = () => {
+        const successfulImport = importResult != '';
+        clearImportForm();
+        onClose(successfulImport);
+    }
+
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
+        <Dialog isOpen={isOpen} onClose={closeDialog} title={`Upload a Data File to Project: (${project.name})`} autoFocus={true}>
             <DialogBody useOverflowScrollContainer>
                 <Text> Upload a .csv to import the data into this project.</Text>
                 <FormGroup label="Select a file:">
@@ -473,6 +488,8 @@ export const ProjectImportDialog: React.FC<{
                         text={selectedFile?.name || "Choose file to upload"}
                         onInputChange={e => importFileChosen(e)}
                     />
+                    {"  "}
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!downloadButtonState}>Submit File</Button>
                 </FormGroup>
                 <Divider></Divider>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
@@ -480,8 +497,7 @@ export const ProjectImportDialog: React.FC<{
             </DialogBody>
             <DialogFooter actions={
                 <>
-                    <Button onClick={(e) => onClose()} >Close</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={!downloadButtonState}>Submit File</Button>
+                    <Button onClick={(e) => closeDialog()} >Close</Button>
                 </>
             } />
         </Dialog>

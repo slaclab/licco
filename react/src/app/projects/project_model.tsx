@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { toUnixSeconds } from "../utils/date_utils";
-import { Fetch } from "../utils/fetching";
+import { Fetch, JsonErrorMsg } from "../utils/fetching";
 
 export interface ProjectInfo {
     _id: string;
@@ -35,7 +36,7 @@ export function isUserAProjectEditor(project: ProjectInfo, username: string): bo
     return project.owner === username || project.editors.includes(username);
 }
 
-const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
+export const MASTER_PROJECT_NAME = "LCLS Machine Configuration Database";
 
 // fetch data about all projects
 export async function fetchAllProjectsInfo(): Promise<ProjectInfo[]> {
@@ -468,4 +469,19 @@ export function editProject(projectId: string, data: ProjectEditData): Promise<P
 // returns the username of the currently logged in user
 export async function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);
+}
+
+export function whoAmIHook() {
+    const [user, setUser] = useState('');
+    const [userLoadingError, setUserLoadingError] = useState('');
+    useEffect(() => {
+        whoAmI()
+            .then(u => setUser(u))
+            .catch((e: JsonErrorMsg) => {
+                let msg = "Failed to fetch 'whoami' data: " + e.error;
+                console.error(msg, e);
+                setUserLoadingError(msg);
+            });
+    }, []);
+    return { user, userLoadingError };
 }
