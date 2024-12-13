@@ -847,7 +847,7 @@ def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
 
     # this will delete every stored value (history of value changes and discussion comment for this device)
     ids = [ObjectId(x) for x in fft_ids]
-    result = licco_db[line_config_db_name]["projects_history"].delete_many({'$and': [{"fft": {"$in": ids}}, {"prj": ObjectId(prjid)}]})
+    result = licco_db[line_config_db_name]["projects_history"].delete_many({'$and': [{"prj": ObjectId(prjid)}, {"fft": {"$in": ids}}]})
     if result.deleted_count == 0:
         # this should never happen when using the GUI (the user can only delete a device if a device is displayed
         # in a GUI (with a valid id) - there should always be at least one such document.
