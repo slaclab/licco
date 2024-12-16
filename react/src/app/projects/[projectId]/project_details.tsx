@@ -270,9 +270,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         // create the csv document from filtered devices
-        let data = `FC,Fungible,TC_part_no,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,Z_dim,X_dim,Y_dim,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
+        let data = `FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.state)},${r(device.comments)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_dim_z)},${r(device.nom_dim_x)},${r(device.nom_dim_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)}\n`;
+            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.comments)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)}\n`;
         }
         return data;
     }
@@ -289,10 +289,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
             {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
             <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
-                <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable}`}>
+                <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
                     <thead>
                         <tr>
-                            <th colSpan={isProjectInDevelopment ? 6 : 5}>
+                            <th colSpan={isProjectInDevelopment ? 7 : 6}>
                                 {!project ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
@@ -405,7 +405,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             </th>
 
                             <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
-                            <th colSpan={3} className="text-center">Nominal Dimension (meters)</th>
                             <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
                             <th></th>
                         </tr>
@@ -414,6 +413,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
                             <th onClick={e => changeSortOrder('fg')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
+                            <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('stand')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
                             <th>Comments</th>
 
@@ -421,13 +421,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('nom_loc_x')} className="text-center">X {displaySortOrderIconInColumn('nom_loc_x')}</th>
                             <th onClick={e => changeSortOrder('nom_loc_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_loc_y')}</th>
 
-                            <th onClick={e => changeSortOrder('nom_dim_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_dim_z')}</th>
-                            <th onClick={e => changeSortOrder('nom_dim_x')} className="text-center">X {displaySortOrderIconInColumn('nom_dim_x')}</th>
-                            <th onClick={e => changeSortOrder('nom_dim_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_dim_y')}</th>
-
-                            <th onClick={e => changeSortOrder('nom_ang_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_ang_z')}</th>
-                            <th onClick={e => changeSortOrder('nom_ang_x')} className="text-center">X {displaySortOrderIconInColumn('nom_ang_x')}</th>
-                            <th onClick={e => changeSortOrder('nom_ang_y')} className="text-center">Y {displaySortOrderIconInColumn('nom_ang_y')}</th>
+                            <th onClick={e => changeSortOrder('nom_ang_z')} className="text-center">Rz {displaySortOrderIconInColumn('nom_ang_z')}</th>
+                            <th onClick={e => changeSortOrder('nom_ang_x')} className="text-center">Rx {displaySortOrderIconInColumn('nom_ang_x')}</th>
+                            <th onClick={e => changeSortOrder('nom_ang_y')} className="text-center">Ry {displaySortOrderIconInColumn('nom_ang_y')}</th>
                             <th onClick={e => changeSortOrder('ray_trace')}>Must Ray Trace {displaySortOrderIconInColumn('ray_trace')}</th>
                         </tr>
                     </thead>
@@ -717,16 +713,13 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.fc}</td>
                 <td>{device.fg}</td>
                 <td>{device.tc_part_no}</td>
+                <td>{device.stand}</td>
                 <td>{device.state}</td>
                 <td>{device.comments}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_y)}</td>
-
-                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_z)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_x)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_dim_y)}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_ang_z)}</td>
                 <td className="text-number">{formatDevicePositionNumber(device.nom_ang_x)}</td>
@@ -769,16 +762,13 @@ const DeviceDataEditTableRow: React.FC<{
 
     const editableDeviceFields: EditField[] = [
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
         { key: 'comments', type: "string", value: useState<string>(), err: useState(false) },
 
         { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_loc_x', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_loc_y', type: "number", value: useState<string>(), err: useState(false) },
-
-        { key: 'nom_dim_z', type: "number", value: useState<string>(), err: useState(false) },
-        { key: 'nom_dim_x', type: "number", value: useState<string>(), err: useState(false) },
-        { key: 'nom_dim_y', type: "number", value: useState<string>(), err: useState(false) },
 
         { key: 'nom_ang_z', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_ang_x', type: "number", value: useState<string>(), err: useState(false) },

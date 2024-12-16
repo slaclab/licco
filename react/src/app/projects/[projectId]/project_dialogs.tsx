@@ -734,7 +734,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
 
         <hr className="mt-4 mb-3" />
 
-        <FormGroup label="Reason for the update (optional):">
+        <FormGroup label="Reason for the update:" labelInfo={"(optional)"}>
           <TextArea autoFocus={true} value={comment} onChange={e => setComment(e.target.value)} fill={true} placeholder="Why are these changes necessary?" rows={4} />
         </FormGroup>
 
