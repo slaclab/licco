@@ -1301,6 +1301,24 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
     return True, ""
 
 
+def delete_project(userid, project_id):
+    """
+    Delete the chosen project and all related data (history of value changes, tags).
+    """
+    prj = get_project(project_id)
+    if not prj:
+        return False, f"Project {project_id} does not exist"
+
+    allowed_to_delete = userid == prj["owner"]
+    if not allowed_to_delete:
+        return False, f"You don't have permission to delete the project {prj['name']}"
+
+    licco_db[line_config_db_name]["projects"].delete_one({'_id': ObjectId(project_id)})
+    licco_db[line_config_db_name]["projects_history"].delete_many({'prj': ObjectId(project_id)})
+    licco_db[line_config_db_name]["tags"].delete_many({'prj': ObjectId(project_id)})
+    return True, ""
+
+
 def get_tags_for_project(prjid):
     """
     Get the tags for the specified project

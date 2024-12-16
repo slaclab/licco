@@ -472,6 +472,10 @@ export function editProject(projectId: string, data: ProjectEditData): Promise<P
         });
 }
 
+export function deleteProject(projectId: string): Promise<void> {
+    return Fetch.delete<void>(`/ws/projects/${projectId}/`);
+}
+
 // returns the username of the currently logged in user
 export async function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);

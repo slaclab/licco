@@ -8,7 +8,7 @@ import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog } from "./projects_overview_dialogs";
+import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
 
@@ -26,6 +26,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectInfo>();
 
     // sorting
@@ -217,6 +218,16 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                     setIsExportDialogOpen(true);
                                                 }}
                                             />
+
+                                            {project.owner === currentlyLoggedInUser ?
+                                                <Button icon="trash" minimal={true} small={true}
+                                                    onClick={(e) => {
+                                                        setSelectedProject(project);
+                                                        setIsDeleteDialogOpen(true);
+                                                    }}
+                                                />
+                                                : null
+                                            }
                                         </ButtonGroup>
                                     </td>
                                     <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
@@ -332,6 +343,24 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     project={selectedProject}
                     onClose={() => {
                         setIsImportDialogOpen(false);
+                    }}
+                />
+                : null
+            }
+
+            {selectedProject && isDeleteDialogOpen ?
+                <RemoveProjectDialog
+                    isOpen={isDeleteDialogOpen}
+                    project={selectedProject}
+                    onClose={() => {
+                        setSelectedProject(undefined);
+                        setIsDeleteDialogOpen(false);
+                    }}
+                    onSubmit={() => {
+                        let data = projectData.filter(p => p._id != selectedProject._id);
+                        setProjectData(data);
+                        setSelectedProject(undefined);
+                        setIsDeleteDialogOpen(false);
                     }}
                 />
                 : null
