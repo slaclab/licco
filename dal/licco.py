@@ -501,6 +501,14 @@ fcattrs = {
         "required": True,
         "default": "Conceptual"
     },
+    "stand": {
+        "name": "stand",
+        "type": "text",
+        "fromstr": str,
+        "label": "Stand/Nearest Stand",
+        "desc": "Stand/Nearest Stand",
+        "required": False,
+    },
     "comments": {
         "name": "comments",
         "type": "text",
@@ -541,39 +549,6 @@ fcattrs = {
         "desc": "Nominal Location Y",
         "required": False,
         "is_required_dimension": True
-    },
-    "nom_dim_z": {
-        "name": "nom_dim_z",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Z",
-        "category": {"label": "Nominal Dimension (meters)", "span": 3},
-        "desc": "Nominal Dimension Z",
-        "required": False,
-        "is_required_dimension": False
-    },
-    "nom_dim_x": {
-        "name": "nom_dim_x",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "X",
-        "category": {"label": "Nominal Dimension (meters)"},
-        "desc": "Nominal Dimension X",
-        "required": False,
-        "is_required_dimension": False
-    },
-    "nom_dim_y": {
-        "name": "nom_dim_y",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Y",
-        "category": {"label": "Nominal Dimension (meters)"},
-        "desc": "Nominal Dimension Y",
-        "required": False,
-        "is_required_dimension": False
     },
     "nom_ang_z": {
         "name": "nom_ang_z",

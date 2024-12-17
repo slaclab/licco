@@ -157,13 +157,11 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBack
 export interface deviceDetailFields {
     tc_part_no: string;
     comments: string;
+    stand: string,
     state: string;
     nom_ang_x?: number;
     nom_ang_y?: number;
     nom_ang_z?: number;
-    nom_dim_x?: number;
-    nom_dim_y?: number;
-    nom_dim_z?: number;
     nom_loc_x?: number;
     nom_loc_y?: number;
     nom_loc_z?: number;
@@ -181,7 +179,6 @@ interface ChangeComment {
 
 export const ProjectDevicePositionKeys: (keyof deviceDetailFields)[] = [
     'nom_ang_x', 'nom_ang_y', 'nom_ang_z',
-    'nom_dim_x', 'nom_dim_y', 'nom_dim_z',
     'nom_loc_x', 'nom_loc_y', 'nom_loc_z',
 ]
 
