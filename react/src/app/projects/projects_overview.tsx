@@ -32,12 +32,20 @@ export const ProjectsOverview: React.FC = ({ }) => {
     type sortColumnField = 'name' | 'created' | 'edit' | 'owner';
     const [sortByColumn, setSortByColumn] = useState<SortState<sortColumnField>>(new SortState('created'));
 
-    const fetchProjectData = () => {
+    const fetchProjectData = async () => {
+        const [projects, whoami] = await Promise.all([
+            fetchAllProjectsInfo(),
+            whoAmI(),
+        ]);
+        return { projects, whoami };
+    }
+
+    useEffect(() => {
         setProjectDataLoading(true);
-        fetchAllProjectsInfo()
-            .then((projects) => {
-                setProjectData(projects);
-                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
+        fetchProjectData()
+            .then(d => {
+                setProjectData(d.projects);
+                setCurrentlyLoggedInUser(d.whoami);
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to load projects data: " + e.error;
                 setError(msg);
@@ -45,10 +53,6 @@ export const ProjectsOverview: React.FC = ({ }) => {
             }).finally(() => {
                 setProjectDataLoading(false);
             });
-    }
-
-    useEffect(() => {
-        fetchProjectData();
     }, []);
 
 
