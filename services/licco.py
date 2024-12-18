@@ -280,8 +280,28 @@ def svc_get_users():
     Get the users in the system.
     For now, this is simply the owners of projects.
     """
-    logged_in_user = context.security.get_current_user_id()
-    users = get_all_users()
+    roles = request.args.get('roles', '')
+    if not roles:
+        out = {"all": get_all_users()}
+        return JSONEncoder().encode({"success": True, "value": out})
+
+    # user wanted specific roles
+    roles = roles.split(",")
+    users = {}
+    for role in roles:
+        role = role.strip()
+        if role == "all":
+            users["all"] = get_all_users()
+        elif role == "admins":
+            users["admins"] = get_users_with_privilege("admin")
+        elif role == "editors":
+            users["editors"] = get_users_with_privilege("edit")
+        elif role == "approvers":
+            users["approvers"] = get_users_with_privilege("approve")
+        elif role == "super_approvers":
+            users["super_approvers"] = get_users_with_privilege("super_approve")
+        else:
+            return logAndAbortJson(f"invalid user role '{role}'")
     return JSONEncoder().encode({"success": True, "value": users})
 
 
@@ -299,24 +319,6 @@ def svc_get_logged_in_user(username):
     # get the specified user data (for now we don't have any, so we just return username)
     return JSONEncoder().encode({"success": True, "value": username})
 
-
-@licco_ws_blueprint.route("/approvers/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_users_with_approve_privilege():
-    """
-    Get the users in the system who have the approve privilege
-    """
-    users = get_users_with_privilege("approve")
-    return JSONEncoder().encode({"success": True, "value": users})
-
-@licco_ws_blueprint.route("/editors/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_users_with_edit_privilege():
-    """
-    Get the users in the system who have the edit privilege
-    """
-    users = get_users_with_privilege("edit")
-    return JSONEncoder().encode({"success": True, "value": users})
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
 @context.security.authentication_required
@@ -871,8 +873,6 @@ def svc_submit_for_approval(prjid):
     editors = []
     if request.json:
         approvers = request.json.get("approvers", [])
-        if len(approvers) == 0:
-            return JSONEncoder().encode({"success": False, "errormsg": "At least 1 approver is expected"})
         editors = request.json.get("editors", [])
     else:
         # TODO: DEPRECATED: old gui approved project this way

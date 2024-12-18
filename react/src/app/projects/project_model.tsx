@@ -74,25 +74,67 @@ export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> 
         });
 }
 
+interface UsersByRole {
+    all?: string[];
+    editors?: string[];
+    approvers?: string[];
+    super_approvers?: string[];
+    admins?: string[];
+}
 
-// fetch all available approvers 
+export enum UserRoles {
+    All = 1 << 0,
+    Editors = 1 << 1,
+    Approvers = 1 << 2,
+    SuperApprovers = 1 << 3,
+    Admins = 1 << 4,
+}
+
+export async function fetchUsers(flags: UserRoles = UserRoles.All): Promise<UsersByRole> {
+    let roles: string[] = [];
+    if (flags & UserRoles.All) {
+        roles.push("all");
+    }
+    if (flags & UserRoles.Editors) {
+        roles.push("editors");
+    }
+    if (flags & UserRoles.Admins) {
+        roles.push("admins");
+    }
+    if (flags & UserRoles.Approvers) {
+        roles.push("approvers");
+    }
+    if (flags & UserRoles.SuperApprovers) {
+        roles.push("super_approvers");
+    }
+
+    let url = "/ws/users/";
+    if (roles.length) {
+        let queryParams = new URLSearchParams();
+        queryParams.set('roles', roles.join(","))
+        url += `?${queryParams.toString()}`
+    }
+
+    return Fetch.get<UsersByRole>(url);
+}
+
 export async function fetchProjectApprovers(projectOwner?: string): Promise<string[]> {
-    return Fetch.get<string[]>('/ws/approvers/')
-        .then(approvers => {
+    return fetchUsers(UserRoles.Approvers)
+        .then(data => {
             if (projectOwner) {
-                return approvers.filter(username => username != projectOwner);
+                return data.approvers!.filter(username => username != projectOwner);
             }
-            return approvers;
+            return data.approvers!;
         })
 }
 
 export async function fetchProjectEditors(projectOwner?: string): Promise<string[]> {
-    return Fetch.get<string[]>('/ws/editors/')
-        .then(editors => {
+    return fetchUsers(UserRoles.Editors)
+        .then(data => {
             if (projectOwner) {
-                return editors.filter(username => username != projectOwner);
+                return data.editors!.filter(username => username != projectOwner);
             }
-            return editors;
+            return data.editors!;
         })
 }
 

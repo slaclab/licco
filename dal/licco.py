@@ -851,7 +851,9 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
     if not user_is_allowed_to_edit:
         return False, f"User {userid} is not allowed to submit a project '{project_name}'"
 
-    approvers = list(set(approvers))
+    # the list of approvers could be empty, since we add super approvers to this list
+    super_approvers = get_users_with_privilege("super_approve")
+    approvers = list(set(approvers).union(super_approvers))
     approvers.sort()
 
     # validate a list of approvers
@@ -920,7 +922,7 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
 
     assigned_approvers = prj.get("approvers", [])
     if userid not in assigned_approvers:
-        # TODO: check if the user is a super approver
+        # super approvers are stored in the list of approvers, so we don't have to specially check for them
         return False, False, f"User {userid} is not allowed to approve the project", {}
 
     # update the project metadata
@@ -935,8 +937,6 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
 
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     if all_assigned_approvers_approved:
-        # TODO: super approvers should approve as well, how do we check and store for that?
-        #
         # once the project is approved, it goes back into the development status
         # we have only 1 approved project at a time, to which the ffts are copied
         updated_project_data["status"] = "development"
