@@ -13,8 +13,8 @@ import styles from './project_diff.module.css';
 // displays the diff tables between two projects
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
     const { isLoading, loadError, diff } = fetchProjectDiffDataHook(projectIdA, projectIdB)
-    const { user, userLoadingError } = whoAmIHook();
-    return <ProjectDiffTables isLoading={isLoading} loadError={loadError || userLoadingError} user={user} diff={diff} />
+    const { user, isUserDataLoading, userLoadingError } = whoAmIHook();
+    return <ProjectDiffTables isLoading={isLoading || isUserDataLoading} loadError={loadError || userLoadingError} user={user} diff={diff} />
 }
 
 

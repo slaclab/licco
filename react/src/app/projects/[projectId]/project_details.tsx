@@ -9,6 +9,7 @@ import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDe
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
 
+import { LoadingSpinner } from "@/app/components/loading";
 import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
@@ -76,7 +77,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const queryParams = useSearchParams();
 
     // data and loading
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [fftDataLoadingError, setFftDataLoadingError] = useState('');
     const [project, setProject] = useState<ProjectInfo>();
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
@@ -151,20 +152,29 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
         }
 
-        fetchProjectInfo(projectId)
-            .then(data => {
-                setProject(data);
-                return whoAmI().then(user => setCurrentlyLoggedInUser(user));
-            })
-            .catch((e: JsonErrorMsg) => {
-                console.error("Failed to load required project data", e);
-                setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
-            });
+        const showAllEntries = true;
+        const timestampFilter = queryParams.get("asoftimestamp") ?? '';
+        const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
 
-        let showAllEntries = true;
-        let timestampFilter = queryParams.get("asoftimestamp") ?? '';
-        let asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
-        loadFFTData(projectId, showAllEntries, asOfTimestamp);
+        const loadInitialData = async () => {
+            const [data, fftData, whoami] = await Promise.all([
+                fetchProjectInfo(projectId),
+                fetchProjectFfts(projectId, showAllEntries, asOfTimestamp),
+                whoAmI(),
+            ])
+            return { data, fftData, whoami };
+        }
+
+        loadInitialData().then(d => {
+            setProject(d.data);
+            setFftData(d.fftData);
+            setCurrentlyLoggedInUser(d.whoami);
+        }).catch((e: JsonErrorMsg) => {
+            console.error("Failed to load required project data", e);
+            setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
+        }).finally(() => {
+            setIsLoading(false);
+        })
     }, []);
 
 
@@ -283,10 +293,24 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const isEditedTable = editedDevice != undefined;
     const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
 
+    if (isLoading) {
+        return (
+            <HtmlPage>
+                <LoadingSpinner className="mb-4 mt-4" title="Loading" description={"Loading project data..."} isLoading={isLoading} />
+            </HtmlPage>
+        )
+    }
+
+    if (fftDataLoadingError) {
+        return (
+            <HtmlPage>
+                <NonIdealState className="mb-4 mt-4" icon="error" title="Error" description={fftDataLoadingError} />
+            </HtmlPage>
+        )
+    }
+
     return (
         <HtmlPage>
-            {fftDataLoadingError ? <NonIdealState className="mb-4 mt-4" icon="error" title="Error" description={fftDataLoadingError} /> : null}
-
             {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
             <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
                 <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>

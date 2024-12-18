@@ -26,14 +26,19 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     const [loggedInUser, setLoggedInUser] = useState('');
 
     useEffect(() => {
-        // get master project and fetch the diff between current project id and master project
-        fetchDiffWithMasterProject(projectId)
-            .then(diff => {
-                setDiff(diff);
+        const loadData = async () => {
+            const [diff, whoami] = await Promise.all([
+                fetchDiffWithMasterProject(projectId),
+                whoAmI(),
+            ]);
+            return { diff, whoami };
+        }
 
-                return whoAmI().then(user => {
-                    setLoggedInUser(user);
-                });
+        setIsLoading(true);
+        loadData()
+            .then(d => {
+                setDiff(d.diff);
+                setLoggedInUser(d.whoami);
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to fetch projects diff: ${e.error}`;
                 console.error(msg, e)
