@@ -10,7 +10,7 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: "development" | "submitted" | "approved";
+    status: "hidden" | "development" | "submitted" | "approved";
     approvers?: string[];
     approved_by?: string[];
     approved_time?: Date;
@@ -119,6 +119,10 @@ export function isProjectSubmitted(project?: ProjectInfo): boolean {
 
 export function isProjectApproved(project?: ProjectInfo): boolean {
     return project?.status === "approved";
+}
+
+export function isProjectHidden(project?: ProjectInfo): boolean {
+    return project?.status === "hidden";
 }
 
 export function isProjectInDevelopment(project?: ProjectInfo): boolean {

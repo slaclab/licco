@@ -325,9 +325,8 @@ def svc_get_projects_for_user():
     Get the projects for a user
     """
     logged_in_user = context.security.get_current_user_id()
-    sort_criteria = json.loads(
-        request.args.get("sort", '[["start_time", -1]]'))
-    projects = get_all_projects(sort_criteria)
+    sort_criteria = json.loads(request.args.get("sort", '[["start_time", -1]]'))
+    projects = get_all_projects(logged_in_user, sort_criteria)
     edits = get_projects_recent_edit_time()
     for project in projects:
         project["edit_time"] = edits[(project["_id"])]["time"]

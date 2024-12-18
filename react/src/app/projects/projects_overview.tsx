@@ -7,7 +7,7 @@ import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
 import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
@@ -161,7 +161,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                         {projectDataDisplayed.map((project) => {
                             const allowProjectEdits = isUserAProjectEditor(project, currentlyLoggedInUser);
                             return (
-                                <tr key={project._id} className={isProjectApproved(project) ? 'approved-table-row' : ''}>
+                                <tr key={project._id} className={`${isProjectApproved(project) ? 'approved-table-row' : ''} ${isProjectHidden(project) ? 'hidden-project-table-row' : ''}`}>
                                     <td>
                                         <ButtonGroup minimal={true}>
                                             {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status === "submitted") ?
@@ -230,7 +230,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                             }
                                         </ButtonGroup>
                                     </td>
-                                    <td><Link href={`/projects/${project._id}`}>{project.name}</Link></td>
+                                    <td><Link href={`/projects/${project._id}`}>{project.name}{isProjectHidden(project) ? <Icon className="ms-2" icon='eye-off' /> : null}</Link></td>
                                     <td>{project.owner}</td>
                                     <td>{project.editors.join(", ")}</td>
                                     <td>{formatToLiccoDateTime(project.creation_time)}</td>

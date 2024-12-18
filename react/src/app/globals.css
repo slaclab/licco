@@ -178,3 +178,8 @@ label.table-checkbox {
 .approved-table-row td {
   background-color: #EC9A3C;
 }
+
+.hidden-project-table-row td,
+.hidden-project-table-row td a {
+  color: #5f6b7c;
+}
