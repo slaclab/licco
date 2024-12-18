@@ -28,7 +28,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
     get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
-    delete_fft_comment, add_fft_comment, remove_ffts_from_project
+    delete_fft_comment, add_fft_comment, remove_ffts_from_project, delete_project
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -325,9 +325,8 @@ def svc_get_projects_for_user():
     Get the projects for a user
     """
     logged_in_user = context.security.get_current_user_id()
-    sort_criteria = json.loads(
-        request.args.get("sort", '[["start_time", -1]]'))
-    projects = get_all_projects(sort_criteria)
+    sort_criteria = json.loads(request.args.get("sort", '[["start_time", -1]]'))
+    projects = get_all_projects(logged_in_user, sort_criteria)
     edits = get_projects_recent_edit_time()
     for project in projects:
         project["edit_time"] = edits[(project["_id"])]["time"]
@@ -394,6 +393,19 @@ def svc_update_project(prjid):
         return JSONEncoder().encode({"success": False, "errormsg": err})
 
     return JSONEncoder().encode({"success": True, "value": get_project(prjid)})
+
+
+@licco_ws_blueprint.route("/projects/<prjid>/", methods=["DELETE"])
+@context.security.authentication_required
+def svc_delete_project(prjid):
+    """
+    Get the project details given a project id.
+    """
+    logged_in_user = context.security.get_current_user_id()
+    status, err = delete_project(logged_in_user, prjid)
+    if not status:
+        return JSONEncoder().encode({"success": False, "errormsg": err})
+    return JSONEncoder().encode({"success": True})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["GET"])

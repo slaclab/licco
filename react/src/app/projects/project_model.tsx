@@ -10,7 +10,7 @@ export interface ProjectInfo {
     editors: string[];
     creation_time: Date;
     edit_time?: Date;
-    status: "development" | "submitted" | "approved";
+    status: "hidden" | "development" | "submitted" | "approved";
     approvers?: string[];
     approved_by?: string[];
     approved_time?: Date;
@@ -119,6 +119,10 @@ export function isProjectSubmitted(project?: ProjectInfo): boolean {
 
 export function isProjectApproved(project?: ProjectInfo): boolean {
     return project?.status === "approved";
+}
+
+export function isProjectHidden(project?: ProjectInfo): boolean {
+    return project?.status === "hidden";
 }
 
 export function isProjectInDevelopment(project?: ProjectInfo): boolean {
@@ -467,6 +471,10 @@ export function editProject(projectId: string, data: ProjectEditData): Promise<P
             transformProjectForFrontendUse(project);
             return project;
         });
+}
+
+export function deleteProject(projectId: string): Promise<void> {
+    return Fetch.delete<void>(`/ws/projects/${projectId}/`);
 }
 
 // returns the username of the currently logged in user

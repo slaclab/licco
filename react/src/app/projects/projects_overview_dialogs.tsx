@@ -6,7 +6,7 @@ import { MultiChoiceSelector } from "../components/selector";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-import { ImportResult, ProjectApprovalHistory, ProjectInfo, fetchProjectEditors, transformProjectForFrontendUse } from "./project_model";
+import { ImportResult, ProjectApprovalHistory, ProjectInfo, deleteProject, fetchProjectEditors, transformProjectForFrontendUse } from "./project_model";
 
 
 // dialog for adding new projects
@@ -123,6 +123,40 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
                     <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={disableSubmit}>Create Project</Button>
+                </>
+            } />
+        </Dialog>
+    )
+}
+
+export const RemoveProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, onClose: () => void, onSubmit: () => void }> = ({ isOpen, project, onClose, onSubmit }) => {
+    const [dialogError, setDialogError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const submit = () => {
+        setIsSubmitting(true);
+        deleteProject(project._id)
+            .then(() => {
+                onSubmit();
+            }).catch((e: JsonErrorMsg) => {
+                let msg = `Failed to delete a project: ${e.error}`;
+                setDialogError(msg);
+            }).finally(() => {
+                setIsSubmitting(false);
+            })
+    }
+
+    return (
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Delete Project?`} autoFocus={true}>
+            <DialogBody useOverflowScrollContainer>
+                <p>Do you want to delete a project: <b>{project.name}</b>?</p>
+
+                {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
+            </DialogBody>
+            <DialogFooter minimal={true} actions={
+                <>
+                    <Button onClick={(e) => onClose()}>Cancel</Button>
+                    <Button onClick={(e) => submit()} intent="danger" loading={isSubmitting}>Delete</Button>
                 </>
             } />
         </Dialog>
