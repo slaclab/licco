@@ -693,8 +693,12 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
                     "time": modification_time
                 })
             continue
-
-        attrmeta = fcattrs[attrname]
+        try:
+            attrmeta = fcattrs[attrname]
+        except KeyError:
+            logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
+            insert_count["fail"] += 1
+            continue
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", insert_count
 
