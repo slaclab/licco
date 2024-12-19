@@ -2,9 +2,9 @@ import { NonIdealState, Spinner } from "@blueprintjs/core"
 import React from "react"
 
 
-export const LoadingSpinner: React.FC<{ isLoading: boolean, title?: string, description?: React.ReactElement | string }> = ({ isLoading, title = "Loading", description }) => {
+export const LoadingSpinner: React.FC<{ isLoading: boolean, title?: string, description?: React.ReactElement | string, className?: string }> = ({ isLoading, title = "Loading", description, className }) => {
     if (isLoading) {
-        return <NonIdealState icon={<Spinner />} title={title} description={description} />
+        return <NonIdealState className={className ?? ''} icon={<Spinner />} title={title} description={description} />
     }
     return null
 }

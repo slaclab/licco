@@ -484,15 +484,19 @@ export async function whoAmI(): Promise<string> {
 
 export function whoAmIHook() {
     const [user, setUser] = useState('');
+    const [isUserDataLoading, setIsUserDataLoading] = useState(false);
     const [userLoadingError, setUserLoadingError] = useState('');
     useEffect(() => {
+        setIsUserDataLoading(true);
         whoAmI()
             .then(u => setUser(u))
             .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch 'whoami' data: " + e.error;
                 console.error(msg, e);
                 setUserLoadingError(msg);
-            });
+            }).finally(() => {
+                setIsUserDataLoading(false);
+            })
     }, []);
-    return { user, userLoadingError };
+    return { user, userLoadingError, isUserDataLoading };
 }
