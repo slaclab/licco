@@ -179,13 +179,24 @@ def get_fft_values_by_project(fftid, prjid):
     return fft_pairings
 
 
-def get_all_projects(sort_criteria):
+def get_all_projects(logged_in_user, sort_criteria):
     """
     Return all the projects in the system.
     :return: List of projects
     """
+    filter = {}
+    admins = get_users_with_privilege("admin")
+    is_admin_user = logged_in_user in admins
+    if is_admin_user:
+        # admin users should see all projects, hence we don't specify the filter
+        pass
+    else:
+        # regular user should only see projects that are visible (not hidden)
+        filter = {"status": {"$ne": "hidden"}}
+
     all_projects = list(licco_db[line_config_db_name]
-                        ["projects"].find({}).sort(sort_criteria))
+                        ["projects"].find(filter).sort(sort_criteria))
+
     return all_projects
 
 
@@ -682,8 +693,11 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
                     "time": modification_time
                 })
             continue
-
-        attrmeta = fcattrs[attrname]
+        try:
+            attrmeta = fcattrs[attrname]
+        except KeyError:
+            logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
+            continue
         if attrmeta["required"] and not attrval:
             return False, f"Parameter {attrname} is a required attribute", insert_count
 
@@ -1273,6 +1287,34 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
         if removed_editors:
             notifier.remove_project_editors(removed_editors, project_name, project_id)
 
+    return True, ""
+
+
+def delete_project(userid, project_id):
+    """
+    Delete the chosen project and all related data (history of value changes, tags).
+    """
+    prj = get_project(project_id)
+    if not prj:
+        return False, f"Project {project_id} does not exist"
+
+    admins = get_users_with_privilege("admin")
+    user_is_owner = userid == prj["owner"]
+    user_is_admin = userid in admins
+
+    allowed_to_delete = user_is_owner or user_is_admin
+    if not allowed_to_delete:
+        return False, f"You don't have permission to delete the project {prj['name']}"
+
+    if user_is_admin:
+        # deletion for admin role means 'delete'
+        licco_db[line_config_db_name]["projects"].delete_one({'_id': ObjectId(project_id)})
+        licco_db[line_config_db_name]["projects_history"].delete_many({'prj': ObjectId(project_id)})
+        licco_db[line_config_db_name]["tags"].delete_many({'prj': ObjectId(project_id)})
+        return True, ""
+
+    # user is just the owner, delete in this case means 'hide the project'
+    licco_db[line_config_db_name]["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden'}})
     return True, ""
 
 
