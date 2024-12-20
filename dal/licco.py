@@ -865,7 +865,9 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
     if not user_is_allowed_to_edit:
         return False, f"User {userid} is not allowed to submit a project '{project_name}'"
 
-    approvers = list(set(approvers))
+    # the list of approvers could be empty, since we add super approvers to this list
+    super_approvers = get_users_with_privilege("super_approve")
+    approvers = list(set(approvers).union(super_approvers))
     approvers.sort()
 
     # validate a list of approvers
@@ -934,7 +936,7 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
 
     assigned_approvers = prj.get("approvers", [])
     if userid not in assigned_approvers:
-        # TODO: check if the user is a super approver
+        # super approvers are stored in the list of approvers, so we don't have to specially check for them
         return False, False, f"User {userid} is not allowed to approve the project", {}
 
     # update the project metadata
@@ -949,8 +951,6 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
 
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     if all_assigned_approvers_approved:
-        # TODO: super approvers should approve as well, how do we check and store for that?
-        #
         # once the project is approved, it goes back into the development status
         # we have only 1 approved project at a time, to which the ffts are copied
         updated_project_data["status"] = "development"
@@ -1142,6 +1142,16 @@ def clone_project(userid: str, prjid: str, name: str, description: str, editors:
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
+    super_approvers = get_users_with_privilege("super_approve")
+    if userid in super_approvers:
+        # super approvers should not be editors or owner of projects
+        return False, f"Super approver is not allowed to clone the project", None
+
+    if editors:
+        for e in editors:
+            if e in super_approvers:
+                return False, f"Selected editor {e} is also a super approver: super approvers are not allowed to be project editors", None
+
     # check if a project with this name already exists
     existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if existing_project:
@@ -1254,9 +1264,12 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
                 return False, f"Editors field should be an array"
 
             all_editors = get_users_with_privilege("edit")
+            super_approvers = get_users_with_privilege("super_approve")
             not_allowed_editors = []
             for user in val:
-                if user not in all_editors:
+                if user not in all_editors:  # user is not on the list of allowed editors
+                    not_allowed_editors.append(user)
+                if user in super_approvers:  # super approver should not be an editor
                     not_allowed_editors.append(user)
 
             if len(not_allowed_editors) > 0:
