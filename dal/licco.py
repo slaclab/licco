@@ -1142,6 +1142,16 @@ def clone_project(userid: str, prjid: str, name: str, description: str, editors:
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
+    super_approvers = get_users_with_privilege("super_approve")
+    if userid in super_approvers:
+        # super approvers should not be editors or owner of projects
+        return False, f"Super approver is not allowed to clone the project", None
+
+    if editors:
+        for e in editors:
+            if e in super_approvers:
+                return False, f"Selected editor {e} is also a super approver: super approvers are not allowed to be project editors", None
+
     # check if a project with this name already exists
     existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
     if existing_project:
@@ -1254,9 +1264,12 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
                 return False, f"Editors field should be an array"
 
             all_editors = get_users_with_privilege("edit")
+            super_approvers = get_users_with_privilege("super_approve")
             not_allowed_editors = []
             for user in val:
-                if user not in all_editors:
+                if user not in all_editors:  # user is not on the list of allowed editors
+                    not_allowed_editors.append(user)
+                if user in super_approvers:  # super approver should not be an editor
                     not_allowed_editors.append(user)
 
             if len(not_allowed_editors) > 0:

@@ -40,8 +40,12 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         ]);
 
         const projectInfo = diff.a;
-        const allEditors = users.editors ?? [];
         const superApprovers = users.super_approvers ?? [];
+
+        let allEditors = users.editors ?? [];
+        // super approver should not be selectable as an editor
+        allEditors = allEditors.filter(editor => !superApprovers.includes(editor) && editor != diff.a.owner);
+
         let allApprovers = users.approvers ?? [];
         // super approver should not be selectable as an approver
         allApprovers = allApprovers.filter(approver => !superApprovers.includes(approver));
@@ -279,7 +283,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                 {isProjectInDevelopment(project) ?
                                     <Button icon="tick" intent="danger" large={true}
                                         loading={submittingForm}
-                                        disabled={selectedApprovers.length == 0 && superApprovers.length == 0}
+                                        disabled={selectedApprovers.length == 0}
                                         onClick={e => submitButtonClicked()}>
                                         Submit for Approval
                                     </Button>
@@ -291,7 +295,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                     <>
                                         <Button large={true} icon="edit" intent="danger" className="me-2"
                                             loading={submittingForm}
-                                            disabled={selectedApprovers.length == 0 && superApprovers.length == 0}
+                                            disabled={selectedApprovers.length == 0}
                                             onClick={e => submitButtonClicked()}
                                         >
                                             Edit Submitted Project

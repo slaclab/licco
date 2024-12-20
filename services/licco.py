@@ -370,6 +370,8 @@ def svc_create_project():
     """
     Create an empty project; do we really have a use case for this?
     """
+    # TODO: I think this endpoint is no longer used in the new GUI. Projects are created via
+    # /clone endpoint (svc_clone_project).
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
     if not prjdetails.get("name", None):
