@@ -224,7 +224,6 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                         defaultSelectedItems={selectedEditors}
                                         defaultValue=""
                                         placeholder={"Please select an editor..."}
-                                        renderer={(s) => s}
                                         disabled={disableEditActions}
                                         noSelectionMessage={"No Editors Were Selected"}
                                         onChange={newEditors => setSelectedEditors(newEditors)}
@@ -247,7 +246,6 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                     defaultSelectedItems={selectedApprovers}
                                     placeholder={"Please select an approver..."}
                                     defaultValue=""
-                                    renderer={(s) => s}
                                     disabled={disableEditActions}
                                     noSelectionMessage={"No Approvers Were Selected"}
                                     onChange={newApprovers => setSelectedApprovers(newApprovers)}

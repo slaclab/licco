@@ -297,8 +297,13 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
                 </FormGroup>
 
                 <FormGroup label="Project Editors:" labelInfo="(optional)">
-                    {/* <MultiChoiceInputSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={'' || "Please select an editor..."} renderer={e => e} onChange={e => setProjectEditors(e)} /> */}
-                    <MultiChoiceStringSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={''} placeholder="Please select an editor..." renderer={e => e} onChange={e => setProjectEditors(e)} />
+                    <MultiChoiceStringSelector
+                        availableItems={allEditors}
+                        defaultSelectedItems={project.editors}
+                        defaultValue=''
+                        placeholder="Please select an editor..."
+                        noSelectionMessage="No editors selected"
+                        onChange={e => setProjectEditors(e)} />
                 </FormGroup>
 
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}

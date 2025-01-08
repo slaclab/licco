@@ -135,17 +135,17 @@ export const MultiChoiceSelector = <T,>({ availableItems: allSelections, default
 }
 
 
-// a dropdown with a list of selected items underneath (that could be removed as well)
-export const MultiChoiceStringSelector = ({ availableItems: allSelections, defaultSelectedItems, defaultValue, placeholder, renderer, onChange, noSelectionMessage = '', disabled: disableActions = false }: selectorProps<string>) => {
-    const [currentSelection, setCurrentSelection] = useState(defaultValue);
+// an input box that also acts as a dropdown of predefined items
+export const MultiChoiceStringSelector: React.FC<{ availableItems: string[], defaultSelectedItems: string[], defaultValue?: string, placeholder: string, onChange: (selectedItems: string[]) => void, noSelectionMessage: string, disabled?: boolean }>
+    = ({ availableItems, defaultSelectedItems, defaultValue = "", placeholder = "", onChange, noSelectionMessage, disabled = false }) => {
+        const [currentChoiceText, setCurrentChoiceText] = useState(defaultValue);
     const [selectedItems, setSelectedItems] = useState<string[]>(defaultSelectedItems || []);
     const [availableItemsStrings, setAvailableItemsStrings] = useState<string[]>([]);
 
     useEffect(() => {
-        const availItems = [...allSelections.filter(e => !selectedItems.includes(e))];
-        const availItemsString = availItems.map(e => renderer(e));
-        setAvailableItemsStrings(availItemsString);
-    }, [defaultValue, allSelections, selectedItems])
+        const availItems = [...availableItems.filter(e => !selectedItems.includes(e))];
+        setAvailableItemsStrings(availItems);
+    }, [defaultValue, availableItems, selectedItems])
 
     const removeItem = (index: number) => {
         if (index < 0) {
@@ -167,7 +167,7 @@ export const MultiChoiceStringSelector = ({ availableItems: allSelections, defau
             return;
         }
 
-        setCurrentSelection('');
+        setCurrentChoiceText('');
         let updatedItems = [...selectedItems, item];
         updatedItems.sort((a, b) => sortString(a, b, false));
         setSelectedItems(updatedItems);
@@ -188,7 +188,7 @@ export const MultiChoiceStringSelector = ({ availableItems: allSelections, defau
                     return <li key={i}>
                         <ControlGroup>
                             <Button icon="cross" small={true} minimal={true}
-                                disabled={disableActions}
+                                disabled={disabled}
                                 onClick={(e) => removeItem(i)} />
                             {item}
                         </ControlGroup>
@@ -206,27 +206,28 @@ export const MultiChoiceStringSelector = ({ availableItems: allSelections, defau
                     itemPredicate={stringFilterItemPredicate} itemRenderer={stringItemRenderer}
                     noResults={undefined}
                     inputValueRenderer={e => e}
-                    onItemSelect={(item) => setCurrentSelection(item)}
-                    onQueryChange={e => setCurrentSelection(e)}
+                    onItemSelect={(item) => setCurrentChoiceText(item)}
+                    onQueryChange={e => setCurrentChoiceText(e)}
+                    query={currentChoiceText}
                     inputProps={{
                         placeholder: placeholder ?? "Search...",
                         // NOTE: we can't use a keyup event handler for adding items via Enter key 
-                        // as that would override the default behavior and keep the dropdown open.
+                        // as that would override the default behavior and keep the dropdown open
+                        // after the enter click.
                         // (default behavior: if there is a dropdown, on enter the first suggestion
                         // will be selected)
                     }}
-                    query={currentSelection}
-                    popoverProps={{ minimal: true }}
-                    resetOnQuery={true}
+                    popoverProps={{
+                        minimal: true,
+                    }}
                     defaultSelectedItem={''}
                     selectedItem={''}
                     fill={false}
                 />
 
                 <Button icon="add"
-                    // disabled={currentSelection === defaultValue || disableActions}
-                    disabled={disableActions || !currentSelection || currentSelection === defaultValue || selectedItems.includes(currentSelection)}
-                    onClick={e => addItem(currentSelection)}>
+                    disabled={disabled || !currentChoiceText || currentChoiceText === defaultValue || selectedItems.includes(currentChoiceText)}
+                    onClick={e => addItem(currentChoiceText)}>
                     Add
                 </Button>
             </ControlGroup>
