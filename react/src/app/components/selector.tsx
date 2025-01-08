@@ -1,11 +1,15 @@
-import { Button, Colors, ControlGroup, FormGroup, HTMLSelect } from "@blueprintjs/core";
+import { Button, Colors, ControlGroup, FormGroup, HTMLSelect, MenuItem } from "@blueprintjs/core";
 import { useEffect, useState } from "react";
 import { sortString } from "../utils/sort_utils";
+
+import { ItemPredicate, ItemRenderer, Suggest } from "@blueprintjs/select";
+import React from "react";
 
 interface selectorProps<T> {
     availableItems: T[],
     defaultSelectedItems?: T[],
     defaultValue: T,
+    placeholder?: T,
     noSelectionMessage?: string | React.ReactNode;
     renderer: (element: T) => string;
     onChange?: (currentSelection: T[]) => void;
@@ -85,7 +89,7 @@ export const MultiChoiceSelector = <T,>({ availableItems: allSelections, default
 
     const renderSelection = () => {
         if (selectedItems.length == 0) {
-            if (typeof (defaultValue) == 'string') {
+            if (typeof (noSelectionMessage) == 'string') {
                 return <p style={{ color: Colors.GRAY1 }}>{noSelectionMessage}</p>
             }
             return noSelectionMessage;
@@ -124,7 +128,146 @@ export const MultiChoiceSelector = <T,>({ availableItems: allSelections, default
                     Add
                 </Button>
             </ControlGroup>
+
             {renderSelection()}
         </FormGroup>
     )
+}
+
+
+// a dropdown with a list of selected items underneath (that could be removed as well)
+export const MultiChoiceStringSelector = ({ availableItems: allSelections, defaultSelectedItems, defaultValue, placeholder, renderer, onChange, noSelectionMessage = '', disabled: disableActions = false }: selectorProps<string>) => {
+    const [currentSelection, setCurrentSelection] = useState(defaultValue);
+    const [selectedItems, setSelectedItems] = useState<string[]>(defaultSelectedItems || []);
+    const [availableItemsStrings, setAvailableItemsStrings] = useState<string[]>([]);
+
+    useEffect(() => {
+        const availItems = [...allSelections.filter(e => !selectedItems.includes(e))];
+        const availItemsString = availItems.map(e => renderer(e));
+        setAvailableItemsStrings(availItemsString);
+    }, [defaultValue, allSelections, selectedItems])
+
+    const removeItem = (index: number) => {
+        if (index < 0) {
+            return index;
+        }
+
+        selectedItems.splice(index, 1)
+        const updatedItems = [...selectedItems];
+
+        setSelectedItems(updatedItems);
+        onChange?.(updatedItems);
+    }
+
+    const addItem = (item: string) => {
+        if (!item) {
+            return;
+        }
+        if (selectedItems.includes(item)) {
+            return;
+        }
+
+        setCurrentSelection('');
+        let updatedItems = [...selectedItems, item];
+        updatedItems.sort((a, b) => sortString(a, b, false));
+        setSelectedItems(updatedItems);
+        onChange?.(updatedItems);
+    }
+
+    const renderSelection = () => {
+        if (selectedItems.length == 0) {
+            if (typeof (noSelectionMessage) == 'string') {
+                return <p style={{ color: Colors.GRAY1 }}>{noSelectionMessage}</p>
+            }
+            return noSelectionMessage;
+        }
+
+        return (
+            <ul className="list-unstyled">
+                {selectedItems.map((item, i) => {
+                    return <li key={i}>
+                        <ControlGroup>
+                            <Button icon="cross" small={true} minimal={true}
+                                disabled={disableActions}
+                                onClick={(e) => removeItem(i)} />
+                            {item}
+                        </ControlGroup>
+                    </li>
+                })}
+            </ul>
+        )
+    }
+
+    return (
+        <FormGroup inline={false} className="m-0">
+            <ControlGroup>
+                <Suggest<string>
+                    items={availableItemsStrings}
+                    itemPredicate={stringFilterItemPredicate} itemRenderer={stringItemRenderer}
+                    noResults={undefined}
+                    inputValueRenderer={e => e}
+                    onItemSelect={(item) => setCurrentSelection(item)}
+                    onQueryChange={e => setCurrentSelection(e)}
+                    inputProps={{
+                        placeholder: placeholder ?? "Search...",
+                        // NOTE: we can't use a keyup event handler for adding items via Enter key 
+                        // as that would override the default behavior and keep the dropdown open.
+                        // (default behavior: if there is a dropdown, on enter the first suggestion
+                        // will be selected)
+                    }}
+                    query={currentSelection}
+                    popoverProps={{ minimal: true }}
+                    resetOnQuery={true}
+                    defaultSelectedItem={''}
+                    selectedItem={''}
+                    fill={false}
+                />
+
+                <Button icon="add"
+                    // disabled={currentSelection === defaultValue || disableActions}
+                    disabled={disableActions || !currentSelection || currentSelection === defaultValue || selectedItems.includes(currentSelection)}
+                    onClick={e => addItem(currentSelection)}>
+                    Add
+                </Button>
+            </ControlGroup>
+
+            {renderSelection()}
+        </FormGroup>
+    )
+}
+
+const stringFilterItemPredicate: ItemPredicate<string> = (query, item, _index, exactMatch) => {
+    // first check if the exact query was found
+    if (item.indexOf(query) > 0) {
+        return true
+    }
+
+    // query was not found, so we normalize the title and the query and check again
+    const normalizedTitle = item.toLowerCase();
+    const normalizedQuery = query.toLowerCase();
+    if (exactMatch) {
+        return normalizedTitle === normalizedQuery;
+    } else {
+        return normalizedTitle.indexOf(normalizedQuery) >= 0;
+    }
+};
+
+const stringItemRenderer: ItemRenderer<string> = (item, { handleClick, handleFocus, modifiers, query }) => {
+    if (!modifiers.matchesPredicate) {
+        return null;
+    }
+
+    return (
+        <MenuItem
+            active={modifiers.active}
+            disabled={modifiers.disabled}
+            key={item}
+            // label is part on the right side of the dropdown
+            // label={item}
+            onClick={handleClick}
+            onFocus={handleFocus}
+            roleStructure="listoption"
+            text={item}
+        />
+    );
 }

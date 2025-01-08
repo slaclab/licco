@@ -1,6 +1,6 @@
 import { DividerWithText } from "@/app/components/divider";
 import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
-import { MultiChoiceSelector } from "@/app/components/selector";
+import { MultiChoiceStringSelector } from "@/app/components/selector";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Colors, NonIdealState } from "@blueprintjs/core";
@@ -219,10 +219,11 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                             <td>Editors:</td>
                             <td>
                                 <>
-                                    <MultiChoiceSelector
+                                    <MultiChoiceStringSelector
                                         availableItems={availableEditors}
                                         defaultSelectedItems={selectedEditors}
-                                        defaultValue={"Please select an editor..."}
+                                        defaultValue=""
+                                        placeholder={"Please select an editor..."}
                                         renderer={(s) => s}
                                         disabled={disableEditActions}
                                         noSelectionMessage={"No Editors Were Selected"}
@@ -241,10 +242,11 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                         <tr>
                             <td>Approvers:</td>
                             <td>
-                                <MultiChoiceSelector
+                                <MultiChoiceStringSelector
                                     availableItems={availableApprovers}
                                     defaultSelectedItems={selectedApprovers}
-                                    defaultValue={"Please select an approver..."}
+                                    placeholder={"Please select an approver..."}
+                                    defaultValue=""
                                     renderer={(s) => s}
                                     disabled={disableEditActions}
                                     noSelectionMessage={"No Approvers Were Selected"}

@@ -2,7 +2,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingSpinner } from "../components/loading";
-import { MultiChoiceSelector } from "../components/selector";
+import { MultiChoiceSelector, MultiChoiceStringSelector } from "../components/selector";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
@@ -297,7 +297,8 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
                 </FormGroup>
 
                 <FormGroup label="Project Editors:" labelInfo="(optional)">
-                    <MultiChoiceSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={"Please select an editor..."} renderer={e => e} onChange={e => setProjectEditors(e)} />
+                    {/* <MultiChoiceInputSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={'' || "Please select an editor..."} renderer={e => e} onChange={e => setProjectEditors(e)} /> */}
+                    <MultiChoiceStringSelector availableItems={allEditors} defaultSelectedItems={project.editors} defaultValue={''} placeholder="Please select an editor..." renderer={e => e} onChange={e => setProjectEditors(e)} />
                 </FormGroup>
 
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}

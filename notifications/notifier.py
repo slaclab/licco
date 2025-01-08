@@ -82,6 +82,11 @@ class Notifier:
         self.email_sender = email_sender
         self.admin_email = "XX@slac.stanford.edu"  # TODO: this should come from the configuration
 
+    def validate_email(self, username_or_email: str):
+        """Validates email with the chosen email sender. If a production verifier is used, this method
+           call could be quite slow"""
+        return self.email_sender.validate_email(username_or_email)
+
     def add_project_editors(self, new_editor_ids: List[str], project_name: str, project_id: str):
         subject = f"You were selected as an editor for the project {project_name}"
         content = create_notification_msg("add_editor", "html",
