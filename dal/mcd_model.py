@@ -1,7 +1,7 @@
-'''
+"""
 The model level business logic goes here.
 Most of the code here gets a connection to the database, executes a query and formats the results.
-'''
+"""
 import logging
 import datetime
 import collections
@@ -9,20 +9,15 @@ from enum import Enum
 import copy
 import json
 import math
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, TypeAlias
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
-from context import licco_db
+from pymongo.synchronous.database import Database
 from notifications.notifier import Notifier
-
 from .projdetails import get_project_attributes, get_all_project_changes
-
-__author__ = 'mshankar@slac.stanford.edu'
-
 from .utils import diff_arrays
 
-line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
 
 MASTER_PROJECT_NAME = 'LCLS Machine Configuration Database'
@@ -40,7 +35,8 @@ class FCState(Enum):
     Removed = "Removed"
 
     def describe(self):
-        return descriptions[self]
+        d = self.descriptions()
+        return d[self]
 
     @classmethod
     def descriptions(cls):
@@ -57,62 +53,45 @@ class FCState(Enum):
         }
 
 
-class UDLR(Enum):
-    U = "U"
-    D = "D"
-    L = "L"
-    R = "R"
+MongoDb: TypeAlias = Database[Dict[str, any]]
 
-
-def initialize_collections():
-    if 'name_1' not in licco_db[line_config_db_name]["projects"].index_information().keys():
-        licco_db[line_config_db_name]["projects"].create_index(
-            [("name", ASCENDING)], unique=True, name="name_1")
-    if 'owner_1' not in licco_db[line_config_db_name]["projects"].index_information().keys():
-        licco_db[line_config_db_name]["projects"].create_index(
-            [("owner", ASCENDING)], name="owner_1")
-    if 'editors_1' not in licco_db[line_config_db_name]["projects"].index_information().keys():
-        licco_db[line_config_db_name]["projects"].create_index(
-            [("editors", ASCENDING)], name="editors_1")
-    if 'name_1' not in licco_db[line_config_db_name]["fcs"].index_information().keys():
-        licco_db[line_config_db_name]["fcs"].create_index(
-            [("name", ASCENDING)], unique=True, name="name_1")
-    if 'name_1' not in licco_db[line_config_db_name]["fgs"].index_information().keys():
-        licco_db[line_config_db_name]["fgs"].create_index(
-            [("name", ASCENDING)], unique=True, name="name_1")
-    if 'fc_fg_1' not in licco_db[line_config_db_name]["ffts"].index_information().keys():
-        licco_db[line_config_db_name]["ffts"].create_index(
-            [("fc", ASCENDING), ("fg", ASCENDING)], unique=True, name="fc_fg_1")
-    if 'prj_time_1' not in licco_db[line_config_db_name]["projects_history"].index_information().keys():
-        licco_db[line_config_db_name]["projects_history"].create_index(
-            [("prj", ASCENDING), ("time", DESCENDING)], name="prj_time_1")
-    if 'prj_fc_time_1' not in licco_db[line_config_db_name]["projects_history"].index_information().keys():
-        licco_db[line_config_db_name]["projects_history"].create_index(
-            [("prj", ASCENDING), ("fft", ASCENDING), ("time", DESCENDING)], name="prj_fft_time_1")
-    if 'sw_time_1' not in licco_db[line_config_db_name]["switch"].index_information().keys():
-        licco_db[line_config_db_name]["switch"].create_index(
-            [("switch_time", DESCENDING)], unique=True, name="sw_time_1")
-    if 'name_prj_1' not in licco_db[line_config_db_name]["tags"].index_information().keys():
-        licco_db[line_config_db_name]["tags"].create_index(
-            [("name", ASCENDING), ("prj", ASCENDING)], unique=True, name="name_prj_1")
-    if 'app_1_name_1' not in licco_db[line_config_db_name]["roles"].index_information().keys():
-        licco_db[line_config_db_name]["roles"].create_index(
-            [("app", ASCENDING), ("name", ASCENDING)], unique=True, name="app_1_name_1")
+def initialize_collections(licco_db: MongoDb):
+    if 'name_1' not in licco_db["projects"].index_information().keys():
+        licco_db["projects"].create_index([("name", ASCENDING)], unique=True, name="name_1")
+    if 'owner_1' not in licco_db["projects"].index_information().keys():
+        licco_db["projects"].create_index([("owner", ASCENDING)], name="owner_1")
+    if 'editors_1' not in licco_db["projects"].index_information().keys():
+        licco_db["projects"].create_index([("editors", ASCENDING)], name="editors_1")
+    if 'name_1' not in licco_db["fcs"].index_information().keys():
+        licco_db["fcs"].create_index([("name", ASCENDING)], unique=True, name="name_1")
+    if 'name_1' not in licco_db["fgs"].index_information().keys():
+        licco_db["fgs"].create_index([("name", ASCENDING)], unique=True, name="name_1")
+    if 'fc_fg_1' not in licco_db["ffts"].index_information().keys():
+        licco_db["ffts"].create_index([("fc", ASCENDING), ("fg", ASCENDING)], unique=True, name="fc_fg_1")
+    if 'prj_time_1' not in licco_db["projects_history"].index_information().keys():
+        licco_db["projects_history"].create_index([("prj", ASCENDING), ("time", DESCENDING)], name="prj_time_1")
+    if 'prj_fc_time_1' not in licco_db["projects_history"].index_information().keys():
+        licco_db["projects_history"].create_index([("prj", ASCENDING), ("fft", ASCENDING), ("time", DESCENDING)], name="prj_fft_time_1")
+    if 'sw_time_1' not in licco_db["switch"].index_information().keys():
+        licco_db["switch"].create_index([("switch_time", DESCENDING)], unique=True, name="sw_time_1")
+    if 'name_prj_1' not in licco_db["tags"].index_information().keys():
+        licco_db["tags"].create_index([("name", ASCENDING), ("prj", ASCENDING)], unique=True, name="name_prj_1")
+    if 'app_1_name_1' not in licco_db["roles"].index_information().keys():
+        licco_db["roles"].create_index([("app", ASCENDING), ("name", ASCENDING)], unique=True, name="app_1_name_1")
 
     # add a master project if it doesn't exist already
-    master_project = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+    master_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if not master_project:
-        prj = create_new_project(MASTER_PROJECT_NAME, "Master Project", '')
+        prj = create_new_project(licco_db, MASTER_PROJECT_NAME, "Master Project", '')
         # initial status is set to development, so we can avoid displaying it on the frontend
-        licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "development"}})
+        licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "development"}})
 
 
-def get_all_users():
+def get_all_users(licco_db: MongoDb):
     """
     For now, simply return all the owners and editors of projects.
     """
-    prjs = list(licco_db[line_config_db_name]
-                ["projects"].find({}, {"owner": 1, "editors": 1}))
+    prjs = list(licco_db["projects"].find({}, {"owner": 1, "editors": 1}))
     ret = set()
     for prj in prjs:
         ret.add(prj["owner"])
@@ -120,51 +99,45 @@ def get_all_users():
             ret.add(ed)
     return list(ret)
 
-def get_fft_name_by_id(fftid):
+def get_fft_name_by_id(licco_db: MongoDb, fftid):
     """
     Return string names of both FC and FG components of FFT
     based off of a provided ID. 
     :param: fftid - the id of the FFT
     :return: Tuple of string names FC, FG
     """
-    fft = licco_db[line_config_db_name]["ffts"].find_one(
-        {"_id": ObjectId(fftid)})
-    fc = licco_db[line_config_db_name]["fcs"].find_one(
-        {"_id": fft["fc"]})
-    fg = licco_db[line_config_db_name]["fgs"].find_one(
-        {"_id": fft["fg"]})
+    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
+    fc = licco_db["fcs"].find_one({"_id": fft["fc"]})
+    fg = licco_db["fgs"].find_one({"_id": fft["fg"]})
     return fc["name"], fg["name"]
 
-def get_fft_id_by_names(fc, fg):
+def get_fft_id_by_names(licco_db: MongoDb, fc, fg):
     """
     Return ID of FFT
     based off of a provided string FC and FG names. 
     :param: fft - dict of {fc, fg} with string names of fc, fg
     :return: Tuple of ids FC, FG
     """
-    fc_obj = licco_db[line_config_db_name]["fcs"].find_one(
-        {"name": fc})
-    fg_obj = licco_db[line_config_db_name]["fgs"].find_one(
-        {"name": fg})
-    fft = licco_db[line_config_db_name]["ffts"].find_one(
-        {"fc": ObjectId(fc_obj["_id"]), "fg": ObjectId(fg_obj["_id"])})
+    fc_obj = licco_db["fcs"].find_one({"name": fc})
+    fg_obj = licco_db["fgs"].find_one({"name": fg})
+    fft = licco_db["ffts"].find_one({"fc": ObjectId(fc_obj["_id"]), "fg": ObjectId(fg_obj["_id"])})
     return fft["_id"]
 
-def get_users_with_privilege(privilege):
+def get_users_with_privilege(licco_db: MongoDb, privilege):
     """
     From the roles database, get all the users with the necessary privilege. 
     For now we do not take into account group memberships. 
     We return a unique list of userid's, for example, [ "awallace", "klafortu", "mlng" ]
     """
     ret = set()
-    for role in licco_db[line_config_db_name]["roles"].find({"privileges": privilege}):
+    for role in licco_db["roles"].find({"privileges": privilege}):
         for player in role.get("players", []):
             if player.startswith("uid:"):
                 ret.add(player.replace("uid:", ""))
     return sorted(list(ret))
 
 
-def get_fft_values_by_project(fftid, prjid):
+def get_fft_values_by_project(licco_db: MongoDb, fftid, prjid):
     """
     Return newest data connected with the provided Project and FFT
     :param fftid - the id of the FFT
@@ -172,20 +145,19 @@ def get_fft_values_by_project(fftid, prjid):
     :return: Dict of FFT Values
     """
     fft_pairings = {}
-    results = list(licco_db[line_config_db_name]["projects_history"].find(
-        {"prj": ObjectId(prjid), "fft": ObjectId(fftid)}).sort("time", 1))
+    results = list(licco_db["projects_history"].find({"prj": ObjectId(prjid), "fft": ObjectId(fftid)}).sort("time", 1))
     for res in results:
         fft_pairings[res["key"]] = res["val"]
     return fft_pairings
 
 
-def get_all_projects(logged_in_user, sort_criteria):
+def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria):
     """
     Return all the projects in the system.
     :return: List of projects
     """
     filter = {}
-    admins = get_users_with_privilege("admin")
+    admins = get_users_with_privilege(licco_db, "admin")
     is_admin_user = logged_in_user in admins
     if is_admin_user:
         # admin users should see all projects, hence we don't specify the filter
@@ -194,115 +166,112 @@ def get_all_projects(logged_in_user, sort_criteria):
         # regular user should only see projects that are visible (not hidden)
         filter = {"status": {"$ne": "hidden"}}
 
-    all_projects = list(licco_db[line_config_db_name]
-                        ["projects"].find(filter).sort(sort_criteria))
+    all_projects = list(licco_db["projects"].find(filter).sort(sort_criteria))
 
     return all_projects
 
 
-def get_projects_for_user(username):
+def get_projects_for_user(licco_db: MongoDb, username):
     """
     Return all the projects for which the user is an owner or an editor.
     :param username - the userid of the user from authn
     :return: List of projects
     """
-    owned_projects = list(
-        licco_db[line_config_db_name]["projects"].find({"owner": username}))
-    editable_projects = list(
-        licco_db[line_config_db_name]["projects"].find({"editors": username}))
+    owned_projects = list(licco_db["projects"].find({"owner": username}))
+    editable_projects = list(licco_db["projects"].find({"editors": username}))
     return owned_projects + editable_projects
 
 
-def get_project(id):
+def get_project(licco_db: MongoDb, id):
     """
     Get the details for the project given its id.
     """
     oid = ObjectId(id)
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": oid})
+    prj = licco_db["projects"].find_one({"_id": oid})
     return prj
 
 
-def get_project_by_name(name):
+def get_project_by_name(licco_db: MongoDb, name):
     """
     Get the details for the project given its name.
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"name": name})
+    prj = licco_db["projects"].find_one({"name": name})
     return prj
 
 
-def get_project_ffts(prjid, showallentries=True, asoftimestamp=None):
+def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None):
     """
     Get the FFTs for a project given its id.
     """
     oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db[line_config_db_name], prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
+    return get_project_attributes(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
 
 
-def get_project_changes(prjid):
+def get_project_changes(licco_db: MongoDb, prjid):
     """
     Get a history of changes to the project.
     """
     oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", prjid)
-    return get_all_project_changes(licco_db[line_config_db_name], oid)
+    return get_all_project_changes(licco_db, oid)
 
 
-def get_fcs():
+def get_fcs(licco_db: MongoDb):
     """
     Get the functional component objects - typically just the name and description.
     """
-    fcs = list(licco_db[line_config_db_name]["fcs"].find({}))
-    fcs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fc"))
+    fcs = list(licco_db["fcs"].find({}))
+    fcs_used = set(licco_db["ffts"].distinct("fc"))
     for fc in fcs:
         fc["is_being_used"] = fc["_id"] in fcs_used
     return fcs
 
 
-def delete_fc(fcid):
+def delete_fc(licco_db: MongoDb, fcid):
     """
     Delete an FC if it is not currently being used by any FFT.
     """
     fcid = ObjectId(fcid)
-    fcs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fc"))
+    fcs_used = set(licco_db["ffts"].distinct("fc"))
     if fcid in fcs_used:
         return False, "This FC is being used by an FFT", None
     logger.info(f"Deleting FC with id {str(fcid)}")
-    licco_db[line_config_db_name]["fcs"].delete_one({"_id": fcid})
+    licco_db["fcs"].delete_one({"_id": fcid})
     return True, "", None
 
 
-def get_fgs():
+def get_fgs(licco_db: MongoDb):
     """
     Get the fungible token objects - typically just the name and description.
     """
-    fgs = list(licco_db[line_config_db_name]["fgs"].find({}))
-    fgs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fg"))
+    fgs = list(licco_db["fgs"].find({}))
+    fgs_used = set(licco_db["ffts"].distinct("fg"))
     for fg in fgs:
         fg["is_being_used"] = fg["_id"] in fgs_used
 
     return fgs
 
 
-def delete_fg(fgid):
+def delete_fg(licco_db: MongoDb, fgid):
     """
     Delete an FG if it is not currently being used by any FFT.
     """
     fgid = ObjectId(fgid)
-    fgs_used = set(licco_db[line_config_db_name]["ffts"].distinct("fg"))
+    fgs_used = set(licco_db["ffts"].distinct("fg"))
     if fgid in fgs_used:
         return False, "This FG is being used by an FFT", None
     logger.info("Deleting FG with id " + str(fgid))
-    licco_db[line_config_db_name]["fgs"].delete_one({"_id": fgid})
+    licco_db["fgs"].delete_one({"_id": fgid})
     return True, "", None
 
 
-def get_ffts():
+def get_ffts(licco_db: MongoDb):
     """
     Get the functional fungible token objects.
     In addition to id's we also return the fc and fg name and description
     """
-    ffts = list(licco_db[line_config_db_name]["ffts"].aggregate([
+    ffts = list(licco_db["ffts"].aggregate([
         {"$lookup": {"from": "fcs", "localField": "fc",
                      "foreignField": "_id", "as": "fc"}},
         {"$unwind": "$fc"},
@@ -310,32 +279,30 @@ def get_ffts():
                      "foreignField": "_id", "as": "fg"}},
         {"$unwind": "$fg"}
     ]))
-    ffts_used = set(licco_db[line_config_db_name]
-                    ["projects_history"].distinct("fft"))
+    ffts_used = set(licco_db["projects_history"].distinct("fft"))
     for fft in ffts:
         fft["is_being_used"] = fft["_id"] in ffts_used
     return ffts
 
 
-def delete_fft(fftid):
+def delete_fft(licco_db: MongoDb, fftid):
     """
     Delete an FFT if it is not currently being used by any project.
     """
     fftid = ObjectId(fftid)
-    ffts_used = set(licco_db[line_config_db_name]
-                    ["projects_history"].distinct("fft"))
+    ffts_used = set(licco_db["projects_history"].distinct("fft"))
     if fftid in ffts_used:
         return False, "This FFT is being used in a project", None
     logger.info("Deleting FFT with id " + str(fftid))
-    licco_db[line_config_db_name]["ffts"].delete_one({"_id": fftid})
+    licco_db["ffts"].delete_one({"_id": fftid})
     return True, "", None
 
 
-def add_fft_comment(user_id, project_id, fftid, comment):
+def add_fft_comment(licco_db: MongoDb, user_id, project_id, fftid, comment):
     if not comment:
         return False, f"Comment should not be empty", None
 
-    project = get_project(project_id)
+    project = get_project(licco_db, project_id)
     project_name = project["name"]
     status = project["status"]
 
@@ -354,17 +321,17 @@ def add_fft_comment(user_id, project_id, fftid, comment):
         'comment': comment,
         'time': datetime.datetime.utcnow(),
     }]}
-    status, errormsg, results = update_fft_in_project(project_id, fftid, new_comment, user_id)
+    status, errormsg, results = update_fft_in_project(licco_db, project_id, fftid, new_comment, user_id)
     return status, errormsg, results
 
 
-def delete_fft_comment(user_id, comment_id):
-    comment = licco_db[line_config_db_name]["projects_history"].find_one({"_id": ObjectId(comment_id)})
+def delete_fft_comment(licco_db: MongoDb, user_id, comment_id):
+    comment = licco_db["projects_history"].find_one({"_id": ObjectId(comment_id)})
     if not comment:
         return False, f"Comment with id {comment_id} does not exist"
 
     # check permissions for deletion
-    project = get_project(comment["prj"])
+    project = get_project(licco_db, comment["prj"])
     status = project["status"]
     project_is_in_correct_state = status == "development" or status == "submitted"
     if not project_is_in_correct_state:
@@ -381,21 +348,21 @@ def delete_fft_comment(user_id, comment_id):
     if not allowed_to_delete:
         return False, f"You are not allowed to delete comment {comment_id}"
 
-    licco_db[line_config_db_name]["projects_history"].delete_one({"_id": ObjectId(comment_id)})
+    licco_db["projects_history"].delete_one({"_id": ObjectId(comment_id)})
     return True, ""
 
 
-def create_new_project(name, description, userid):
+def create_new_project(licco_db: MongoDb, name, description, userid):
     """
     Create a new project belonging to the specified user.
     """
-    newprjid = licco_db[line_config_db_name]["projects"].insert_one({"name": name, "description": description, "owner": userid, "editors": [
+    newprjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": userid, "editors": [
     ], "status": "development", "creation_time": datetime.datetime.utcnow()}).inserted_id
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": newprjid})
+    prj = licco_db["projects"].find_one({"_id": newprjid})
     return prj
 
 
-def create_new_functional_component(name, description):
+def create_new_functional_component(licco_db: MongoDb, name, description):
     """
     Create a new functional component
     """
@@ -403,17 +370,16 @@ def create_new_functional_component(name, description):
         return False, "The name is a required field", None
     if not description:
         return False, "The description is a required field", None
-    if licco_db[line_config_db_name]["fcs"].find_one({"name": name}):
+    if licco_db["fcs"].find_one({"name": name}):
         return False, f"Functional component {name} already exists", None
     try:
-        fcid = licco_db[line_config_db_name]["fcs"].insert_one(
-            {"name": name, "description": description}).inserted_id
-        return True, "", licco_db[line_config_db_name]["fcs"].find_one({"_id": fcid})
+        fcid = licco_db["fcs"].insert_one({"name": name, "description": description}).inserted_id
+        return True, "", licco_db["fcs"].find_one({"_id": fcid})
     except Exception as e:
         return False, str(e), None
 
 
-def create_new_fungible_token(name, description):
+def create_new_fungible_token(licco_db: MongoDb, name, description):
     """
     Create a new fungible token
     """
@@ -421,50 +387,46 @@ def create_new_fungible_token(name, description):
         name = ""
     if not description:
         return False, "The description is a required field", None
-    if licco_db[line_config_db_name]["fgs"].find_one({"name": name}):
+    if licco_db["fgs"].find_one({"name": name}):
         return False, f"Fungible token {name} already exists", None
     try:
-        fgid = licco_db[line_config_db_name]["fgs"].insert_one(
-            {"name": name, "description": description}).inserted_id
-        return True, "", licco_db[line_config_db_name]["fgs"].find_one({"_id": fgid})
+        fgid = licco_db["fgs"].insert_one({"name": name, "description": description}).inserted_id
+        return True, "", licco_db["fgs"].find_one({"_id": fgid})
     except Exception as e:
         return False, str(e), None
 
 
-def create_new_fft(fc, fg, fcdesc=None, fgdesc=None):
+def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc=None, fgdesc=None):
     """
     Create a new functional component + fungible token based on their names
     If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
     """
     logger.info("Creating new fft with %s and %s", fc, fg)
-    fcobj = licco_db[line_config_db_name]["fcs"].find_one({"name": fc})
+    fcobj = licco_db["fcs"].find_one({"name": fc})
     if not fcobj:
         if not fcdesc:
             return False, f"Could not find functional component {fc}", None
         else:
             logger.debug(f"Creating a new FC as part of creating an FFT {fc}")
-            _, _, fcobj = create_new_functional_component(fc, fcdesc)
+            _, _, fcobj = create_new_functional_component(licco_db, fc, fcdesc)
     if not fg:
         fg = ""
         fgdesc = "The default null fg to accommodate outer joins"
-    fgobj = licco_db[line_config_db_name]["fgs"].find_one({"name": fg})
+    fgobj = licco_db["fgs"].find_one({"name": fg})
     if not fgobj:
         if not fgdesc:
             return False, f"Could not find fungible token with id {fg}", None
         else:
             logger.debug(f"Creating a new FG as part of creating an FFT {fg}")
-            _, _, fgobj = create_new_fungible_token(fg, fgdesc)
-    if licco_db[line_config_db_name]["ffts"].find_one({"fc": ObjectId(fcobj["_id"]), "fg": fgobj["_id"]}):
+            _, _, fgobj = create_new_fungible_token(licco_db, fg, fgdesc)
+    if licco_db["ffts"].find_one({"fc": ObjectId(fcobj["_id"]), "fg": fgobj["_id"]}):
         return False, f"FFT with {fc}-{fg} has already been registered", None
 
     try:
-        fftid = licco_db[line_config_db_name]["ffts"].insert_one(
-            {"fc": fcobj["_id"], "fg": fgobj["_id"]}).inserted_id
-        fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": fftid})
-        fft["fc"] = licco_db[line_config_db_name]["fcs"].find_one(
-            {"_id": fft["fc"]})
-        fft["fg"] = licco_db[line_config_db_name]["fgs"].find_one(
-            {"_id": fft["fg"]})
+        fftid = licco_db["ffts"].insert_one({"fc": fcobj["_id"], "fg": fgobj["_id"]}).inserted_id
+        fft = licco_db["ffts"].find_one({"_id": fftid})
+        fft["fc"] = licco_db["fcs"].find_one({"_id": fft["fc"]})
+        fft["fg"] = licco_db["fgs"].find_one({"_id": fft["fg"]})
         return True, "", fft
     except Exception as e:
         return False, str(e), None
@@ -629,7 +591,7 @@ def get_fcattrs(fromstr=False):
     return fcattrscopy
 
 
-def update_fft_in_project(prjid, fftid, fcupdate, userid,
+def update_fft_in_project(licco_db: MongoDb, prjid, fftid, fcupdate, userid,
                           modification_time=None,
                           current_project_attributes=None) -> Tuple[bool, str, Dict[str, int]]:
     """
@@ -637,10 +599,10 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
     insert_count = {"success": 0, "fail": 0, "ignored": 0}
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", insert_count
-    fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": ObjectId(fftid)})
+    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", insert_count
 
@@ -649,12 +611,12 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
         # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
         # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
         # (cca 150-300 ms per query).
-        current_attrs = get_project_attributes(licco_db[line_config_db_name], ObjectId(prjid)).get(str(fftid), {})
+        current_attrs = get_project_attributes(licco_db, ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
         modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
     # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find({}).sort([("time", -1)]).limit(1))
+    latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_count
@@ -733,7 +695,7 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
     if all_inserts:
         logger.debug("Inserting %s documents into the history", len(all_inserts))
         insert_count["success"] += 1
-        licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
+        licco_db["projects_history"].insert_many(all_inserts)
     else:
         insert_count["ignored"] += 1
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
@@ -770,36 +732,30 @@ def validate_insert_range(attr, val):
     return True
 
 
-def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
+def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrnames, userid):
     """
     Copy values for the fftid from srcprjid into destprjid for the specified attrnames
     """
-    srcprj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(srcprjid)})
+    srcprj = licco_db["projects"].find_one({"_id": ObjectId(srcprjid)})
     if not srcprj:
         return False, f"Cannot find source project {srcprj}", None
-    destprj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(destprjid)})
+    destprj = licco_db["projects"].find_one({"_id": ObjectId(destprjid)})
     if not destprj:
         return False, f"Cannot find destination project {destprjid}", None
-    fft = licco_db[line_config_db_name]["ffts"].find_one(
-        {"_id": ObjectId(fftid)})
+    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find FFT for {fftid}", None
 
     modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
     # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db[line_config_db_name]["projects_history"].find(
-        {}).sort([("time", -1)]).limit(1))
+    latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
 
-    current_attrs = get_project_attributes(
-        licco_db[line_config_db_name], ObjectId(destprjid))
+    current_attrs = get_project_attributes(licco_db, ObjectId(destprjid))
     fftattrs = current_attrs.get(fftid, {})
-    other_attrs = get_project_attributes(
-        licco_db[line_config_db_name], ObjectId(srcprjid))
+    other_attrs = get_project_attributes(licco_db, ObjectId(srcprjid))
     oattrs = other_attrs.get(fftid, {})
 
     all_inserts = []
@@ -821,14 +777,14 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
                 "user": userid,
                 "time": modification_time
             })
-    licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
+    licco_db["projects_history"].insert_many(all_inserts)
 
-    return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
+    return True, "", get_project_attributes(licco_db, ObjectId(destprjid)).get(fftid, {})
 
 
 
-def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
-    project = get_project(prjid)
+def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str]):
+    project = get_project(licco_db, prjid)
     if not project:
         return False, f"Project {prjid} does not exist"
     if project["status"] != "development":
@@ -840,7 +796,7 @@ def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
 
     # this will delete every stored value (history of value changes and discussion comment for this device)
     ids = [ObjectId(x) for x in fft_ids]
-    result = licco_db[line_config_db_name]["projects_history"].delete_many({'$and': [{"prj": ObjectId(prjid)}, {"fft": {"$in": ids}}]})
+    result = licco_db["projects_history"].delete_many({'$and': [{"prj": ObjectId(prjid)}, {"fft": {"$in": ids}}]})
     if result.deleted_count == 0:
         # this should never happen when using the GUI (the user can only delete a device if a device is displayed
         # in a GUI (with a valid id) - there should always be at least one such document.
@@ -849,12 +805,12 @@ def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
         return False, f"Chosen ffts {fft_ids} do not exist"
     return True, ""
 
-def submit_project_for_approval(project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
+def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
     """
     Submit a project for approval.
     Set the status to submitted
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(project_id)})
     project_name = prj["name"]
     if not prj:
         return False, f"Cannot find project for '{project_name}'", None
@@ -884,12 +840,12 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
         return False, f"Project '{project_name}' is not in development or submitted status", None
 
     # update editors (if necessary)
-    editors_update_ok, err = update_project_details(userid, project_id, {'editors': editors}, notifier)
+    editors_update_ok, err = update_project_details(licco_db, userid, project_id, {'editors': editors}, notifier)
     if not editors_update_ok:
         return editors_update_ok, err, None
 
     # store approval metadata
-    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
+    licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {
         "status": "submitted", "submitter": userid, "approvers": approvers,
         "submitted_time": datetime.datetime.utcnow()
     }})
@@ -915,16 +871,16 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
         project_editors = list(set([prj["owner"]] + editors))
         notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
 
-    updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
+    updated_project_info = licco_db["projects"].find_one({"_id": ObjectId(project_id)})
     return True, "", updated_project_info
 
 
-def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
+def approve_project(licco_db: MongoDb, prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
     """
     Approve a submitted project.
     Set the status to approved
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, False, f"Cannot find project for {prjid}", {}
     if prj["status"] != "submitted":
@@ -962,75 +918,74 @@ def approve_project(prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
         updated_project_data['notes'] = []
 
         # update current master project
-        approved_project = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+        approved_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
         if not approved_project:
             return False, False, "Failed to find an approved project: this is a programming bug", {}
-        licco_db[line_config_db_name]["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
+        licco_db["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
             "owner": "", "status": "approved", "approved_time": datetime.datetime.utcnow()
         }})
 
-    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
-    store_project_approval(prjid, prj["submitter"])
+    licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    store_project_approval(licco_db, prjid, prj["submitter"])
 
-    updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": prj["_id"]})
+    updated_project = licco_db["projects"].find_one({"_id": prj["_id"]})
     return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
 
-def reject_project(prjid, userid, reason):
+def reject_project(licco_db: MongoDb, prjid, userid, reason):
     """
     Do not approve a submitted project.
     Set the status to development
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
 
-    licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
+    licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                         "status": "development",
                                                         "approved_by": [],
                                                         "approved_time": None,
                                                         "notes": [reason] + prj.get("notes", [])}})
-    updated_project = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    updated_project = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     return True, "", updated_project
 
 
-def get_currently_approved_project_by_switch():
+def get_currently_approved_project_by_switch(licco_db: MongoDb):
     """
     Get the current approved project.
     This is really the most recently approved project
     """
-    prjs = list(licco_db[line_config_db_name]["switch"].find(
-        {}).sort([("switch_time", -1)]).limit(1))
+    prjs = list(licco_db["switch"].find({}).sort([("switch_time", -1)]).limit(1))
     if prjs:
         current_id = prjs[0]["prj"]
-        return licco_db[line_config_db_name]["projects"].find_one({"_id": current_id})
+        return licco_db["projects"].find_one({"_id": current_id})
     return None
 
-def get_currently_approved_project():
+def get_currently_approved_project(licco_db: MongoDb):
     """
     Get the current approved project by status
     """
     # since there could be multiple projects with status 'approved', we grab the latest one based on the approved time
     # prj = licco_db[line_config_db_name]["projects"].find_one({"status": "approved"}, sort=[("approved_time", -1)])
-    prj = licco_db[line_config_db_name]["projects"].find_one({"name": MASTER_PROJECT_NAME})
+    prj = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if prj and prj["status"] == "approved":
         return prj
     return None
 
-def store_project_approval(prjid: str, project_submitter: str):
-    licco_db[line_config_db_name]["switch"].insert_one({
+def store_project_approval(licco_db: MongoDb, prjid: str, project_submitter: str):
+    licco_db["switch"].insert_one({
         "prj": ObjectId(prjid),
         "requestor_uid": project_submitter,
         "switch_time": datetime.datetime.utcnow()
     })
 
-def get_projects_approval_history(limit: int = 100):
+def get_projects_approval_history(licco_db: MongoDb, limit: int = 100):
     """
     Get the history of project approvals
     """
-    hist = list(licco_db[line_config_db_name]["switch"].aggregate([
+    hist = list(licco_db["switch"].aggregate([
         {"$sort": {"switch_time": -1}},
         {"$limit": limit},
         {"$lookup": {"from": "projects", "localField": "prj",
@@ -1047,15 +1002,15 @@ def get_projects_approval_history(limit: int = 100):
     ]))
     return hist
 
-def get_projects_recent_edit_time():
+def get_projects_recent_edit_time(licco_db: MongoDb):
     """
     Gets the most recent time of edit for all projects in development status
     """
     edit_list = {}
-    projects = licco_db[line_config_db_name]["projects"].find()
+    projects = licco_db["projects"].find()
     for project in projects:
-        most_recent = licco_db[line_config_db_name]["projects_history"].find_one(
-        {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )])
+        most_recent = licco_db["projects_history"].find_one(
+            {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )])
         if not most_recent:
             most_recent = {"_id": "", "time": ""}
         edit_list[project["_id"]] = most_recent
@@ -1092,24 +1047,22 @@ def __replace_fc__(fcs):
     return ret
 
 
-def diff_project(prjid, other_prjid, userid, approved=False):
+def diff_project(licco_db: MongoDb, prjid, other_prjid, userid, approved=False):
     """
     Diff two projects
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
 
-    otr = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(other_prjid)})
+    otr = licco_db["projects"].find_one({"_id": ObjectId(other_prjid)})
     if not otr:
         return False, f"Cannot find project for {other_prjid}", None
 
     # we don't want to diff comments, hence we filter them out by setting the timestamp far into the future
     no_comment_timestamp = datetime.datetime.now() + datetime.timedelta(days=365 * 100)
-    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid, commentAfterTimestamp=no_comment_timestamp)
-    thfcs = get_project_attributes(licco_db[line_config_db_name], other_prjid, commentAfterTimestamp=no_comment_timestamp)
+    myfcs = get_project_attributes(licco_db, prjid, commentAfterTimestamp=no_comment_timestamp)
+    thfcs = get_project_attributes(licco_db, other_prjid, commentAfterTimestamp=no_comment_timestamp)
 
     myflat = __flatten__(myfcs)
     thflat = __flatten__(thfcs)
@@ -1138,30 +1091,30 @@ def diff_project(prjid, other_prjid, userid, approved=False):
     return True, "", sorted(diff, key=lambda x: x["key"])
 
 
-def clone_project(userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):
+def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
     # check if a project with this name already exists
-    existing_project = licco_db[line_config_db_name]["projects"].find_one({"name": name})
+    existing_project = licco_db["projects"].find_one({"name": name})
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
     create_new_blank_project = prjid == "NewBlankProjectClone"
     if not create_new_blank_project:
         # we are copying an existing project, check if this project actually exists before creating a new project
-        prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+        prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
         if not prj:
             return False, f"Cannot find project for {prjid}", None
 
-    created_project = create_new_project(name, description, userid)
+    created_project = create_new_project(licco_db, name, description, userid)
     if not created_project:
         # this should never happen
         return False, "Failed to create a new project", None
 
     if create_new_blank_project:
         if editors:  # update editors if any
-            status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+            status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)
             if not status:
                 logger.error(f"Failed to update editors of a new project {prjid}: {err}")
                 # FUTURE: the project was created but editor update failed; we still have to return success
@@ -1170,11 +1123,11 @@ def clone_project(userid: str, prjid: str, name: str, description: str, editors:
                 #
                 # This code should be refactored in the future.
                 return True, "", created_project
-        created_project = get_project(created_project["_id"])
+        created_project = get_project(licco_db, created_project["_id"])
         return True, "", created_project
 
     # we are cloning an existing project
-    myfcs = get_project_attributes(licco_db[line_config_db_name], prjid)
+    myfcs = get_project_attributes(licco_db, prjid)
     modification_time = created_project["creation_time"]
     all_inserts = []
     for fftid, attrs in myfcs.items():
@@ -1201,10 +1154,10 @@ def clone_project(userid: str, prjid: str, name: str, description: str, editors:
                     "user": userid,
                     "time": modification_time
                 })
-    licco_db[line_config_db_name]["projects_history"].insert_many(all_inserts)
+    licco_db["projects_history"].insert_many(all_inserts)
 
     if editors:
-        status, err = update_project_details(userid, created_project["_id"], {'editors': editors}, notifier)
+        status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)
         if not status:
             # there was an error while updating editors
             # see the explanation above why we still return success (True).
@@ -1212,24 +1165,24 @@ def clone_project(userid: str, prjid: str, name: str, description: str, editors:
             return True, "", created_project
 
     # load the project together with editors
-    created_project = get_project(created_project["_id"])
+    created_project = get_project(licco_db, created_project["_id"])
     return True, "", created_project
 
 
-def create_empty_project(name, description, logged_in_user):
+def create_empty_project(licco_db: MongoDb, name, description, logged_in_user):
     """
     Empty project with name project name ands description
     """
-    prjid = licco_db[line_config_db_name]["projects"].insert_one({"name": name, "description": description, "owner": logged_in_user, "editors": [
+    prjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": logged_in_user, "editors": [
     ], "status": "development", "creation_time": datetime.datetime.utcnow()}).inserted_id
-    return get_project(prjid)
+    return get_project(licco_db, prjid)
 
 
-def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier: Notifier):
+def update_project_details(licco_db: MongoDb, userid, prjid, user_changes: Dict[str, any], notifier: Notifier):
     """
     Just update the project name ands description
     """
-    project = get_project(prjid)
+    project = get_project(licco_db, prjid)
     project_owner = project["owner"]
     user_has_permission_to_edit = project_owner == userid or userid in project["editors"]
     if not user_has_permission_to_edit:
@@ -1253,7 +1206,7 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
             if not isinstance(val, list):
                 return False, f"Editors field should be an array"
 
-            all_editors = get_users_with_privilege("edit")
+            all_editors = get_users_with_privilege(licco_db, "edit")
             not_allowed_editors = []
             for user in val:
                 if user not in all_editors:
@@ -1269,7 +1222,7 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
         else:
             return False, f"Invalid update field '{key}'"
 
-    licco_db[line_config_db_name]["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
+    licco_db["projects"].update_one({"_id": ObjectId(prjid)}, {"$set": update})
 
     # send notifications if necessary
     updated_editors = "editors" in user_changes
@@ -1290,15 +1243,15 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
     return True, ""
 
 
-def delete_project(userid, project_id):
+def delete_project(licco_db: MongoDb, userid, project_id):
     """
     Delete the chosen project and all related data (history of value changes, tags).
     """
-    prj = get_project(project_id)
+    prj = get_project(licco_db, project_id)
     if not prj:
         return False, f"Project {project_id} does not exist"
 
-    admins = get_users_with_privilege("admin")
+    admins = get_users_with_privilege(licco_db, "admin")
     user_is_owner = userid == prj["owner"]
     user_is_admin = userid in admins
 
@@ -1308,40 +1261,39 @@ def delete_project(userid, project_id):
 
     if user_is_admin:
         # deletion for admin role means 'delete'
-        licco_db[line_config_db_name]["projects"].delete_one({'_id': ObjectId(project_id)})
-        licco_db[line_config_db_name]["projects_history"].delete_many({'prj': ObjectId(project_id)})
-        licco_db[line_config_db_name]["tags"].delete_many({'prj': ObjectId(project_id)})
+        licco_db["projects"].delete_one({'_id': ObjectId(project_id)})
+        licco_db["projects_history"].delete_many({'prj': ObjectId(project_id)})
+        licco_db["tags"].delete_many({'prj': ObjectId(project_id)})
         return True, ""
 
     # user is just the owner, delete in this case means 'hide the project'
-    licco_db[line_config_db_name]["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden'}})
+    licco_db["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden'}})
     return True, ""
 
 
-def get_tags_for_project(prjid):
+def get_tags_for_project(licco_db: MongoDb, prjid):
     """
     Get the tags for the specified project
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
-    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
+    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags
 
 
-def add_project_tag(prjid, tagname, asoftimestamp):
+def add_project_tag(licco_db: MongoDb, prjid, tagname, asoftimestamp):
     """
     Add a tag at the specified time for the project.
     """
-    prj = licco_db[line_config_db_name]["projects"].find_one(
-        {"_id": ObjectId(prjid)})
+    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", None
 
-    existing_tag = licco_db[line_config_db_name]["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
+    existing_tag = licco_db["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
     if existing_tag:
         return False, f"Tag {tagname} already exists for project {prjid}", None
 
-    licco_db[line_config_db_name]["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
-    tags = list(licco_db[line_config_db_name]["tags"].find({"prj": ObjectId(prjid)}))
+    licco_db["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
+    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags

@@ -12,7 +12,7 @@ from notifications.email_sender import EmailSettings, EmailSender, EmailSenderMo
 from notifications.notifier import Notifier
 from pages import pages_blueprint
 from services.licco import licco_ws_blueprint
-from dal.licco import initialize_collections
+from dal.mcd_model import initialize_collections
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -78,7 +78,7 @@ def create_notifier(app: Flask) -> Notifier:
 
 context.notifier = create_notifier(app)
 
-initialize_collections()
+initialize_collections(context.licco_db)
 
 
 if __name__ == '__main__':

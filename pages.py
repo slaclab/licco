@@ -7,7 +7,7 @@ import context
 
 from flask import Blueprint, render_template, send_file, abort, request, redirect, url_for
 
-from dal.licco import get_project
+from dal.mcd_model import get_project
 
 pages_blueprint = Blueprint('pages_api', __name__)
 

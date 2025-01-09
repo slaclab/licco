@@ -1,6 +1,6 @@
-'''
-Various small utilties.
-'''
+"""
+Various small utilities.
+"""
 import json
 import math
 import collections
