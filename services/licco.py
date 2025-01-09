@@ -902,7 +902,6 @@ def svc_submit_for_approval(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
 @context.security.authentication_required
-@context.security.authorization_required("approve")
 def svc_approve_project(prjid):
     """
     Approve a project
@@ -939,7 +938,6 @@ def svc_approve_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
 @context.security.authentication_required
-@context.security.authorization_required("approve")
 def svc_reject_project(prjid):
     """
     Do not approve a project

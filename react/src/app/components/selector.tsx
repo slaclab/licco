@@ -176,6 +176,10 @@ export const MultiChoiceStringSelector: React.FC<{ availableItems: string[], def
 
     const renderSelection = () => {
         if (selectedItems.length == 0) {
+            if (!noSelectionMessage) {
+                return null; // nothing to render
+            }
+
             if (typeof (noSelectionMessage) == 'string') {
                 return <p style={{ color: Colors.GRAY1 }}>{noSelectionMessage}</p>
             }

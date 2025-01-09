@@ -50,24 +50,20 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
 
                 // submitter or editor can't be an approver, that's why the currently logged in user should never appear in the list
                 // of all available approvers
-                const allApprovers = data.allApprovers.filter(e => e != data.whoami);
-                setAllApprovers(allApprovers);
-
-                const allEditors = data.allEditors;
-                setAllEditors(allEditors);
+                setAllApprovers(data.allApprovers.filter(e => e != data.whoami));
+                setAllEditors(data.allEditors.filter(e => e != data.whoami));
 
                 // remove already selected approvers and editors
                 if (data.projectInfo.approvers) {
-                    // select approvers which are allowed to approve and who are not currently selected as editors
-                    let selectedEditors = data.projectInfo.editors ?? [];
-                    let selectedApprovers = allApprovers.filter(a => data.projectInfo.approvers?.includes(a) && !selectedEditors.includes(a));
-                    setSelectedApprovers(selectedApprovers);
+                    // We don't restrict approvers to just the ones with approval roles, since anyone with an account
+                    // is elligible to be an approver. Account validity is tested on project edit
+                    setSelectedApprovers(data.projectInfo.approvers)
                 }
 
                 if (data.projectInfo.editors) {
-                    // only select editors which are allowed to edit and are in the current list of editors
-                    let selectedEditors = allEditors.filter(a => data.projectInfo.editors?.includes(a));
-                    setSelectedEditors(selectedEditors);
+                    // we don't restrict editors to just the ones with edito role, since anyone with an account 
+                    // could be an editor. The account validity is tested on project edit
+                    setSelectedEditors(data.projectInfo.editors);
                 }
             }).catch((e: JsonErrorMsg) => {
                 setLoadError(e.error);

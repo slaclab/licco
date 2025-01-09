@@ -2,7 +2,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Dialog, DialogBody, DialogFooter, Divider, FileInput, FormGroup, HTMLSelect, InputGroup, Label, NonIdealState, Spinner, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingSpinner } from "../components/loading";
-import { MultiChoiceSelector, MultiChoiceStringSelector } from "../components/selector";
+import { MultiChoiceStringSelector } from "../components/selector";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
@@ -10,7 +10,7 @@ import { ImportResult, ProjectApprovalHistory, ProjectInfo, deleteProject, fetch
 
 
 // dialog for adding new projects
-export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: ProjectInfo[], user: string, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, approvedProjects, user, onClose, onSubmit }) => {
+export const CreateNewProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: ProjectInfo[], user: string, onClose: () => void, onSubmit: (projectInfo: ProjectInfo) => void }> = ({ isOpen, approvedProjects, user, onClose, onSubmit }) => {
     const DEFAULT_TEMPLATE = "Blank Project";
 
     const [selectedTemplate, setSelectedTemplate] = useState<string>(DEFAULT_TEMPLATE);
@@ -115,7 +115,7 @@ export const AddProjectDialog: React.FC<{ isOpen: boolean, approvedProjects: Pro
                 </FormGroup>
 
                 <FormGroup label="Project Editors:" labelInfo="(optional)">
-                    <MultiChoiceSelector availableItems={allEditors} defaultSelectedItems={[]} defaultValue={"Please select an editor..."} renderer={e => e} onChange={e => setEditors(e)} />
+                    <MultiChoiceStringSelector availableItems={allEditors} defaultSelectedItems={[]} placeholder={"Please select an editor..."} noSelectionMessage="No editors selected..." onChange={e => setEditors(e)} />
                 </FormGroup>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}
             </DialogBody>
