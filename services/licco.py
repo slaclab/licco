@@ -1,20 +1,24 @@
-'''
+"""
 Web service endpoints for licco
-'''
+"""
 import csv
+import datetime
 import os
 import fnmatch
 import re
 from io import BytesIO, StringIO
 import tempfile
 from functools import wraps
+import pytz
+import logging
+import json
 import context
 from context import licco_db
-
 from flask import Blueprint, request, Response, send_file
 
+from dal import mcd_model
+from dal.mcd_model import FCState
 from dal.utils import JSONEncoder
-from dal.mcd_model import *
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
 
@@ -59,7 +63,7 @@ def project_writable(wrapped_function):
         prjid = kwargs.get('prjid', None)
         if not prjid:
             raise Exception("Need to specify project id")
-        prj = get_project(licco_db, prjid)
+        prj = mcd_model.get_project(licco_db, prjid)
         if not prj:
             raise Exception(f"Project with id {prjid} does not exist")
         if prj.get("status", "N/A") == "development":
@@ -121,7 +125,7 @@ def svc_get_fcattrs():
     """
     Get the metadata for the attributes for the functional components
     """
-    return JSONEncoder().encode({"success": True, "value": get_fcattrs()})
+    return JSONEncoder().encode({"success": True, "value": mcd_model.get_fcattrs()})
 
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -132,7 +136,7 @@ def svc_get_users():
     For now, this is simply the owners of projects.
     """
     logged_in_user = context.security.get_current_user_id()
-    users = get_all_users(licco_db)
+    users = mcd_model.get_all_users(licco_db)
     return JSONEncoder().encode({"success": True, "value": users})
 
 
@@ -157,7 +161,7 @@ def svc_get_users_with_approve_privilege():
     """
     Get the users in the system who have the approve privilege
     """
-    users = get_users_with_privilege(licco_db, "approve")
+    users = mcd_model.get_users_with_privilege(licco_db, "approve")
     return JSONEncoder().encode({"success": True, "value": users})
 
 @licco_ws_blueprint.route("/editors/", methods=["GET"])
@@ -166,7 +170,7 @@ def svc_get_users_with_edit_privilege():
     """
     Get the users in the system who have the edit privilege
     """
-    users = get_users_with_privilege(licco_db, "edit")
+    users = mcd_model.get_users_with_privilege(licco_db, "edit")
     return JSONEncoder().encode({"success": True, "value": users})
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
@@ -177,13 +181,13 @@ def svc_get_projects_for_user():
     """
     logged_in_user = context.security.get_current_user_id()
     sort_criteria = json.loads(request.args.get("sort", '[["start_time", -1]]'))
-    projects = get_all_projects(licco_db, logged_in_user, sort_criteria)
-    edits = get_projects_recent_edit_time(licco_db)
+    projects = mcd_model.get_all_projects(licco_db, logged_in_user, sort_criteria)
+    edits = mcd_model.get_projects_recent_edit_time(licco_db)
     for project in projects:
         project["edit_time"] = edits[(project["_id"])]["time"]
     if sort_criteria[0][0] == "edit_time":
         reverse = (sort_criteria[0][1] == -1)
-        min_date = datetime.min.replace(tzinfo=pytz.UTC)
+        min_date = datetime.datetime.min.replace(tzinfo=pytz.UTC)
         projects = sorted(projects, key=lambda d: d['edit_time'] or min_date, reverse=reverse)
     return JSONEncoder().encode({"success": True, "value": projects})
 
@@ -193,11 +197,11 @@ def svc_get_projects_for_user():
 def svc_get_currently_approved_project():
     """ Get the currently approved project """
     logged_in_user = context.security.get_current_user_id()
-    prj = get_master_project(licco_db)
+    prj = mcd_model.get_master_project(licco_db)
     if not prj:
          # no currently approved project (this can happen when the project is submitted for the first time)
         return JSONEncoder().encode({"success": True, "value": None})
-    prj_ffts = get_project_ffts(licco_db, prj["_id"])
+    prj_ffts = mcd_model.get_project_ffts(licco_db, prj["_id"])
     prj["ffts"] = prj_ffts
     return JSONEncoder().encode({"success": True, "value": prj})
 
@@ -209,7 +213,7 @@ def svc_get_project(prjid):
     Get the project details given a project id.
     """
     logged_in_user = context.security.get_current_user_id()
-    project_details = get_project(licco_db, prjid)
+    project_details = mcd_model.get_project(licco_db, prjid)
     return JSONEncoder().encode({"success": True, "value": project_details})
 
 
@@ -226,7 +230,7 @@ def svc_create_project():
     if not prjdetails.get("description", None):
         return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
 
-    prj = create_new_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
+    prj = mcd_model.create_new_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
     return JSONEncoder().encode({"success": True, "value": prj})
 
 
@@ -238,11 +242,11 @@ def svc_update_project(prjid):
     """
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
-    status, err = update_project_details(licco_db, logged_in_user, prjid, prjdetails, context.notifier)
+    status, err = mcd_model.update_project_details(licco_db, logged_in_user, prjid, prjdetails, context.notifier)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": err})
 
-    return JSONEncoder().encode({"success": True, "value": get_project(licco_db, prjid)})
+    return JSONEncoder().encode({"success": True, "value": mcd_model.get_project(licco_db, prjid)})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["DELETE"])
@@ -252,7 +256,7 @@ def svc_delete_project(prjid):
     Get the project details given a project id.
     """
     logged_in_user = context.security.get_current_user_id()
-    status, err = delete_project(licco_db, logged_in_user, prjid)
+    status, err = mcd_model.delete_project(licco_db, logged_in_user, prjid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": err})
     return JSONEncoder().encode({"success": True})
@@ -268,11 +272,10 @@ def svc_get_project_ffts(prjid):
     showallentries = json.loads(request.args.get("showallentries", "true"))
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
-        asoftimestamp = datetime.strptime(
-            asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+        asoftimestamp = datetime.datetime.strptime(asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
     else:
         asoftimestamp = None
-    project_fcs = get_project_ffts(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
+    project_fcs = mcd_model.get_project_ffts(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
 
     def __filter__(f, d):
         """ Apply f onto d as a filter """
@@ -301,7 +304,7 @@ def svc_get_project_changes(prjid):
     """
     Get the functional component objects
     """
-    changes = get_project_changes(licco_db, prjid)
+    changes = mcd_model.get_project_changes(licco_db, prjid)
     return JSONEncoder().encode({"success": True, "value": changes})
 
 
@@ -311,7 +314,7 @@ def svc_get_fcs():
     """
     Get the functional component objects
     """
-    fcs = get_fcs(licco_db)
+    fcs = mcd_model.get_fcs(licco_db)
     return JSONEncoder().encode({"success": True, "value": fcs})
 
 
@@ -321,7 +324,7 @@ def svc_get_fgs():
     """
     Get the fungible tokens
     """
-    fgs = get_fgs(licco_db)
+    fgs = mcd_model.get_fgs(licco_db)
     return JSONEncoder().encode({"success": True, "value": fgs})
 
 
@@ -331,7 +334,7 @@ def svc_get_ffts():
     """
     Get a list of functional fungible tokens
     """
-    ffts = get_ffts(licco_db)
+    ffts = mcd_model.get_ffts(licco_db)
     return JSONEncoder().encode({"success": True, "value": ffts})
 
 
@@ -342,7 +345,7 @@ def svc_create_fc():
     Create a functional component
     """
     newfc = request.json
-    status, errormsg, fc = create_new_functional_component(licco_db,
+    status, errormsg, fc = mcd_model.create_new_functional_component(licco_db,
         name=newfc.get("name", ""), description=newfc.get("description", ""))
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
@@ -354,7 +357,7 @@ def svc_create_fg():
     Create a fungible token
     """
     newfg = request.json
-    status, errormsg, fg = create_new_fungible_token(licco_db,
+    status, errormsg, fg = mcd_model.create_new_fungible_token(licco_db,
         name=newfg.get("name", ""), description=newfg.get("description", ""))
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fg})
 
@@ -367,7 +370,7 @@ def svc_create_fft():
     For now, we expect the ID's of the functional component and the fungible token ( and not the names )
     """
     newfft = request.json
-    status, errormsg, fft = create_new_fft(licco_db,
+    status, errormsg, fft = mcd_model.create_new_fft(licco_db,
         fc=newfft["fc"], fg=newfft["fg"], fcdesc=newfft.get(
         "fc_description", None), fgdesc=newfft.get("fg_description", None))
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
@@ -379,7 +382,7 @@ def svc_delete_fft(fftid):
     """
     Delete a FFT if it is not being used in any project
     """
-    status, errormsg, _ = delete_fft(licco_db, fftid)
+    status, errormsg, _ = mcd_model.delete_fft(licco_db, fftid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
 
 
@@ -389,7 +392,7 @@ def svc_delete_fc(fcid):
     """
     Delete a FC if it is not being used by an FFT
     """
-    status, errormsg, _ = delete_fc(licco_db, fcid)
+    status, errormsg, _ = mcd_model.delete_fc(licco_db, fcid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
 
 
@@ -399,7 +402,7 @@ def svc_delete_fg(fgid):
     """
     Delete a FG if it is not being used by an FFT
     """
-    status, errormsg, _ = delete_fg(licco_db, fgid)
+    status, errormsg, _ = mcd_model.delete_fg(licco_db, fgid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
 
 
@@ -413,7 +416,7 @@ def svc_update_fc_in_project(prjid, fftid):
     fcupdate = request.json
     fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
-    status, msg = validate_import_headers(licco_db, fcupdate, prjid)
+    status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
 
@@ -424,8 +427,8 @@ def svc_update_fc_in_project(prjid, fftid):
             'author': userid,
             'comment': discussion
         }]
-    status, errormsg, results = update_fft_in_project(licco_db, userid, prjid, fcupdate)
-    fc = get_project_ffts(licco_db, prjid)
+    status, errormsg, results = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
+    fc = mcd_model.get_project_ffts(licco_db, prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
@@ -444,12 +447,12 @@ def svc_add_fft_comment(prjid, fftid):
         return logAndAbortJson("Comment should not be empty", ret_status=400)
 
     userid = context.security.get_current_user_id()
-    status, errormsg, results = add_fft_comment(licco_db, userid, prjid, fftid, comment)
+    status, errormsg, results = mcd_model.add_fft_comment(licco_db, userid, prjid, fftid, comment)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
 
     # TODO: refactor: we should be able to get just one specific device (and not fetch all devices everytime we want one)
-    fc = get_project_ffts(licco_db, prjid)
+    fc = mcd_model.get_project_ffts(licco_db, prjid)
     val = fc[fftid]
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": val})
 
@@ -464,7 +467,7 @@ def svc_remove_fft_comment(prjid, fftid):
 
     errors = []
     for comment_id in comment_ids:
-        deleted, errormsg = delete_fft_comment(licco_db, prjid, comment_id)
+        deleted, errormsg = mcd_model.delete_fft_comment(licco_db, prjid, comment_id)
         if not deleted:
             errors.append(errormsg)
 
@@ -492,9 +495,10 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     reqparams = request.json
     logger.info(reqparams)
-    status, errormsg, fc = copy_ffts_from_project(licco_db,
+    status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-        x["name"] for x in get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"], userid=userid)
+        x["name"] for x in mcd_model.get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
+        userid=userid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 
@@ -510,8 +514,8 @@ def svc_update_ffts_in_project(prjid):
         ffts = [ffts]
 
     userid = context.security.get_current_user_id()
-    status, errormsg, update_status = update_ffts_in_project(licco_db, userid, prjid, ffts)
-    fft = get_project_ffts(licco_db, prjid)
+    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
+    fft = mcd_model.get_project_ffts(licco_db, prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])
@@ -523,7 +527,7 @@ def svc_remove_ffts_from_project(prjid):
     """
     userid = context.security.get_current_user_id()
     fft_ids = request.json.get('ids', [])
-    status, errormsg = remove_ffts_from_project(licco_db, userid, prjid, fft_ids)
+    status, errormsg = mcd_model.remove_ffts_from_project(licco_db, userid, prjid, fft_ids)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
 
@@ -535,8 +539,7 @@ def svc_import_project(prjid):
     Import project data from csv file
     """
     userid = context.security.get_current_user_id()
-    prj_name = get_project(licco_db, prjid)["name"]
-    status_str = f'Import Results for:  {prj_name}\n'
+    prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     status_val = {"headers": 0, "fail": 0, "success": 0, "ignored": 0}
 
     with BytesIO() as stream:
@@ -549,6 +552,7 @@ def svc_import_project(prjid):
             response_value = {"status_str": error_msg, "log_name": None}
             return JSONEncoder().encode({"success": False, "value": response_value})
 
+    # TODO: refactor this into a separate method
     with StringIO(filestring) as fp:
         fp.seek(0)
         # Find the header row
@@ -582,8 +586,7 @@ def svc_import_project(prjid):
                 fcs[line["FC"]].append(line)
             else:
                 # Sanitize/replace unicode quotes
-                clean_line = re.sub(
-                    u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
+                clean_line = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
                 if not clean_line:
                     status_val["fail"] += 1
                     continue
@@ -592,7 +595,7 @@ def svc_import_project(prjid):
             response_value = {"status_str": "Import Error: No data detected in import file.", "log_name": None}
             return JSONEncoder().encode({"success": False, "value": response_value})
 
-    log_time = datetime.now().strftime("%m%d%Y.%H%M%S")
+    log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
     imp_log, imp_handler = create_logger(log_name)
 
@@ -608,7 +611,7 @@ def svc_import_project(prjid):
         current_list = []
         for fc in fc_list:
             if fc["FC"] not in fc2id:
-                status, errormsg, newfc = create_new_functional_component(licco_db,
+                status, errormsg, newfc = mcd_model.create_new_functional_component(licco_db,
                     name=fc["FC"], description="Generated from " + nm)
                 # FFT creation successful, add to data to import list
                 if status:
@@ -633,15 +636,15 @@ def svc_import_project(prjid):
     for nm, fc_list in fcs.items():
         for fc in fc_list:
             if fc["Fungible"] and fc["Fungible"] not in fg2id:
-                status, errormsg, newfg = create_new_fungible_token(licco_db,
+                status, errormsg, newfg = mcd_model.create_new_fungible_token(licco_db,
                     name=fc["Fungible"], description="Generated from " + nm)
                 fg2id[fc["Fungible"]] = newfg["_id"]
 
-    ffts = {(fft["fc"]["name"], fft["fg"]["name"]): fft["_id"] for fft in get_ffts(licco_db)}
+    ffts = {(fft["fc"]["name"], fft["fg"]["name"]): fft["_id"] for fft in mcd_model.get_ffts(licco_db)}
     for fc_list in fcs.values():
         for fc in fc_list:
             if (fc["FC"], fc["Fungible"]) not in ffts:
-                status, errormsg, newfft = create_new_fft(licco_db,
+                status, errormsg, newfft = mcd_model.create_new_fft(licco_db,
                     fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
                 ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
                       if "fg" in newfft else None)] = newfft["_id"]
@@ -657,10 +660,10 @@ def svc_import_project(prjid):
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
 
-    status, errormsg, update_status = update_ffts_in_project(licco_db, userid, prjid, fcuploads, imp_log)
+    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, fcuploads, imp_log)
 
     # Include imports failed from bad FC/FGs
-    prj_name = get_project(licco_db, prjid)["name"]
+    prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     if update_status:
         status_val = {k: update_status[k]+status_val[k]
                             for k in update_status.keys()}
@@ -668,7 +671,7 @@ def svc_import_project(prjid):
     # number of recognized headers minus the id used for DB reference
     status_val["headers"] = len(fcuploads[0].keys())-1
     status_str = create_status_update(prj_name, status_val)
-    logger.debug(re.sub('\n|_', '', status_str))
+    logger.debug(re.sub('[\n_]', '', status_str))
     imp_log.info(status_str)
     imp_log.removeHandler(imp_handler)
     imp_handler.close()
@@ -702,8 +705,8 @@ def svc_export_project(prjid):
     with StringIO() as stream:
         writer = csv.DictWriter(stream, fieldnames=KEYMAP.keys())
         writer.writeheader()
-        prj_ffts = get_project_ffts(licco_db, prjid)
-        prj_name = get_project(licco_db, prjid)["name"]
+        prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
+        prj_name = mcd_model.get_project(licco_db, prjid)["name"]
 
         for fft in prj_ffts:
             row_dict = {}
@@ -746,11 +749,11 @@ def svc_submit_for_approval(prjid):
         approver = request.args.get("approver", None)
         if approver:
             approvers.append(approver)
-        old_prj = get_project(licco_db, prjid)
+        old_prj = mcd_model.get_project(licco_db, prjid)
         editors = old_prj["editors"]
 
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
+    status, errormsg, prj = mcd_model.submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -762,7 +765,7 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
-    status, all_approved, errormsg, prj = approve_project(licco_db, prjid, userid, context.notifier)
+    status, all_approved, errormsg, prj = mcd_model.approve_project(licco_db, prjid, userid, context.notifier)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
@@ -782,7 +785,7 @@ def svc_reject_project(prjid):
     if not reason:
         return logAndAbortJson("Please provide a reason for why this project is not being approved")
 
-    status, errormsg, prj = reject_project(licco_db, prjid, userid, reason, context.notifier)
+    status, errormsg, prj = mcd_model.reject_project(licco_db, prjid, userid, reason, context.notifier)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
@@ -800,7 +803,7 @@ def svc_project_diff(prjid):
 
     if not other_prjid:
         return logAndAbort("Please specify the other project id using the parameter other_id")
-    status, errormsg, diff = diff_project(licco_db, prjid, other_prjid, userid, approved=approved)
+    status, errormsg, diff = mcd_model.diff_project(licco_db, prjid, other_prjid, userid, approved=approved)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": diff})
 
 
@@ -820,7 +823,7 @@ def svc_clone_project(prjid):
     if not project_name or not project_description:
         return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
 
-    status, erorrmsg, newprj = clone_project(licco_db, userid, prjid, project_name, project_description, project_editors, context.notifier)
+    status, erorrmsg, newprj = mcd_model.clone_project(licco_db, userid, prjid, project_name, project_description, project_editors, context.notifier)
     return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
 
 
@@ -830,7 +833,7 @@ def svc_project_tags(prjid):
     """
     Get the tags for the project
     """
-    status, errormsg, tags = get_tags_for_project(licco_db, prjid)
+    status, errormsg, tags = mcd_model.get_tags_for_project(licco_db, prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
 
 
@@ -846,13 +849,13 @@ def svc_add_project_tag(prjid):
     if not tagname:
         return JSONEncoder().encode({"success": False, "errormsg": "Please specify the tag_name", "value": None})
     if not asoftimestamp:
-        changes = get_project_changes(licco_db, prjid)
+        changes = mcd_model.get_project_changes(licco_db, prjid)
         if not changes:
             return JSONEncoder().encode({"success": False, "errormsg": "Cannot tag a project without a change", "value": None})
         logger.info("Latest change is at " + str(changes[0]["time"]))
         asoftimestamp = changes[0]["time"]
     logger.debug(f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
-    status, errormsg, tags = add_project_tag(licco_db, prjid, tagname, asoftimestamp)
+    status, errormsg, tags = mcd_model.add_project_tag(licco_db, prjid, tagname, asoftimestamp)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
 
 
@@ -862,4 +865,4 @@ def svc_get_projects_approval_history():
     """
     Get the approval history of projects in the system
     """
-    return JSONEncoder().encode({"success": True, "value": get_projects_approval_history(licco_db, limit=100)})
+    return JSONEncoder().encode({"success": True, "value": mcd_model.get_projects_approval_history(licco_db, limit=100)})

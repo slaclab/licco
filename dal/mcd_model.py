@@ -87,6 +87,17 @@ def initialize_collections(licco_db: MongoDb):
         licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "development"}})
 
 
+def is_user_allowed_to_edit_project(userid: str, project: Dict[str, any]) -> bool:
+    if userid == '' or None:
+        return False
+
+    allowed_to_edit = False
+    allowed_to_edit |= userid == project.get('owner', None)
+    allowed_to_edit |= userid in project.get('editors', [])
+    # TODO: check if user is admin
+    return allowed_to_edit
+
+
 def get_all_users(licco_db: MongoDb):
     """
     For now, simply return all the owners and editors of projects.
@@ -741,7 +752,7 @@ def validate_insert_range(attr, val):
     return True
 
 
-def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False) -> Tuple[bool, str, Dict[str, int]]:
+def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, Dict[str, int]]:
     """
     Insert multiple FFTs into a project
     """
@@ -754,14 +765,24 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
             new_ffts.append(ffts[entry])
         ffts = new_ffts
 
-    project_ffts = get_project_ffts(licco_db, prjid)
+    project = get_project(licco_db, prjid)
+    if project['name'] != MASTER_PROJECT_NAME:
+        if project['status'] != 'development':
+            return False, f"can't update ffts of a project that is not in a development mode (status = {project['status']})", {}
 
-    # TODO: ROBUSTNESS 1: check that only owner/editor/admin is able to set the values
-    #
-    # TODO: ROBUSTNESS 2: we should validate ffts before insertion: right now it's possible that only some of the
+    verify_user_permissions = not ignore_user_permission_check
+    if verify_user_permissions:
+        # check that only owner/editor/admin are allowed to update this project
+        allowed_to_update = is_user_allowed_to_edit_project(userid, project)
+        if not allowed_to_update:
+            return False, f"user '{userid}' is not allowed to update a project {project['name']}", {}
+
+
+    # TODO: ROBUSTNESS: we should validate ffts before insertion: right now it's possible that only some of the
     #       ffts will be inserted, while the ones with errors will not. This leaves the db in an inconsistent state.
     #
     # Iterate through parameter fft set
+    project_ffts = get_project_ffts(licco_db, prjid)
     errormsg = ""
     for fft in ffts:
         if "_id" not in fft:
@@ -779,13 +800,14 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
             else:
                 if "fg" not in fft:
                     fft["fg"] = ""
-                fft["_id"] = get_fft_id_by_names(licco_db, fc=fft["fc"], fg=fft["fg"])
-        fftid = fft["_id"]
+                fft["_id"] = str(get_fft_id_by_names(licco_db, fc=fft["fc"], fg=fft["fg"]))
+        fftid = str(fft["_id"])
 
         # previous values
-        db_values = get_fft_values_by_project(licco_db, fft["_id"], prjid)
-        fcupdate = {"_id": fftid}
+        db_values = get_fft_values_by_project(licco_db, fftid, prjid)
+        fcupdate = {}
         fcupdate.update(fft)
+        fcupdate["_id"] = fftid
         if ("state" not in fcupdate) or (not fcupdate["state"]):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
@@ -798,14 +820,14 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
             update_status["fail"] += 1
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
-        for attr in ["_id", "name", "fc", "fg", "fft"]:
+        for attr in ["name", "fc", "fg", "fft"]:
             if attr in fcupdate:
                 del fcupdate[attr]
 
         # Performance: when updating fft in a project, we used to do hundreds of database calls
         # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
         # querying the current project attributes once and passing it to the update routine
-        current_attributes = project_ffts.get(str(fftid), {})
+        current_attributes = project_ffts.get(fftid, {})
         if remove_discussion_comments:
             # discussion comment will not be copied/updated
             if fcupdate.get('discussion', None):
@@ -1089,7 +1111,8 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     status, errormsg, update_status = update_ffts_in_project(licco_db, userid,
                                                              master_project["_id"],
                                                              get_project_ffts(licco_db, prjid),
-                                                             remove_discussion_comments=True)
+                                                             remove_discussion_comments=True,
+                                                             ignore_user_permission_check=True)
     if not status:
         # failed to insert changed fft data into master project
         return False, False, errormsg, {}

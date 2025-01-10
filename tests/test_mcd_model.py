@@ -137,8 +137,7 @@ def test_add_fft_to_project(db):
     assert len(project_ffts) == 0, "there should be no ffts in a new project"
 
     # add fft change
-    fft_id = mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG")
-    fft_id = str(fft_id)
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
     assert fft_id, "fft_id should exist"
     fft_update = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
     ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
@@ -152,3 +151,34 @@ def test_add_fft_to_project(db):
     assert str(inserted_fft["fft"]["_id"]) == fft_update["_id"]
     assert inserted_fft["comments"] == fft_update["comments"]
     assert inserted_fft["nom_ang_x"] == pytest.approx(fft_update["nom_ang_x"], "0.001")
+    assert len(inserted_fft["discussion"]) == 0, "there should be no discussion comments"
+    # discussion and fft are extra fields
+    default_fields = 2
+    inserted_fields = 2
+    total_fields = default_fields + inserted_fields
+    assert len(inserted_fft.keys()) == total_fields, "there should not be more fields than the one we have inserted"
+
+
+def test_remove_fft_from_project(db):
+    project = mcd_model.create_new_project(db, "test_remove_fft_from_project", "", "test_user")
+    prjid = str(project["_id"])
+
+    # insert new fft
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_y': 1.23}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    assert ok
+    assert err == ""
+
+    inserted_ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(inserted_ffts) == 1
+    inserted_fft = inserted_ffts[fft_id]
+    assert str(inserted_fft["fft"]["_id"]) == fft_update["_id"]
+
+    # remove inserted fft
+    ok, err = mcd_model.remove_ffts_from_project(db, "test_user", prjid, [fft_id])
+    assert ok
+    assert err == ""
+
+    project_ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(project_ffts) == 0, "there should be no ffts after deletion"
