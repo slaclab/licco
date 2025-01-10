@@ -316,12 +316,14 @@ def add_fft_comment(licco_db: MongoDb, user_id, project_id, fftid, comment):
     if not allowed_to_comment:
         return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
 
-    new_comment = {'discussion': [{
+    new_comment = {
+        "_id": fftid,
+        'discussion': [{
         'author': user_id,
         'comment': comment,
         'time': datetime.datetime.utcnow(),
     }]}
-    status, errormsg, results = update_fft_in_project(licco_db, project_id, fftid, new_comment, user_id)
+    status, errormsg, results = update_fft_in_project(licco_db, user_id, project_id, new_comment)
     return status, errormsg, results
 
 
@@ -356,8 +358,10 @@ def create_new_project(licco_db: MongoDb, name, description, userid):
     """
     Create a new project belonging to the specified user.
     """
-    newprjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": userid, "editors": [
-    ], "status": "development", "creation_time": datetime.datetime.utcnow()}).inserted_id
+    newprjid = licco_db["projects"].insert_one({
+        "name": name, "description": description, "owner": userid, "editors": [], "approvers": [],
+        "status": "development", "creation_time": datetime.datetime.utcnow()
+    }).inserted_id
     prj = licco_db["projects"].find_one({"_id": newprjid})
     return prj
 
@@ -566,7 +570,7 @@ fcattrs = {
     },
     "discussion": {
         # NOTE: everytime the user changes a device value, a discussion comment is added to the database
-        # as a separate document. On load, however, we have to parse all the comments into an structured
+        # as a separate document. On load, however, we have to parse all the comments into a structured
         # array of all comments for that specific device.
         "name": "discussion",
         "type": "text",
@@ -591,13 +595,16 @@ def get_fcattrs(fromstr=False):
     return fcattrscopy
 
 
-def update_fft_in_project(licco_db: MongoDb, prjid, fftid, fcupdate, userid,
-                          modification_time=None,
+def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
                           current_project_attributes=None) -> Tuple[bool, str, Dict[str, int]]:
     """
     Update the value(s) of an FFT in a project
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
+    fftid = fcupdate["_id"]
+    if not fftid:
+        return False, "fft id is missing in updated values", {}
+
     insert_count = {"success": 0, "fail": 0, "ignored": 0}
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
@@ -630,6 +637,8 @@ def update_fft_in_project(licco_db: MongoDb, prjid, fftid, fcupdate, userid,
     all_inserts = []
     fft_edits = set()
     for attrname, attrval in fcupdate.items():
+        if attrname == "_id":
+            continue
         if attrname == "fft":
             continue
 
@@ -732,6 +741,150 @@ def validate_insert_range(attr, val):
     return True
 
 
+def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False) -> Tuple[bool, str, Dict[str, int]]:
+    """
+    Insert multiple FFTs into a project
+    """
+    if def_logger is None:
+        def_logger = logger
+    update_status = {"success": 0, "fail": 0, "ignored": 0}
+    if isinstance(ffts, dict):
+        new_ffts = []
+        for entry in ffts:
+            new_ffts.append(ffts[entry])
+        ffts = new_ffts
+
+    project_ffts = get_project_ffts(licco_db, prjid)
+
+    # TODO: ROBUSTNESS 1: check that only owner/editor/admin is able to set the values
+    #
+    # TODO: ROBUSTNESS 2: we should validate ffts before insertion: right now it's possible that only some of the
+    #       ffts will be inserted, while the ones with errors will not. This leaves the db in an inconsistent state.
+    #
+    # Iterate through parameter fft set
+    errormsg = ""
+    for fft in ffts:
+        if "_id" not in fft:
+            # TODO: this lookup should be removed in the future
+            # REVIEW: the database layer should return the kind of structure that you
+            # need, so you don't have to fix it everyhwere that structure is used.
+            # That fix should be already in the database layer.
+            #
+            # If the fft set comes from the database, unpack the fft ids
+            if "fft" in fft:
+                fft["_id"] = fft["fft"]["_id"]
+                fft["fc"] = fft["fft"]["fc"]
+                fft["fg"] = fft["fft"]["fg"]
+            # Otherwise, look up the fft ids
+            else:
+                if "fg" not in fft:
+                    fft["fg"] = ""
+                fft["_id"] = get_fft_id_by_names(licco_db, fc=fft["fc"], fg=fft["fg"])
+        fftid = fft["_id"]
+
+        # previous values
+        db_values = get_fft_values_by_project(licco_db, fft["_id"], prjid)
+        fcupdate = {"_id": fftid}
+        fcupdate.update(fft)
+        if ("state" not in fcupdate) or (not fcupdate["state"]):
+            if "state" in db_values:
+                fcupdate["state"] = db_values["state"]
+            else:
+                fcupdate["state"] = "Conceptual"
+
+        # If invalid, don't try to add to DB
+        status, errormsg = validate_import_headers(licco_db, fcupdate, prjid)
+        if not status:
+            update_status["fail"] += 1
+            def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
+            continue
+        for attr in ["_id", "name", "fc", "fg", "fft"]:
+            if attr in fcupdate:
+                del fcupdate[attr]
+
+        # Performance: when updating fft in a project, we used to do hundreds of database calls
+        # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
+        # querying the current project attributes once and passing it to the update routine
+        current_attributes = project_ffts.get(str(fftid), {})
+        if remove_discussion_comments:
+            # discussion comment will not be copied/updated
+            if fcupdate.get('discussion', None):
+                del fcupdate['discussion']
+
+        status, errormsg, results = update_fft_in_project(licco_db, userid, prjid, fcupdate,
+                                                          current_project_attributes=current_attributes)
+        # Have smarter error handling here for different exit conditions
+        def_logger.info(create_imp_msg(fft, status=status, errormsg=errormsg))
+
+        # Add the individual FFT update results into overall count
+        if results:
+            update_status = {k: update_status[k]+results[k]
+                             for k in update_status.keys()}
+
+    # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
+    # that comes out of fft update loop
+    return True, errormsg, update_status
+
+
+def create_imp_msg(fft, status, errormsg=None):
+    """
+    Creates a message to be logged for the import report.
+    """
+    if status is None:
+        res = "IGNORED"
+    elif status is True:
+        res = "SUCCESS"
+    else:
+        res = "FAIL"
+    if 'fc' not in fft:
+        fft['fc'] = "NO VALID FC"
+    if 'fg' not in fft:
+        fft['fg'] = ''
+    msg = f"{res}: {fft['fc']}-{fft['fg']} - {errormsg}"
+    return msg
+
+
+def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
+    """
+    Helper function to pre-validate that all required data is present
+    fft: dictionary of field_name:values. '_id': '<fft_id>' is a necessary value
+    """
+    attrs = get_fcattrs(fromstr=True)
+    fftid = fft.get("_id", None)
+    if not fftid:
+        return False, "expected '_id' field in the fft values"
+
+    db_values = get_fft_values_by_project(licco_db, fftid, prjid)
+    if not "state" in fft:
+        fft["state"] = db_values["state"]
+    for header in attrs:
+        # If header is required for all, or if the FFT is non-conceptual and header is required
+        if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
+            # If required header not present in upload dataset
+            if not header in fft:
+                # Check if in DB already, continue to validate next if so
+                if header not in db_values:
+                    error_str = f"Missing Required Header {header}"
+                    logger.debug(error_str)
+                    return False, error_str
+                fft[header] = db_values[header]
+            # Header is a required value, but user is trying to null this value
+            if fft[header] == '':
+                error_str = f"Header {header} Value Required for a Non-Conceptual Device"
+                logger.debug(error_str)
+                return False, error_str
+
+        # Header not in data
+        if not header in fft:
+            continue
+        try:
+            val = attrs[header]["fromstr"](fft[header])
+        except (ValueError, KeyError) as e:
+            error_str = f"Invalid Data {fft[header]} For Type of {header}."
+            return False, error_str
+    return True, "Success"
+
+
 def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrnames, userid):
     """
     Copy values for the fftid from srcprjid into destprjid for the specified attrnames
@@ -782,7 +935,6 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     return True, "", get_project_attributes(licco_db, ObjectId(destprjid)).get(fftid, {})
 
 
-
 def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str]):
     project = get_project(licco_db, prjid)
     if not project:
@@ -804,6 +956,7 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str
         # while providing a list of invalid ids.
         return False, f"Chosen ffts {fft_ids} do not exist"
     return True, ""
+
 
 def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
     """
@@ -875,7 +1028,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
     return True, "", updated_project_info
 
 
-def approve_project(licco_db: MongoDb, prjid, userid) -> Tuple[bool, bool, str, Dict[str, any]]:
+def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifier) -> Tuple[bool, bool, str, Dict[str, any]]:
     """
     Approve a submitted project.
     Set the status to approved
@@ -890,7 +1043,6 @@ def approve_project(licco_db: MongoDb, prjid, userid) -> Tuple[bool, bool, str, 
 
     assigned_approvers = prj.get("approvers", [])
     if userid not in assigned_approvers:
-        # TODO: check if the user is a super approver
         return False, False, f"User {userid} is not allowed to approve the project", {}
 
     # update the project metadata
@@ -903,36 +1055,59 @@ def approve_project(licco_db: MongoDb, prjid, userid) -> Tuple[bool, bool, str, 
         "approved_by": approved_by
     }
 
-    all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
-    if all_assigned_approvers_approved:
-        # TODO: super approvers should approve as well, how do we check and store for that?
-        #
-        # once the project is approved, it goes back into the development status
-        # we have only 1 approved project at a time, to which the ffts are copied
-        updated_project_data["status"] = "development"
-        updated_project_data['approved_time'] = datetime.datetime.utcnow()
-        # clean the project metadata as if it was freshly created project
-        updated_project_data["editors"] = []
-        updated_project_data["approvers"] = []
-        updated_project_data["approved_by"] = []
-        updated_project_data['notes'] = []
-
-        # update current master project
-        approved_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
-        if not approved_project:
-            return False, False, "Failed to find an approved project: this is a programming bug", {}
-        licco_db["projects"].update_one({"_id": approved_project["_id"]}, {"$set": {
-            "owner": "", "status": "approved", "approved_time": datetime.datetime.utcnow()
-        }})
-
+    # user was allowed to approve, store the approvers for this project
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
     store_project_approval(licco_db, prjid, prj["submitter"])
 
+    all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
+    still_waiting_for_approval = not all_assigned_approvers_approved
+    if still_waiting_for_approval:
+        updated_project = licco_db["projects"].find_one({"_id": prj["_id"]})
+        return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
+
+    # all assigned approvers approved
+    #
+    # once the project is approved, it goes back into the development status
+    # we have only 1 approved project at a time, to which the ffts are copied
+    updated_project_data["status"] = "development"
+    updated_project_data['approved_time'] = datetime.datetime.utcnow()
+    # clean the project metadata as if it was freshly created project
+    updated_project_data["editors"] = []
+    updated_project_data["approvers"] = []
+    updated_project_data["approved_by"] = []
+    updated_project_data['notes'] = []
+
+    # update current master project
+    master_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
+    if not master_project:
+        return False, False, "Failed to find an approved project: this is a programming bug", {}
+    licco_db["projects"].update_one({"_id": master_project["_id"]}, {"$set": {
+        "owner": "", "status": "approved", "approved_time": datetime.datetime.utcnow()
+    }})
+
+    # master project should not inherit old discussion comments from a submitted project, hence the removal flag
+    status, errormsg, update_status = update_ffts_in_project(licco_db, userid,
+                                                             master_project["_id"],
+                                                             get_project_ffts(licco_db, prjid),
+                                                             remove_discussion_comments=True)
+    if not status:
+        # failed to insert changed fft data into master project
+        return False, False, errormsg, {}
+
+    # successfully inserted project ffts into a master project
+    # send notifications that the project was approved
     updated_project = licco_db["projects"].find_one({"_id": prj["_id"]})
+    project_name = updated_project["name"]
+    owner = updated_project["owner"]
+    editors = updated_project["editors"]
+    approvers = updated_project["approvers"]
+    notified_users = list(set([owner] + editors + approvers))
+    notifier.project_approval_approved(notified_users, project_name, prjid)
+
     return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
 
-def reject_project(licco_db: MongoDb, prjid, userid, reason):
+def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, notifier: Notifier):
     """
     Do not approve a submitted project.
     Set the status to development
@@ -943,12 +1118,39 @@ def reject_project(licco_db: MongoDb, prjid, userid, reason):
     if prj["status"] != "submitted":
         return False, f"Project {prjid} is not in submitted status", None
 
+    allowed_to_reject = False
+    allowed_to_reject |= userid == prj['owner']
+    allowed_to_reject |= userid in prj['editors']
+    allowed_to_reject |= userid in prj['approvers']
+    if not allowed_to_reject and userid in get_users_with_privilege(licco_db, "admin"):
+        # user is admin, and as such has the privilege to delete a project
+        allowed_to_reject = True
+
+    if not allowed_to_reject:
+        return False, f"User {userid} is not allowed to reject this project", None
+
+    # TODO: notes should probably be stored in a format (user: <username>, date: datetime, content: "")
+    # so we can avoid rendering them when they are no longer relevant.
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
+    formatted_reason = f"{userid} ({licco_datetime}):\n{reason}"
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {
                                                         "status": "development",
                                                         "approved_by": [],
                                                         "approved_time": None,
-                                                        "notes": [reason] + prj.get("notes", [])}})
+                                                        "notes": [formatted_reason] + prj.get("notes", [])}})
     updated_project = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
+
+    # send notifications
+    project_id = updated_project["_id"]
+    project_name = updated_project["name"]
+    owner = updated_project["owner"]
+    editors = updated_project["editors"]
+    approvers = updated_project["approvers"]
+    project_approver_emails = list(set([owner] + editors + approvers))
+    user_who_rejected = userid
+    notifier.project_approval_rejected(project_approver_emails, project_name, project_id,
+                                               user_who_rejected, reason)
     return True, "", updated_project
 
 
@@ -963,16 +1165,16 @@ def get_currently_approved_project_by_switch(licco_db: MongoDb):
         return licco_db["projects"].find_one({"_id": current_id})
     return None
 
-def get_currently_approved_project(licco_db: MongoDb):
+
+def get_master_project(licco_db: MongoDb):
     """
     Get the current approved project by status
     """
-    # since there could be multiple projects with status 'approved', we grab the latest one based on the approved time
-    # prj = licco_db[line_config_db_name]["projects"].find_one({"status": "approved"}, sort=[("approved_time", -1)])
     prj = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if prj and prj["status"] == "approved":
         return prj
     return None
+
 
 def store_project_approval(licco_db: MongoDb, prjid: str, project_submitter: str):
     licco_db["switch"].insert_one({
@@ -980,6 +1182,7 @@ def store_project_approval(licco_db: MongoDb, prjid: str, project_submitter: str
         "requestor_uid": project_submitter,
         "switch_time": datetime.datetime.utcnow()
     })
+
 
 def get_projects_approval_history(licco_db: MongoDb, limit: int = 100):
     """
@@ -1001,6 +1204,7 @@ def get_projects_approval_history(licco_db: MongoDb, limit: int = 100):
         }}
     ]))
     return hist
+
 
 def get_projects_recent_edit_time(licco_db: MongoDb):
     """
@@ -1167,15 +1371,6 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     # load the project together with editors
     created_project = get_project(licco_db, created_project["_id"])
     return True, "", created_project
-
-
-def create_empty_project(licco_db: MongoDb, name, description, logged_in_user):
-    """
-    Empty project with name project name ands description
-    """
-    prjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": logged_in_user, "editors": [
-    ], "status": "development", "creation_time": datetime.datetime.utcnow()}).inserted_id
-    return get_project(licco_db, prjid)
 
 
 def update_project_details(licco_db: MongoDb, userid, prjid, user_changes: Dict[str, any], notifier: Notifier):

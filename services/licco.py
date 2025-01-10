@@ -6,7 +6,6 @@ import os
 import fnmatch
 import re
 from io import BytesIO, StringIO
-from datetime import datetime, timezone
 import tempfile
 from functools import wraps
 import context
@@ -69,140 +68,6 @@ def project_writable(wrapped_function):
             f"Project with id {prjid} is not in development status")
     return function_interceptor
 
-
-def create_imp_msg(fft, status, errormsg=None):
-    """
-    Creates a message to be logged for the import report.
-    """
-    if status is None:
-        res = "IGNORED"
-    elif status is True:
-        res = "SUCCESS"
-    else:
-        res = "FAIL"
-    if 'fc' not in fft:
-        fft['fc'] = "NO VALID FC"
-    if 'fg' not in fft:
-        fft['fg'] = ''
-    msg = f"{res}: {fft['fc']}-{fft['fg']} - {errormsg}"
-    return msg
-
-
-# TODO: this should most likely be moved into DAL
-def update_ffts_in_project(licco_db: MongoDb, prjid, ffts, def_logger=None, remove_discussion_comments = False) -> Tuple[bool, str, Dict[str, int]]:
-    """
-    Insert multiple FFTs into a project
-    """
-    if def_logger is None:
-        def_logger = logger
-    userid = context.security.get_current_user_id()
-    update_status = {"success": 0, "fail": 0, "ignored": 0}
-    if isinstance(ffts, dict):
-        new_ffts = []
-        for entry in ffts:
-            new_ffts.append(ffts[entry])
-        ffts = new_ffts
-
-    project_ffts = get_project_ffts(licco_db, prjid)
-
-    # Iterate through parameter fft set
-    errormsg = ""
-    for fft in ffts:
-        if "_id" not in fft:
-            # REVIEW: the database layer should return the kind of structure that you
-            # need, so you don't have to fix it everyhwere that structure is used.
-            # That fix should be already in the database layer.
-            #
-            # If the fft set comes from the database, unpack the fft ids
-            if "fft" in fft:
-                fft["_id"] = fft["fft"]["_id"]
-                fft["fc"] = fft["fft"]["fc"]
-                fft["fg"] = fft["fft"]["fg"]
-            # Otherwise, look up the fft ids
-            else:
-                if "fg" not in fft:
-                    fft["fg"] = ""
-                fft["_id"] = get_fft_id_by_names(licco_db, fc=fft["fc"], fg=fft["fg"])
-        fftid = fft["_id"]
-        # previous values
-        db_values = get_fft_values_by_project(licco_db, fft["_id"], prjid)
-        fcupdate = {}
-        fcupdate.update(fft)
-        if ("state" not in fcupdate) or (not fcupdate["state"]):
-            if "state" in db_values:
-                fcupdate["state"] = db_values["state"]
-            else:
-                fcupdate["state"] = "Conceptual"
-        # If invalid, don't try to add to DB
-        status, errormsg = validate_import_headers(fcupdate, prjid, fftid)
-        if not status:
-            update_status["fail"] += 1
-            def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
-            continue
-        for attr in ["_id", "name", "fc", "fg", "fft"]:
-            if attr in fcupdate:
-                del fcupdate[attr]
-
-        # Performance: when updating fft in a project, we used to do hundreds of database calls
-        # which was very slow. An import of a few ffts took 10 seconds. We speed this up, by
-        # querying the current project attributes once and passing it to the update routine
-        current_attributes = project_ffts.get(str(fftid), {})
-        if remove_discussion_comments:
-            # discussion comment will not be copied/updated
-            if fcupdate.get('discussion', None):
-                del fcupdate['discussion']
-
-        status, errormsg, results = update_fft_in_project(licco_db, prjid, fftid, fcupdate, userid,
-                                                          current_project_attributes=current_attributes)
-        # Have smarter error handling here for different exit conditions
-        def_logger.info(create_imp_msg(fft, status=status, errormsg=errormsg))
-
-        # Add the individual FFT update results into overall count
-        if results:
-            update_status = {k: update_status[k]+results[k]
-                             for k in update_status.keys()}
-
-    # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
-    # that comes out of fft update loop
-    return True, errormsg, update_status
-
-
-def validate_import_headers(fft, prjid, fftid=None):
-    """
-    Helper function to pre-validate that all required data is present
-    """
-    attrs = get_fcattrs(fromstr=True)
-    if not fftid:
-        fftid = fft["_id"]
-    db_values = get_fft_values_by_project(licco_db, fftid, prjid)
-    if not "state" in fft:
-        fft["state"] = db_values["state"]
-    for header in attrs:
-        # If header is required for all, or if the FFT is non-conceptual and header is required
-        if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
-            # If required header not present in upload dataset
-            if not header in fft:
-                # Check if in DB already, continue to validate next if so
-                if header not in db_values:
-                    error_str = f"Missing Required Header {header}"
-                    logger.debug(error_str)
-                    return False, error_str
-                fft[header] = db_values[header]
-            # Header is a required value, but user is trying to null this value
-            if (fft[header] == ''):
-                error_str = f"Header {header} Value Required for a Non-Conceptual Device"
-                logger.debug(error_str)
-                return False, error_str
-
-        # Header not in data
-        if not header in fft:
-            continue
-        try:
-            val = attrs[header]["fromstr"](fft[header])
-        except (ValueError, KeyError) as e:
-            error_str = f"Invalid Data {fft[header]} For Type of {header}."
-            return False, error_str
-    return True, "Success"
 
 def create_status_update(prj_name, status):
     """
@@ -328,7 +193,7 @@ def svc_get_projects_for_user():
 def svc_get_currently_approved_project():
     """ Get the currently approved project """
     logged_in_user = context.security.get_current_user_id()
-    prj = get_currently_approved_project(licco_db)
+    prj = get_master_project(licco_db)
     if not prj:
          # no currently approved project (this can happen when the project is submitted for the first time)
         return JSONEncoder().encode({"success": True, "value": None})
@@ -361,7 +226,7 @@ def svc_create_project():
     if not prjdetails.get("description", None):
         return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
 
-    prj = create_empty_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
+    prj = create_new_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
     return JSONEncoder().encode({"success": True, "value": prj})
 
 
@@ -546,8 +411,9 @@ def svc_update_fc_in_project(prjid, fftid):
     Update the values of a functional component in a project
     """
     fcupdate = request.json
+    fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
-    status, msg = validate_import_headers(fcupdate, prjid, fftid)
+    status, msg = validate_import_headers(licco_db, fcupdate, prjid)
     if not status:
         return JSONEncoder().encode({"success": False, "errormsg": msg})
 
@@ -558,7 +424,7 @@ def svc_update_fc_in_project(prjid, fftid):
             'author': userid,
             'comment': discussion
         }]
-    status, errormsg, results = update_fft_in_project(licco_db, prjid, fftid, fcupdate, userid)
+    status, errormsg, results = update_fft_in_project(licco_db, userid, prjid, fcupdate)
     fc = get_project_ffts(licco_db, prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
@@ -620,7 +486,8 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     Most of the time this is the currently approved project.
     Pass in a JSON with
     :param: other_id - Project id of the other project
-    "param: attrnames - List of attribute names to copy over. If this is a string "ALL", then all the attributes that are set are copied over.
+    :param: attrnames - List of attribute names to copy over. If this is a string "ALL", then all the attributes that
+    are set are copied over.
     """
     userid = context.security.get_current_user_id()
     reqparams = request.json
@@ -641,7 +508,9 @@ def svc_update_ffts_in_project(prjid):
     ffts = request.json
     if isinstance(ffts, dict):
         ffts = [ffts]
-    status, errormsg, update_status = update_ffts_in_project(licco_db, prjid, ffts)
+
+    userid = context.security.get_current_user_id()
+    status, errormsg, update_status = update_ffts_in_project(licco_db, userid, prjid, ffts)
     fft = get_project_ffts(licco_db, prjid)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
 
@@ -665,6 +534,7 @@ def svc_import_project(prjid):
     """
     Import project data from csv file
     """
+    userid = context.security.get_current_user_id()
     prj_name = get_project(licco_db, prjid)["name"]
     status_str = f'Import Results for:  {prj_name}\n'
     status_val = {"headers": 0, "fail": 0, "success": 0, "ignored": 0}
@@ -787,7 +657,7 @@ def svc_import_project(prjid):
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
 
-    status, errormsg, update_status = update_ffts_in_project(licco_db, prjid, fcuploads, imp_log)
+    status, errormsg, update_status = update_ffts_in_project(licco_db, userid, prjid, fcuploads, imp_log)
 
     # Include imports failed from bad FC/FGs
     prj_name = get_project(licco_db, prjid)["name"]
@@ -856,8 +726,7 @@ def svc_export_project(prjid):
     return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={prj_name}.csv"})
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval",
-                          methods=["GET", "POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval", methods=["GET", "POST"])
 @context.security.authentication_required
 def svc_submit_for_approval(prjid):
     """
@@ -893,32 +762,9 @@ def svc_approve_project(prjid):
     Approve a project
     """
     userid = context.security.get_current_user_id()
-    # See if approval conditions are good
-    status, all_approved, errormsg, prj = approve_project(licco_db, prjid, userid)
+    status, all_approved, errormsg, prj = approve_project(licco_db, prjid, userid, context.notifier)
     if not status:
         return JSONEncoder().encode({"success": status, "errormsg": errormsg})
-
-    if not all_approved:
-        # successful approval, but we are still waiting for some approvers
-        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
-
-    # all users approved
-    # copy ffts to the master project.
-    # FUTURE: This should be done in approve_project method, but can't due to circular imports
-    approved_project = get_currently_approved_project(licco_db)
-    # Master project should not inherit old discussion comments from a submitted project, hence the removal flag
-    status, errormsg, update_status = update_ffts_in_project(licco_db, approved_project["_id"], get_project_ffts(licco_db, prjid), remove_discussion_comments=True)
-    if not status:
-        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
-
-    # send email notifications that the project was approved
-    project_name = prj["name"]
-    owner = prj["owner"]
-    editors = prj["editors"]
-    approvers = prj["approvers"]
-    notified_users = list(set([owner] + editors + approvers))
-    context.notifier.project_approval_approved(notified_users, project_name, prjid)
-
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -933,28 +779,12 @@ def svc_reject_project(prjid):
     reason = request.args.get("reason", None)
     if not reason and request.json:
         reason = request.json.get("reason")
-
     if not reason:
         return logAndAbortJson("Please provide a reason for why this project is not being approved")
 
-    # TODO: notes should probably be stored in a format (user: <username>, date: datetime, content: "")
-    # so we can avoid rendering them when they are no longer relevant.
-    #
-    # add current user and datetime to the original reason
-    now = datetime.now(tz=timezone.utc)
-    licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
-    formatted_reason = f"{userid} ({licco_datetime}):\n{reason}"
-    status, errormsg, prj = reject_project(licco_db, prjid, userid, formatted_reason)
-    if status:
-        project_id = prj["_id"]
-        project_name = prj["name"]
-        owner = prj["owner"]
-        editors = prj["editors"]
-        approvers = prj["approvers"]
-        project_approver_emails = list(set([owner] + editors + approvers))
-        user_who_rejected = userid
-        context.notifier.project_approval_rejected(project_approver_emails, project_name, project_id,
-                                                   user_who_rejected, reason)
+    status, errormsg, prj = reject_project(licco_db, prjid, userid, reason, context.notifier)
+    if not status:
+        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
 
 
@@ -1021,8 +851,7 @@ def svc_add_project_tag(prjid):
             return JSONEncoder().encode({"success": False, "errormsg": "Cannot tag a project without a change", "value": None})
         logger.info("Latest change is at " + str(changes[0]["time"]))
         asoftimestamp = changes[0]["time"]
-    logger.debug(
-        f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
+    logger.debug(f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
     status, errormsg, tags = add_project_tag(licco_db, prjid, tagname, asoftimestamp)
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
 

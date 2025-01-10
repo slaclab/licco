@@ -1,13 +1,16 @@
+from typing import List, Dict
+
 import pytest
 
 import context
-import start
+from dal import mcd_model
 from dal.mcd_model import initialize_collections
-from dal.utils import diff_arrays
+from notifications.email_sender import EmailSenderInterface
+from notifications.notifier import Notifier
 
 _TEST_DB_NAME = "_licco_test_db_"
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def db():
     """Create db at the start of the session"""
     client = context.mongo_client
@@ -19,6 +22,19 @@ def db():
     projects = db['projects'].find().to_list()
     assert len(projects) == 1, "only one project should be present (master project)"
     assert projects[0]['name'] == "LCLS Machine Configuration Database", "expected a master project"
+
+    # roles used in tests
+    admin_users = {"app": "Licco", "name": "Admin", "players": ["uid:admin_user"], "privileges": ["read", "write", "edit", "approve", "admin"]}
+    super_approvers = {"app": "Licco", "name": "Super Approver", "players": ["uid:super_approver"], "privileges": ["read", "write", "edit", "approve", "super_approve"]}
+    res = db['roles'].insert_many([admin_users, super_approvers])
+    assert len(res.inserted_ids) == 2, "roles should be inserted"
+
+    # ffts used in tests
+    ffts = [{"fc": "TESTFC", "fc_desc": "fcDesc", "fg": "TESTFG", "fg_desc": "fgDesc"}]
+    for f in ffts:
+        ok, err, fft = mcd_model.create_new_fft(db, f['fc'], f['fg'], f.get('fc_desc', ''), f.get('fg_desc', ''))
+        assert ok, f"fft '{f['fc']}' could not be inserted due to: {err}"
+
     return db
 
 @pytest.fixture(scope="session", autouse=True)
@@ -29,23 +45,110 @@ def destroy_db():
     client.drop_database(_TEST_DB_NAME)
     client.close()
 
-def test_something(db):
-    print("APP:", start.app)
-    print("notifier", start.context.notifier)
-    out = db['roles'].find()
-    print("OUT 1:", out.to_list())
-    db['roles'].insert_one({'App': "Test", 'name': 'Test role', 'players': ['test_user'], 'privileges': ['create']})
 
-    out = db['roles'].find()
-    print("OUT 2:", out.to_list())
-    print("PROJECTS:", db['projects'].find().to_list())
+class TestEmailSender(EmailSenderInterface):
+    """Testing email sender, so we can verify whether the emails were correctly assigned"""
+    def __init__(self):
+        self.emails_sent = []
+
+    def send_email(self, from_user: str, to_users: List[str], subject: str, content: str,
+                   plain_text_content: str = "", send_as_separate_emails: bool = True):
+            self.emails_sent.append({'from': from_user, 'to': to_users, subject: subject, content: content})
+
+    def clear(self):
+        self.emails_sent = []
 
 
-def test_arr_diff():
-    old = ['a', 'b']
-    new = ['b', 'c']
-    diff = diff_arrays(old, new)
+class NoOpEmailSender(EmailSenderInterface):
+    def __init__(self):
+        pass
 
-    assert diff.removed == ['a']
-    assert diff.new == ['c']
-    assert diff.in_both == ['b']
+class NoOpNotifier(Notifier):
+    def __init__(self):
+        super().__init__('', NoOpEmailSender())
+        pass
+
+    def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
+                                plain_text_msg: str = ""):
+        # do nothing
+        pass
+
+# -------- helper functions --------
+
+def create_project(db, project_name, owner, editors: List[str] = None, approvers: List[str] = None) -> Dict[str, any]:
+    if not editors:
+        editors = []
+    if not approvers:
+        approvers = []
+
+    # TODO: create project should probably accept editors and approvers as well, we would have to verify them though
+    project = mcd_model.create_new_project(db, project_name, "", owner)
+    if editors or approvers:
+        mcd_model.update_project_details(db, owner, project['_id'], {'editors': editors, 'approvers': approvers}, NoOpNotifier())
+    assert project, "project should be created but it was not"
+    return project
+
+
+# -------- tests ---------
+
+def test_create_delete_project(db):
+    """test project creation and deletion.
+    A regular user can't delete a project, but only hide it via a status flag (status == hidden)
+    """
+    project = mcd_model.create_new_project(db, "test_create_delete_project", "my description", "test_user")
+    assert project, "project should be created"
+    assert len(str(project["_id"])) > 0, "Project id should exist"
+    assert project["description"] == "my description", "wrong description inserted"
+    assert len(project["editors"]) == 0, "no editors should be there"
+    assert len(project["approvers"]) == 0, "no approvers should be there"
+
+    projects = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    assert len(projects) == 1, "Only one such project should be found"
+
+    prj = projects[0]
+    assert prj["owner"] == "test_user", "wrong project owner set"
+    assert prj["status"] == "development", "newly created project should be in development"
+    ok, err = mcd_model.delete_project(db, "test_user", prj["_id"])
+    assert ok
+    assert err == "", "there should be no error"
+
+    # regular user can't delete a project, only hide it
+    found_after_delete = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    assert len(found_after_delete) == 1, "project should not be deleted"
+    assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
+
+
+@pytest.mark.skip(reason="TODO: implement this test case")
+def test_create_delete_project_admin(db):
+    """test project creation and deletion for an admin user
+    As opposed to the regular user, the admin user can delete a project and all its device values
+    """
+    # TODO: check that project and all its fft fields (such as comments) are properly deleted when admin
+    # deletes the project
+    pass
+
+
+def test_add_fft_to_project(db):
+    # TODO: check what happens if non editor is trying to update fft: we should return an error
+    project = mcd_model.create_new_project(db, "test_add_fft_to_project", "", "test_user")
+
+    # get ffts for project, there should be none
+    project_ffts = mcd_model.get_project_ffts(db, project["_id"])
+    assert len(project_ffts) == 0, "there should be no ffts in a new project"
+
+    # add fft change
+    fft_id = mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG")
+    fft_id = str(fft_id)
+    assert fft_id, "fft_id should exist"
+    fft_update = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert ok, "fft should be inserted"
+    assert err == "", "there should be no error"
+
+    project_ffts = mcd_model.get_project_ffts(db, project["_id"])
+    assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
+
+    inserted_fft = project_ffts[fft_id]
+    assert str(inserted_fft["fft"]["_id"]) == fft_update["_id"]
+    assert inserted_fft["comments"] == fft_update["comments"]
+    assert inserted_fft["nom_ang_x"] == pytest.approx(fft_update["nom_ang_x"], "0.001")
