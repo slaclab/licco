@@ -964,7 +964,7 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str
     if project["status"] != "development":
         return False, f"Project {project['name']} is not in a development state"
 
-    user_is_editor = userid == project["owner"] or userid in project["editors"]
+    user_is_editor = is_user_allowed_to_edit_project(userid, project)
     if not user_is_editor:
         return False, f"You are not an editor and therefore can't remove the project devices"
 
@@ -991,8 +991,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         return False, f"Cannot find project for '{project_name}'", None
 
     # check if the user has a permissions for submitting a project
-    # TODO: check for admin users?
-    user_is_allowed_to_edit = userid == prj["owner"] or userid in prj["editors"]
+    user_is_allowed_to_edit = is_user_allowed_to_edit_project(userid, prj)
     if not user_is_allowed_to_edit:
         return False, f"User {userid} is not allowed to submit a project '{project_name}'"
 
@@ -1084,22 +1083,13 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     still_waiting_for_approval = not all_assigned_approvers_approved
     if still_waiting_for_approval:
-        updated_project = licco_db["projects"].find_one({"_id": prj["_id"]})
+        updated_project = get_project(licco_db, prj["_id"])
         return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
 
-    # all assigned approvers approved
-    #
-    # once the project is approved, it goes back into the development status
-    # we have only 1 approved project at a time, to which the ffts are copied
-    updated_project_data["status"] = "development"
-    updated_project_data['approved_time'] = datetime.datetime.utcnow()
-    # clean the project metadata as if it was freshly created project
-    updated_project_data["editors"] = []
-    updated_project_data["approvers"] = []
-    updated_project_data["approved_by"] = []
-    updated_project_data['notes'] = []
+    # all assigned approvers have approved the project
+    # now we merge the data changes into the master project and update the merged project's metadata
 
-    # update current master project
+    # update fft data of master project
     master_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if not master_project:
         return False, False, "Failed to find an approved project: this is a programming bug", {}
@@ -1119,15 +1109,23 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
 
     # successfully inserted project ffts into a master project
     # send notifications that the project was approved
-    updated_project = licco_db["projects"].find_one({"_id": prj["_id"]})
-    project_name = updated_project["name"]
-    owner = updated_project["owner"]
-    editors = updated_project["editors"]
-    approvers = updated_project["approvers"]
-    notified_users = list(set([owner] + editors + approvers))
+    project_name = prj["name"]
+    notified_users = list(set([(prj["owner"])] + prj["editors"] + prj["approvers"]))
     notifier.project_approval_approved(notified_users, project_name, prjid)
 
-    return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
+    # once the project is approved and fully merged in, it goes back into the development status
+    # we have only 1 approved project at a time, to which the ffts are copied
+    updated_project_data["status"] = "development"
+    updated_project_data['approved_time'] = datetime.datetime.utcnow()
+    # clean the project metadata as if it was freshly created project
+    updated_project_data["editors"] = []
+    updated_project_data["approvers"] = []
+    updated_project_data["approved_by"] = []
+    updated_project_data['notes'] = []
+    licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    updated_project = get_project(licco_db, prj["_id"])
+
+    return True, all_assigned_approvers_approved, "", updated_project
 
 
 def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, notifier: Notifier):

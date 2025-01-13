@@ -25,9 +25,11 @@ def db():
 
     # roles used in tests
     admin_users = {"app": "Licco", "name": "Admin", "players": ["uid:admin_user"], "privileges": ["read", "write", "edit", "approve", "admin"]}
+    approvers = {"app": "Licco", "name": "Approver", "players": ["uid:approve_user"], "privileges": ["read", "write", "edit", "approve"]}
     super_approvers = {"app": "Licco", "name": "Super Approver", "players": ["uid:super_approver"], "privileges": ["read", "write", "edit", "approve", "super_approve"]}
-    res = db['roles'].insert_many([admin_users, super_approvers])
-    assert len(res.inserted_ids) == 2, "roles should be inserted"
+    editors = {"app": "Licco", "name": "Editor", "players": ["uid:editor_user", "uid:editor_user_2"], "privileges": ["read", "write", "edit"]}
+    res = db['roles'].insert_many([admin_users, approvers, super_approvers, editors])
+    assert len(res.inserted_ids) == 4, "roles should be inserted"
 
     # ffts used in tests
     ffts = [{"fc": "TESTFC", "fc_desc": "fcDesc", "fg": "TESTFG", "fg_desc": "fgDesc"}]
@@ -53,7 +55,7 @@ class TestEmailSender(EmailSenderInterface):
 
     def send_email(self, from_user: str, to_users: List[str], subject: str, content: str,
                    plain_text_content: str = "", send_as_separate_emails: bool = True):
-            self.emails_sent.append({'from': from_user, 'to': to_users, subject: subject, content: content})
+            self.emails_sent.append({'from': from_user, 'to': sorted(to_users), 'subject': subject, 'content': content})
 
     def clear(self):
         self.emails_sent = []
@@ -182,3 +184,92 @@ def test_remove_fft_from_project(db):
 
     project_ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
+
+
+def test_project_approval_workflow(db):
+    # testing happy path
+    project = mcd_model.create_new_project(db, "test_approval_workflow", "", "test_user")
+    prjid = project["_id"]
+
+    email_sender = TestEmailSender()
+    notifier = Notifier('', email_sender)
+    ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']}, notifier)
+    assert err == ""
+    assert ok
+
+    # check if notifications were sent (editor should receive an email when assigned)
+    assert len(email_sender.emails_sent) == 1, "Editor should receive a notification that they were appointed"
+    editor_mail = email_sender.emails_sent[0]
+    assert editor_mail['to'] == ['editor_user', 'editor_user_2']
+    assert editor_mail['subject'] == 'You were selected as an editor for the project test_approval_workflow'
+    email_sender.clear()
+
+    # an editor user should be able to save an fft
+    fftid = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "editor_user", prjid, {"_id": fftid, "tc_part_no": "PART 123"})
+    assert err == ""
+    assert ok
+    assert update_status['success'] == 1
+
+    # verify status and submitter (should not exist right now)
+    project = mcd_model.get_project(db, prjid)
+    assert project["status"] == "development"
+    assert project.get("submitter", None) is None
+
+    # the editor should be able to submit a project
+    ok, err, project = mcd_model.submit_project_for_approval(db, prjid, "editor_user", project['editors'], ['approve_user'], notifier)
+    assert err == ""
+    assert ok
+    assert project["_id"] == prjid
+    assert project["status"] == "submitted"
+    assert project["submitter"] == "editor_user"
+
+    # verify notifications
+    assert len(email_sender.emails_sent) == 2, "wrong number of notification emails sent"
+    approver_email = email_sender.emails_sent[0]
+    # TODO: add a super approver once that branch is merged in
+    assert approver_email['to'] == ['approve_user']
+    assert approver_email['subject'] == "You were selected as an approver for the project test_approval_workflow"
+
+    # this project was submitted for the first time, therefore an initial message should be sent to editors
+    editor_email = email_sender.emails_sent[1]
+    assert editor_email['to'] == ["editor_user", "editor_user_2", "test_user"]
+    assert editor_email['subject'] == "Project test_approval_workflow was submitted for approval"
+    email_sender.clear()
+
+    project = mcd_model.get_project(db, prjid)
+    # TODO: add "super_approver" to the list once the super approvers branch is merged in
+    assert project['approvers'] == ["approve_user"]
+    assert project.get('approved_by', []) == []
+
+    # TODO: once super_approver branch is merged in approve by super approver
+    # ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, "super_approver", notifier)
+    # assert err == ""
+    # assert ok
+    # assert all_approved == False
+    # assert prj['approved_by'] == ['super_approver']
+    # assert len(email_sender.emails_sent) == 0, "there should be no notifications"
+    # assert prj['status'] == 'submitted'
+
+    # approve by the final approver, we should receive notifications about approved project
+    ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, 'approve_user', notifier)
+    assert err == ""
+    assert ok
+    assert all_approved, "the project should be approved"
+    # approved this project goes back into a development branch
+    assert prj['editors'] == []
+    assert prj['approvers'] == []
+    assert prj['approved_by'] == []
+    assert prj['status'] == 'development'
+
+    # the changed fft data should reflect in the master project
+    master_project = mcd_model.get_master_project(db)
+    ffts = mcd_model.get_fft_values_by_project(db, fftid, master_project['_id'])
+    assert ffts['tc_part_no'] == "PART 123"
+
+    assert len(email_sender.emails_sent) == 1, "only one set of messages should be sent"
+    email = email_sender.emails_sent[0]
+    # TODO: once super approve branch is merged in, we have to add super_approver to the list
+    assert email['to'] == ['approve_user', 'editor_user', 'editor_user_2', 'test_user']  # , 'super_approver']
+    assert email['subject'] == 'Project test_approval_workflow was approved'
+    email_sender.clear()
