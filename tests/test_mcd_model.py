@@ -273,3 +273,46 @@ def test_project_approval_workflow(db):
     assert email['to'] == ['approve_user', 'editor_user', 'editor_user_2', 'test_user']  # , 'super_approver']
     assert email['subject'] == 'Project test_approval_workflow was approved'
     email_sender.clear()
+
+
+def test_project_rejection(db):
+    project = mcd_model.create_new_project(db, "test_project_rejection_workflow", "", "test_user")
+    prjid = project["_id"]
+
+    email_sender = TestEmailSender()
+    notifier = Notifier('', email_sender)
+    ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']},
+                                               notifier)
+    assert err == ""
+    assert ok
+
+    ok, err, prj = mcd_model.submit_project_for_approval(db, prjid, "test_user", ['editor_user', 'editor_user_2'], ['approve_user', 'approve_user_2'], notifier)
+    assert err == ""
+    assert ok
+    assert prj['status'] == "submitted"
+
+    # clear sender so we can verify the rejection notifications
+    email_sender.clear()
+
+    # approve 1/2 approvers
+    ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, "approve_user", notifier)
+    assert err == ""
+    assert ok
+    assert all_approved == False
+    assert len(email_sender.emails_sent) == 0, "no emails should be sent"
+    assert prj['approved_by'] == ['approve_user']
+
+    # reject
+    ok, err, prj = mcd_model.reject_project(db, prjid, "test_user", "This is my rejection message", notifier)
+    assert err == ""
+    assert ok
+    assert prj['status'] == "development", "status should go back into a development state"
+    assert prj['editors'] == ['editor_user', 'editor_user_2']
+    assert prj['approvers'] == ['approve_user', 'approve_user_2']
+
+    # validate that notifications were send
+    assert len(email_sender.emails_sent) == 1
+    email = email_sender.emails_sent[0]
+    assert email['to'] == ['approve_user', 'approve_user_2', 'editor_user', 'editor_user_2', 'test_user']
+    assert email['subject'] == 'Project test_project_rejection_workflow was rejected'
+    assert 'This is my rejection message' in email['content']

@@ -1084,7 +1084,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     still_waiting_for_approval = not all_assigned_approvers_approved
     if still_waiting_for_approval:
         updated_project = get_project(licco_db, prj["_id"])
-        return True, all_assigned_approvers_approved, f"Project {updated_project['name']} approved by {updated_project['submitter']}.", updated_project
+        return True, all_assigned_approvers_approved, "", updated_project
 
     # all assigned approvers have approved the project
     # now we merge the data changes into the master project and update the merged project's metadata
