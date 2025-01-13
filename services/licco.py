@@ -366,7 +366,7 @@ def svc_get_project(prjid):
 @context.security.authentication_required
 def svc_create_project():
     """
-    Create an empty project; do we really have a use case for this?
+    Create an empty project
     """
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
@@ -375,8 +375,7 @@ def svc_create_project():
     if not prjdetails.get("description", None):
         return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
 
-    prj = create_empty_project(
-        prjdetails["name"], prjdetails["description"], logged_in_user)
+    prj = create_empty_project(prjdetails["name"], prjdetails["description"], logged_in_user)
     return JSONEncoder().encode({"success": True, "value": prj})
 
 
@@ -384,7 +383,7 @@ def svc_create_project():
 @context.security.authentication_required
 def svc_update_project(prjid):
     """
-    Get the project details given a project id.
+    Update the project details (project name, description, editors)
     """
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
@@ -903,7 +902,6 @@ def svc_submit_for_approval(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
 @context.security.authentication_required
-@context.security.authorization_required("approve")
 def svc_approve_project(prjid):
     """
     Approve a project
@@ -940,7 +938,6 @@ def svc_approve_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
 @context.security.authentication_required
-@context.security.authorization_required("approve")
 def svc_reject_project(prjid):
     """
     Do not approve a project

@@ -9,7 +9,7 @@ from enum import Enum
 import copy
 import json
 import math
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
@@ -849,7 +849,11 @@ def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
         return False, f"Chosen ffts {fft_ids} do not exist"
     return True, ""
 
-def submit_project_for_approval(project_id: str, userid: str, editors: List[str], approvers: List[str], notifier: Notifier):
+def _emails_to_usernames(emails: List[str]):
+    return [email.split("@")[0] for email in emails]
+
+def submit_project_for_approval(project_id: str, userid: str, editors: List[str], approvers: List[str],
+                                notifier: Notifier) -> Tuple[bool, str, Optional[Dict[str, any]]]:
     """
     Submit a project for approval.
     Set the status to submitted
@@ -859,12 +863,18 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
     if not prj:
         return False, f"Cannot find project for '{project_name}'", None
 
+    status = prj["status"]
+    if status != "development" and status != "submitted":
+        return False, f"Project '{project_name}' is not in development or submitted status", None
+
     # check if the user has a permissions for submitting a project
     # TODO: check for admin users?
     user_is_allowed_to_edit = userid == prj["owner"] or userid in prj["editors"]
     if not user_is_allowed_to_edit:
-        return False, f"User {userid} is not allowed to submit a project '{project_name}'"
+        return False, f"User {userid} is not allowed to submit a project '{project_name}'", None
 
+    # an approver could be anyone with a SLAC account. These approvers could be given in the
+    # form of an email (e.g., username@example.com), which we have to validate
     approvers = list(set(approvers))
     approvers.sort()
 
@@ -873,15 +883,34 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
         return False, f"Project '{project_name}' should have at least 1 approver", None
     for a in approvers:
         if not a:
-            return False, f"Invalid project approver: '{a}'"
+            return False, f"Invalid project approver: '{a}'", None
     if userid in approvers:
         return False, f"Submitter {userid} is not allowed to also be a project approver", None
     if prj["owner"] in approvers:
         return False, f"A project owner {userid} is not allowed to also be a project approver", None
 
-    status = prj["status"]
-    if status != "development" and status != "submitted":
-        return False, f"Project '{project_name}' is not in development or submitted status", None
+    # check if approver is also an editor (they are not allowed to be)
+    approver_usernames = _emails_to_usernames(approvers)
+    editor_usernames = _emails_to_usernames(editors)
+    users_with_multiple_roles = []
+    for i, approver in enumerate(approver_usernames):
+        if approver in editor_usernames:
+            # we want to return the name of the approver with the actual name that the user had sent us
+            # otherwise the error message may look confusing (e.g., the user sent us 'user@example.com'
+            # we return the same string back within the error message)
+            users_with_multiple_roles.append(approvers[i])
+    if users_with_multiple_roles:
+        multiple_roles = ", ".join(users_with_multiple_roles)
+        return False, f"The users are not allowed to be both editors and approvers: [{multiple_roles}]", None
+
+    invalid_approver_accounts = []
+    for a in approvers:
+        if not notifier.validate_email(a):
+            invalid_approver_accounts.append(a)
+
+    if invalid_approver_accounts:
+        invalid_accounts = ", ".join(invalid_approver_accounts)
+        return False, f"Invalid approver emails/accounts: [{invalid_accounts}]", None
 
     # update editors (if necessary)
     editors_update_ok, err = update_project_details(userid, project_id, {'editors': editors}, notifier)
@@ -889,8 +918,10 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
         return editors_update_ok, err, None
 
     # store approval metadata
+    # all approvers are valid, but we have to store their usernames since the application performs permission checks
+    # via usernames (and not emails that the user may provide)
     licco_db[line_config_db_name]["projects"].update_one({"_id": prj["_id"]}, {"$set": {
-        "status": "submitted", "submitter": userid, "approvers": approvers,
+        "status": "submitted", "submitter": userid, "approvers": approver_usernames,
         "submitted_time": datetime.datetime.utcnow()
     }})
 
@@ -913,7 +944,9 @@ def submit_project_for_approval(project_id: str, userid: str, editors: List[str]
     else:
         # project was edited
         project_editors = list(set([prj["owner"]] + editors))
-        notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
+        approvers_have_changed = new_approvers or deleted_approvers
+        if approvers_have_changed:
+            notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
 
     updated_project_info = licco_db[line_config_db_name]["projects"].find_one({"_id": ObjectId(project_id)})
     return True, "", updated_project_info
@@ -1225,7 +1258,7 @@ def create_empty_project(name, description, logged_in_user):
     return get_project(prjid)
 
 
-def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier: Notifier):
+def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier: Notifier) -> Tuple[bool, str]:
     """
     Just update the project name ands description
     """
@@ -1253,18 +1286,21 @@ def update_project_details(userid, prjid, user_changes: Dict[str, any], notifier
             if not isinstance(val, list):
                 return False, f"Editors field should be an array"
 
-            all_editors = get_users_with_privilege("edit")
-            not_allowed_editors = []
+            # anyone with a SLAC account could be an editor
+            invalid_editor_emails = []
             for user in val:
-                if user not in all_editors:
-                    not_allowed_editors.append(user)
+                if not notifier.validate_email(user):
+                    invalid_editor_emails.append(user)
 
-            if len(not_allowed_editors) > 0:
-                not_allowed_users = ", ".join(not_allowed_editors)
-                return False, f"Users [{not_allowed_users}] are not allowed to be editors"
+            if invalid_editor_emails:
+                invalid_users = ", ".join(invalid_editor_emails)
+                return False, f"Invalid editor emails/accounts: [{invalid_users}]"
 
-            # all users are valid (or the list is empty)
-            updated_editors = val
+            # all users are valid (or editor's list is empty)
+            # For now we only store the usernames in the editors list, since permission
+            # comparison is done by comparing usernames as well. This behavior might change
+            # in the future to accomodate any email (even from outside of organization)
+            updated_editors = _emails_to_usernames(val)
             update["editors"] = updated_editors
         else:
             return False, f"Invalid update field '{key}'"

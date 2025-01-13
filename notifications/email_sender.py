@@ -18,6 +18,10 @@ class EmailSenderInterface:
                    plain_text_content: str = "", send_as_separate_emails: bool = True):
         pass
 
+    def validate_email(self, username_or_email: str):
+        return False
+
+
 class EmailSenderMock(EmailSenderInterface):
     """Mock email sender implementation that only prints the content into console.
     It's only used during development to avoid sending hundreds of test emails to
@@ -49,6 +53,12 @@ class EmailSenderMock(EmailSenderInterface):
                f"{content}{plain_text}\n"
                f"-----------------------------------------------------------------")
         return msg
+
+    def validate_email(self, username_or_email: str):
+        # every mock email is valid (except for a special case)
+        if username_or_email == "invalid_email@example.com":
+            return False
+        return True
 
 class EmailSettings:
     def __init__(self, url: str, port: int, username: str, password: str,
@@ -169,6 +179,15 @@ class EmailSender(EmailSenderInterface):
                 except Exception as ex:
                     exceptions.append(ex)
             return exceptions
+
+    def validate_email(self, username_or_email: str):
+        # we don't know if the provided email is valid, hence we have to check it
+        # against the account service
+        username = username_or_email.split("@")[0]
+        user_email = EmailSender.convert_usernames_to_emails(self.settings.username_to_email_service, [username])
+        if len(user_email) == 0:  # invalid email, this user does not exist
+            return False
+        return True
 
     @staticmethod
     def convert_usernames_to_emails(service_url, usernames: List[str]) -> List[str]:
