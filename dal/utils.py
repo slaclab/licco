@@ -4,6 +4,7 @@ Various small utilities.
 import json
 import math
 import collections
+from dataclasses import dataclass
 from typing import List
 
 from bson import ObjectId
@@ -48,6 +49,20 @@ def escape_chars_for_mongo(attrname):
     For example, use something like so to find the param - db.runs.findOne({}, {"params.AMO:HFP:MMS:72\uFF0ERBV": 1})
     '''
     return attrname.replace(".", u"\uFF0E").replace("$", u"\uFF04")
+
+
+@dataclass
+class ImportCounter:
+    headers: int = 0
+    fail: int = 0
+    success: int = 0
+    ignored: int = 0
+
+    def add(self, counter: "ImportCounter"):
+        self.headers += counter.headers
+        self.fail += counter.fail
+        self.success += counter.success
+        self.ignored += counter.ignored
 
 
 class Difference:

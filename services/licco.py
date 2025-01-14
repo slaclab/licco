@@ -18,7 +18,7 @@ from flask import Blueprint, request, Response, send_file
 
 from dal import mcd_model
 from dal.mcd_model import FCState
-from dal.utils import JSONEncoder
+from dal.utils import JSONEncoder, ImportCounter
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
 
@@ -73,7 +73,7 @@ def project_writable(wrapped_function):
     return function_interceptor
 
 
-def create_status_update(prj_name, status):
+def create_status_update(prj_name, status: ImportCounter):
     """
     Helper function to make the import status message based on the dictionary results
     """
@@ -82,11 +82,11 @@ def create_status_update(prj_name, status):
         f'{line_brk}',
         f'Summary of Results:',
         f'Project Name: {prj_name}.',
-        f'Valid headers recognized: {status["headers"]}.',
+        f'Valid headers recognized: {status.headers}.',
         f'{line_brk}',
-        f'Successful row imports: {status["success"]}.',
-        f'Failed row imports: {status["fail"]}.',
-        f'Ignored row imports: {status["ignored"]}.',
+        f'Successful row imports: {status.success}.',
+        f'Failed row imports: {status.fail}.',
+        f'Ignored row imports: {status.ignored}.',
     ])
     return status_str
 
@@ -539,7 +539,7 @@ def svc_import_project(prjid):
     """
     userid = context.security.get_current_user_id()
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
-    status_val = {"headers": 0, "fail": 0, "success": 0, "ignored": 0}
+    import_counter = ImportCounter()
 
     with BytesIO() as stream:
         request.files['file'].save(stream)
@@ -579,7 +579,7 @@ def svc_import_project(prjid):
         for line in reader:
             # No FC present in the data line
             if not line["FC"]:
-                status_val["fail"] += 1
+                import_counter.fail += 1
                 continue
             if line["FC"] in fcs.keys():
                 fcs[line["FC"]].append(line)
@@ -587,7 +587,7 @@ def svc_import_project(prjid):
                 # Sanitize/replace unicode quotes
                 clean_line = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
                 if not clean_line:
-                    status_val["fail"] += 1
+                    import_counter.fail += 1
                     continue
                 fcs[clean_line] = [line]
         if not fcs:
@@ -598,8 +598,8 @@ def svc_import_project(prjid):
     log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
     imp_log, imp_handler = create_logger(log_name)
 
-    if status_val["fail"] > 0:
-        imp_log.debug(f"FAIL: {status_val['fail']} FFTS malformed. (FC values likely missing)")
+    if import_counter.fail > 0:
+        imp_log.debug(f"FAIL: {import_counter.fail} FFTS malformed. (FC values likely missing)")
 
     fc2id = {
         value["name"]: value["_id"]
@@ -619,7 +619,7 @@ def svc_import_project(prjid):
                 # Tried to create a new FFT and failed - don't include in dataset
                 else:
                     # Count failed imports - excluding FC & FG
-                    status_val["fail"] += 1
+                    import_counter.fail += 1
                     error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
                     logger.debug(error_str)
                     imp_log.info(error_str)
@@ -664,12 +664,11 @@ def svc_import_project(prjid):
     # Include imports failed from bad FC/FGs
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     if update_status:
-        status_val = {k: update_status[k]+status_val[k]
-                            for k in update_status.keys()}
+        import_counter.add(update_status)
 
     # number of recognized headers minus the id used for DB reference
-    status_val["headers"] = len(fcuploads[0].keys())-1
-    status_str = create_status_update(prj_name, status_val)
+    import_counter.headers = len(fcuploads[0].keys())-1
+    status_str = create_status_update(prj_name, import_counter)
     logger.debug(re.sub('[\n_]', '', status_str))
     imp_log.info(status_str)
     imp_log.removeHandler(imp_handler)

@@ -16,7 +16,7 @@ from pymongo import ASCENDING, DESCENDING
 from pymongo.synchronous.database import Database
 from notifications.notifier import Notifier
 from .projdetails import get_project_attributes, get_all_project_changes
-from .utils import diff_arrays
+from .utils import diff_arrays, ImportCounter
 
 logger = logging.getLogger(__name__)
 
@@ -607,22 +607,22 @@ def get_fcattrs(fromstr=False):
 
 
 def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
-                          current_project_attributes=None) -> Tuple[bool, str, Dict[str, int]]:
+                          current_project_attributes=None) -> Tuple[bool, str, ImportCounter]:
     """
     Update the value(s) of an FFT in a project
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
     """
+    insert_counter = ImportCounter()
     fftid = fcupdate["_id"]
     if not fftid:
-        return False, "fft id is missing in updated values", {}
+        return False, "fft id is missing in updated values", insert_counter
 
-    insert_count = {"success": 0, "fail": 0, "ignored": 0}
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", insert_count
+        return False, f"Cannot find project for {prjid}", insert_counter
     fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
-        return False, f"Cannot find functional+fungible token for {fftid}", insert_count
+        return False, f"Cannot find functional+fungible token for {fftid}", insert_counter
 
     current_attrs = current_project_attributes
     if current_attrs is None:
@@ -637,12 +637,12 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
         if modification_time < latest_changes[0]["time"]:
-            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_count
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_counter
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
             if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
-                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_count
+                return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
     error_str = ""
     all_inserts = []
@@ -681,19 +681,19 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
         if attrmeta["required"] and not attrval:
-            return False, f"Parameter {attrname} is a required attribute", insert_count
+            return False, f"Parameter {attrname} is a required attribute", insert_counter
 
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
-            insert_count["fail"] += 1
+            insert_counter.fail += 1
             error_str = f"Wrong type - {attrname}, {attrval}"
             break
 
         # Check that values are within bounds
         if not validate_insert_range(attrname, newval):
-            insert_count["fail"] += 1
+            insert_counter.fail += 1
             error_str = f"Value out of range - {attrname}, {attrval}"
             break
 
@@ -711,17 +711,17 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
 
     #If one of the fields is invalid, and we have an error
     if error_str != "":
-        return False, error_str, insert_count
+        return False, error_str, insert_counter
     if all_inserts:
         logger.debug("Inserting %s documents into the history", len(all_inserts))
-        insert_count["success"] += 1
+        insert_counter.success += 1
         licco_db["projects_history"].insert_many(all_inserts)
     else:
-        insert_count["ignored"] += 1
+        insert_counter.ignored += 1
         logger.debug("In update_fft_in_project, all_inserts is an empty list")
         error_str = "No changes detected."
-        return True, error_str, insert_count
-    return True, error_str, insert_count
+        return True, error_str, insert_counter
+    return True, error_str, insert_counter
 
 
 def validate_insert_range(attr, val):
@@ -752,13 +752,13 @@ def validate_insert_range(attr, val):
     return True
 
 
-def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, Dict[str, int]]:
+def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
     """
     Insert multiple FFTs into a project
     """
     if def_logger is None:
         def_logger = logger
-    update_status = {"success": 0, "fail": 0, "ignored": 0}
+    insert_counter = ImportCounter()
     if isinstance(ffts, dict):
         new_ffts = []
         for entry in ffts:
@@ -768,14 +768,14 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
     project = get_project(licco_db, prjid)
     if project['name'] != MASTER_PROJECT_NAME:
         if project['status'] != 'development':
-            return False, f"can't update ffts of a project that is not in a development mode (status = {project['status']})", {}
+            return False, f"can't update ffts of a project that is not in a development mode (status = {project['status']})", ImportCounter()
 
     verify_user_permissions = not ignore_user_permission_check
     if verify_user_permissions:
         # check that only owner/editor/admin are allowed to update this project
         allowed_to_update = is_user_allowed_to_edit_project(userid, project)
         if not allowed_to_update:
-            return False, f"user '{userid}' is not allowed to update a project {project['name']}", {}
+            return False, f"user '{userid}' is not allowed to update a project {project['name']}", ImportCounter()
 
 
     # TODO: ROBUSTNESS: we should validate ffts before insertion: right now it's possible that only some of the
@@ -817,7 +817,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
         # If invalid, don't try to add to DB
         status, errormsg = validate_import_headers(licco_db, fcupdate, prjid)
         if not status:
-            update_status["fail"] += 1
+            insert_counter.fail += 1
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
         for attr in ["name", "fc", "fg", "fft"]:
@@ -840,12 +840,11 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
 
         # Add the individual FFT update results into overall count
         if results:
-            update_status = {k: update_status[k]+results[k]
-                             for k in update_status.keys()}
+            insert_counter.add(results)
 
     # BUG: error message is not declared anywhere, so it will always be as empty string or set to the last value
     # that comes out of fft update loop
-    return True, errormsg, update_status
+    return True, errormsg, insert_counter
 
 
 def create_imp_msg(fft, status, errormsg=None):
