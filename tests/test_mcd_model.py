@@ -57,6 +57,12 @@ class TestEmailSender(EmailSenderInterface):
                    plain_text_content: str = "", send_as_separate_emails: bool = True):
             self.emails_sent.append({'from': from_user, 'to': sorted(to_users), 'subject': subject, 'content': content})
 
+    def validate_email(self, username_or_email: str):
+        if username_or_email == 'invalid_user@example.com':
+            # an invalid account used for testing
+            return False
+        return True
+
     def clear(self):
         self.emails_sent = []
 
