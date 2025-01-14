@@ -8,7 +8,7 @@ import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
 import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
-import { AddProjectDialog, CloneProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
+import { CloneProjectDialog, CreateNewProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
 
@@ -256,7 +256,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                 : null
             }
 
-            <AddProjectDialog
+            <CreateNewProjectDialog
                 approvedProjects={projectDataDisplayed.filter(p => isProjectApproved(p))}
                 user={currentlyLoggedInUser}
                 isOpen={isAddProjectDialogOpen}
