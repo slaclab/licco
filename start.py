@@ -36,7 +36,6 @@ if not os.path.exists(credentials_file):
         "development_mode": not send_smtp_emails
     }
 else:
-    # Overwrite with correct project url
     config = configparser.ConfigParser()
     config.read(credentials_file)
     app.config["NOTIFICATIONS"] = {"service_url": config["email"]["service_url"]}
