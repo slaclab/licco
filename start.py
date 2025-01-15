@@ -44,7 +44,7 @@ else:
     app.config["NOTIFICATIONS"]["email"] = {
         "url": config["email"]["url"],
         "port": config["email"]["port"],
-        "email_auth": config["email"]["email_auth"],
+        "email_auth": config["email"].getboolean("email_auth"),
         "user": config["email"]["user"],
         "password": config["email"]["password"],
         "admin_email": config["email"]["admin_email"],
