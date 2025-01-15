@@ -853,7 +853,7 @@ def svc_export_project(prjid):
             fft_dict = prj_ffts[fft]
             for key in fft_dict:
                 # Check for keys we handle later, or dont want the end user downloading
-                if key in ["fft", "discussion"]:
+                if (key in ["fft", "discussion"]) or (key not in KEYMAP_REVERSE):
                     continue
                 row_dict[KEYMAP_REVERSE[key]] = fft_dict[key]
             for key in fft_dict["fft"]:
