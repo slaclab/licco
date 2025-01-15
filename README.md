@@ -32,9 +32,12 @@ file in the main directory, e.g.:
 ```ini
 # example credentials.ini file
 [email]
+service_url = https://localhost:3000
 url = smtp.example.com
 port = 587
+email_auth = False
 user = user.name@example.com
 password = password
+admin_email = admin@admin.com
 username_to_email_service = http://www.example.com/ws/
 ```

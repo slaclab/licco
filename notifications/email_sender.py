@@ -61,7 +61,8 @@ class EmailSenderMock(EmailSenderInterface):
         return True
 
 class EmailSettings:
-    def __init__(self, url: str, port: int, username: str, password: str,
+    def __init__(self, url: str, port: int, email_auth: bool, 
+                 username: str, password: str,
                  username_to_email_service_url: str = "",
                  email_send_as_ssl: bool = False):
         if not url:
@@ -75,6 +76,8 @@ class EmailSettings:
 
         self.url = url
         self.port = port
+        # bool for if we need email authentication
+        self.email_auth = email_auth
         self.username = username
         self.password = password
         # url of a service that turns licco username into an email
@@ -169,6 +172,10 @@ class EmailSender(EmailSenderInterface):
 
         with smtplib.SMTP(self.settings.url, self.settings.port) as server:
             server.ehlo()
+            if self.settings.email_auth:
+                server.starttls(context=self.context)
+                server.ehlo()
+                server.login(self.settings.username, self.settings.password)
             exceptions = []
             for e in emails:
                 try:
