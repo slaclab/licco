@@ -33,7 +33,8 @@ if not os.path.exists(credentials_file):
     print(f"'credentials.ini' file was not found (path: {credentials_file}), email user notifications are disabled")
     app.config["NOTIFICATIONS"] = {"service_url": "http://localhost:3000"}
     app.config["NOTIFICATIONS"]["email"] = {
-        "development_mode": not send_smtp_emails
+        "development_mode": not send_smtp_emails,
+        "admin_email": ""
     }
 else:
     config = configparser.ConfigParser()
@@ -77,7 +78,8 @@ def create_notifier(app: Flask) -> Notifier:
                                                  email_config["user"], email_config["password"],
                                                  email_config["username_to_email_service"]))
     service_url = notifications_config["service_url"]
-    admin_email = notifications_config["admin_email"]
+    admin_email = notifications_config["email"]["admin_email"]
+
     return Notifier(service_url, email_sender, admin_email)
 
 
