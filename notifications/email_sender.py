@@ -169,9 +169,6 @@ class EmailSender(EmailSenderInterface):
 
         with smtplib.SMTP(self.settings.url, self.settings.port) as server:
             server.ehlo()
-            server.starttls(context=self.context)
-            server.ehlo()
-            server.login(self.settings.username, self.settings.password)
             exceptions = []
             for e in emails:
                 try:
@@ -207,17 +204,19 @@ class EmailSender(EmailSenderInterface):
             # get the email from the service
             try:
                 with request.urlopen(f"{service_url}?unixAcct={name}") as response:
+                    read_response = response.read()
                     if response.status != 200:
                         logger.error(f"Failed to get an email for '{name}': unexpected status code: {response.status}")
                         continue
 
                     # successful response, parse the email
-                    data = json.loads(response.read())
+                    data = json.loads(read_response)
                     email = data["email"]
                     if email and "@" in email:
                         emails.append(email)
                     else:
                         logger.error(f"User '{name}' does not have a valid email account: '{email}'")
+                    return emails
             except Exception as e:
                 # Since this is running in a background notification thread, we can't inform the
                 # user that something went wrong with notifications. Therefore we can only log
