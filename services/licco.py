@@ -1,14 +1,15 @@
 """
 Web service endpoints for licco
 """
-import csv
 import datetime
-import os
 import fnmatch
+import os
 import re
-from io import BytesIO, StringIO
+from io import BytesIO
 import tempfile
 from functools import wraps
+from typing import Tuple
+
 import pytz
 import logging
 import json
@@ -16,33 +17,13 @@ import context
 from context import licco_db
 from flask import Blueprint, request, Response, send_file
 
-from dal import mcd_model
+from dal import mcd_model, mcd_import
 from dal.mcd_model import FCState
 from dal.utils import JSONEncoder, ImportCounter
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
 
 logger = logging.getLogger(__name__)
-
-KEYMAP = {
-    # Column names defined in confluence
-    "FC": "fc",
-    "Fungible": "fg",
-    "TC_part_no": "tc_part_no",
-    "State": "state",
-    "Comments": "comments",
-    "LCLS_Z_loc": "nom_loc_z",
-    "LCLS_X_loc": "nom_loc_x",
-    "LCLS_Y_loc": "nom_loc_y",
-    "Z_dim": "nom_dim_z",
-    "X_dim": "nom_dim_x",
-    "Y_dim": "nom_dim_y",
-    "LCLS_Z_roll": "nom_ang_z",
-    "LCLS_X_pitch": "nom_ang_x",
-    "LCLS_Y_yaw": "nom_ang_y",
-    "Must_Ray_Trace": "ray_trace"
-}
-KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
 
 def logAndAbortJson(error_msg, ret_status=500):
     logger.error(error_msg)
@@ -90,21 +71,6 @@ def create_status_update(prj_name, status: ImportCounter):
     ])
     return status_str
 
-def create_logger(logname):
-    """
-    Create and return a logger that writes to a provided file
-    """
-    dir_path = f"{tempfile.gettempdir()}/mcd"
-    if not os.path.exists(dir_path):
-        os.mkdir(dir_path)
-    # create a file 
-    handler = logging.FileHandler(f'{dir_path}/{logname}.log')
-    logger.debug(f"Creating log file {dir_path}/{logname}.log")
-
-    new_logger = logging.getLogger(logname)
-    new_logger.addHandler(handler)
-    new_logger.propagate = False
-    return new_logger, handler
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
 @context.security.authentication_required
@@ -530,6 +496,23 @@ def svc_remove_ffts_from_project(prjid):
     return JSONEncoder().encode({"success": status, "errormsg": errormsg})
 
 
+def create_logger(logname: str) -> Tuple[logging.Logger, logging.FileHandler]:
+    """
+    Create and return a logger that writes to a provided file. This logger has to be manually closed
+    """
+    dir_path = f"{tempfile.gettempdir()}/mcd"
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+    # create a file
+    handler = logging.FileHandler(f'{dir_path}/{logname}.log')
+    logger.debug(f"Creating log file {dir_path}/{logname}.log")
+
+    new_logger = logging.getLogger(logname)
+    new_logger.addHandler(handler)
+    new_logger.propagate = False
+    return new_logger, handler
+
+
 @licco_ws_blueprint.route("/projects/<prjid>/import/", methods=["POST"])
 @project_writable
 @context.security.authentication_required
@@ -538,9 +521,6 @@ def svc_import_project(prjid):
     Import project data from csv file
     """
     userid = context.security.get_current_user_id()
-    prj_name = mcd_model.get_project(licco_db, prjid)["name"]
-    import_counter = ImportCounter()
-
     with BytesIO() as stream:
         request.files['file'].save(stream)
         try:
@@ -551,135 +531,29 @@ def svc_import_project(prjid):
             response_value = {"status_str": error_msg, "log_name": None}
             return JSONEncoder().encode({"success": False, "value": response_value})
 
-    # TODO: refactor this into a separate method
-    with StringIO(filestring) as fp:
-        fp.seek(0)
-        # Find the header row
-        loc = 0
-        req_headers = False
-        for line in fp:
-            if 'FC' in line and 'Fungible' in line:
-                if not "," in line:
-                    continue
-                req_headers = True
-                break
-            loc = fp.tell()
 
-        # Ensure FC and FG (required headers) are present
-        if not req_headers:
-            error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
-            logger.debug(error_msg)
-            response_value = {"status_str": error_msg, "log_name": None}
-            return JSONEncoder().encode({"success": False, "value": response_value})
-        # Set reader at beginning of header row
-        fp.seek(loc)
-        reader = csv.DictReader(fp)
-        fcs = {}
-        # Add each valid line of data to import dictionary
-        for line in reader:
-            # No FC present in the data line
-            if not line["FC"]:
-                import_counter.fail += 1
-                continue
-            if line["FC"] in fcs.keys():
-                fcs[line["FC"]].append(line)
-            else:
-                # Sanitize/replace unicode quotes
-                clean_line = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
-                if not clean_line:
-                    import_counter.fail += 1
-                    continue
-                fcs[clean_line] = [line]
-        if not fcs:
-            response_value = {"status_str": "Import Error: No data detected in import file.", "log_name": None}
-            return JSONEncoder().encode({"success": False, "value": response_value})
+    # TODO: figure out the logging problem
+    #
+    # prj_name = mcd_model.get_project(licco_db, prjid)['name']
+    # log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
+    # log_name = f"{userid}_{prj_name.replace('/', '_')}_{log_time}"
+    # log, log_handler = create_logger("")
 
-    log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
-    log_name = f"{context.security.get_current_user_id()}_{prj_name.replace('/', '_')}_{log_time}"
-    imp_log, imp_handler = create_logger(log_name)
+    ok, err, import_status = mcd_import.import_project(context.licco_db, userid, prjid, filestring)
+    if not ok:
+        return JSONEncoder().encode({"success": False, "errormsg": err})
 
-    if import_counter.fail > 0:
-        imp_log.debug(f"FAIL: {import_counter.fail} FFTS malformed. (FC values likely missing)")
-
-    fc2id = {
-        value["name"]: value["_id"]
-        for value in json.loads(svc_get_fcs())["value"]
-    }
-
-    for nm, fc_list in fcs.items():
-        current_list = []
-        for fc in fc_list:
-            if fc["FC"] not in fc2id:
-                status, errormsg, newfc = mcd_model.create_new_functional_component(licco_db,
-                    name=fc["FC"], description="Generated from " + nm)
-                # FFT creation successful, add to data to import list
-                if status:
-                    fc2id[fc["FC"]] = newfc["_id"]
-                    current_list.append(fc)
-                # Tried to create a new FFT and failed - don't include in dataset
-                else:
-                    # Count failed imports - excluding FC & FG
-                    import_counter.fail += 1
-                    error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
-                    logger.debug(error_str)
-                    imp_log.info(error_str)
-            else:
-                current_list.append(fc)
-        fcs[nm] = current_list
-
-    fg2id = {
-        fgs["name"]: fgs["_id"]
-        for fgs in json.loads(svc_get_fgs())["value"]
-    }
-
-    for nm, fc_list in fcs.items():
-        for fc in fc_list:
-            if fc["Fungible"] and fc["Fungible"] not in fg2id:
-                status, errormsg, newfg = mcd_model.create_new_fungible_token(licco_db,
-                    name=fc["Fungible"], description="Generated from " + nm)
-                fg2id[fc["Fungible"]] = newfg["_id"]
-
-    ffts = {(fft["fc"]["name"], fft["fg"]["name"]): fft["_id"] for fft in mcd_model.get_ffts(licco_db)}
-    for fc_list in fcs.values():
-        for fc in fc_list:
-            if (fc["FC"], fc["Fungible"]) not in ffts:
-                status, errormsg, newfft = mcd_model.create_new_fft(licco_db,
-                    fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
-                ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
-                      if "fg" in newfft else None)] = newfft["_id"]
-
-    fcuploads = []
-    for nm, fc_list in fcs.items():
-        for fc in fc_list:
-            fcupload = {}
-            fcupload["_id"] = ffts[(fc["FC"], fc["Fungible"])]
-            for k, v in KEYMAP.items():
-                if k not in fc:
-                    continue
-                fcupload[v] = fc[k]
-            fcuploads.append(fcupload)
-
-    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, fcuploads, imp_log)
-
-    # Include imports failed from bad FC/FGs
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
-    if update_status:
-        import_counter.add(update_status)
-
-    # number of recognized headers minus the id used for DB reference
-    import_counter.headers = len(fcuploads[0].keys())-1
-    status_str = create_status_update(prj_name, import_counter)
+    status_str = create_status_update(prj_name, import_status)
     logger.debug(re.sub('[\n_]', '', status_str))
-    imp_log.info(status_str)
-    imp_log.removeHandler(imp_handler)
-    imp_handler.close()
     response_value = {"status_str": status_str, "log_name": log_name}
     return JSONEncoder().encode({"success": True, "value": response_value})
-
 
 @licco_ws_blueprint.route("/projects/<report>/download/", methods=["GET", "POST"])
 @context.security.authentication_required
 def svc_download_report(report):
+    # TODO: who is deleting those temp reports? Why we don't just return the logger output
+    # directly back to the user as part of the export request (and we can delete this function)
     """
     Download a status report from a project file import.
 
@@ -690,7 +564,6 @@ def svc_download_report(report):
     try:
         repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
-
     except FileNotFoundError:
         return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None})
 
@@ -700,31 +573,16 @@ def svc_export_project(prjid):
     """
     Export project into a csv that downloads
     """
-    with StringIO() as stream:
-        writer = csv.DictWriter(stream, fieldnames=KEYMAP.keys())
-        writer.writeheader()
-        prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
-        prj_name = mcd_model.get_project(licco_db, prjid)["name"]
+    project = mcd_model.get_project(licco_db, prjid)
+    if not project:
+        return logAndAbortJson(f"project '{prjid}' does not exist")
+    project_name = project["name"]
 
-        for fft in prj_ffts:
-            row_dict = {}
-            fft_dict = prj_ffts[fft]
-            for key in fft_dict:
-                # Check for keys we handle later, or dont want the end user downloading
-                if key in ["fft", "discussion"]:
-                    continue
-                row_dict[KEYMAP_REVERSE[key]] = fft_dict[key]
-            for key in fft_dict["fft"]:
-                if key == "_id":
-                    continue
-                row_dict[KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
+    ok, err, csv_string = mcd_import.export_project(licco_db, prjid)
+    if not ok:
+        return logAndAbortJson(f"failed to export a project {project['name']}: {err}")
 
-            # Download file will have column order of KEYMAP var
-            writer.writerow(row_dict)
-
-        csv_string = stream.getvalue()
-
-    return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={prj_name}.csv"})
+    return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={project_name}.csv"})
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/submit_for_approval", methods=["GET", "POST"])

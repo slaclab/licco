@@ -2,6 +2,7 @@
 The model level business logic goes here.
 Most of the code here gets a connection to the database, executes a query and formats the results.
 """
+import csv
 import logging
 import datetime
 import collections
@@ -9,14 +10,16 @@ from enum import Enum
 import copy
 import json
 import math
-from typing import TypeAlias, Dict, Tuple, List, Optional
+from io import StringIO
+from typing import Dict, Tuple, List, Optional
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
-from pymongo.synchronous.database import Database
 from notifications.notifier import Notifier
+from .mcd_types import MongoDb, McdProject
 from .projdetails import get_project_attributes, get_all_project_changes
 from .utils import diff_arrays, ImportCounter
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,6 @@ class FCState(Enum):
         }
 
 
-MongoDb: TypeAlias = Database[Dict[str, any]]
 
 def initialize_collections(licco_db: MongoDb):
     if 'name_1' not in licco_db["projects"].index_information().keys():
@@ -193,7 +195,7 @@ def get_projects_for_user(licco_db: MongoDb, username):
     return owned_projects + editable_projects
 
 
-def get_project(licco_db: MongoDb, id):
+def get_project(licco_db: MongoDb, id) -> McdProject:
     """
     Get the details for the project given its id.
     """
@@ -202,7 +204,7 @@ def get_project(licco_db: MongoDb, id):
     return prj
 
 
-def get_project_by_name(licco_db: MongoDb, name):
+def get_project_by_name(licco_db: MongoDb, name) -> Optional[McdProject]:
     """
     Get the details for the project given its name.
     """
@@ -982,7 +984,7 @@ def _emails_to_usernames(emails: List[str]):
     return [email.split("@")[0] for email in emails]
 
 def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str, editors: List[str],
-                                approvers: List[str], notifier: Notifier) -> Tuple[bool, str, Optional[Dict[str, any]]]:
+                                approvers: List[str], notifier: Notifier) -> Tuple[bool, str, Optional[McdProject]]:
     """
     Submit a project for approval.
     Set the status to submitted
@@ -1076,8 +1078,8 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         if approvers_have_changed:
             notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
 
-    updated_project_info = licco_db["projects"].find_one({"_id": ObjectId(project_id)})
-    return True, "", updated_project_info
+    project = licco_db["projects"].find_one({"_id": ObjectId(project_id)})
+    return True, "", project
 
 
 def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifier) -> Tuple[bool, bool, str, Dict[str, any]]:
