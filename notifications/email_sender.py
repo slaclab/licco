@@ -204,13 +204,12 @@ class EmailSender(EmailSenderInterface):
             # get the email from the service
             try:
                 with request.urlopen(f"{service_url}?unixAcct={name}") as response:
-                    read_response = response.read()
                     if response.status != 200:
                         logger.error(f"Failed to get an email for '{name}': unexpected status code: {response.status}")
                         continue
 
                     # successful response, parse the email
-                    data = json.loads(read_response)
+                    data = json.loads(response.read())
                     email = data["email"]
                     if email and "@" in email:
                         emails.append(email)
