@@ -169,9 +169,6 @@ class EmailSender(EmailSenderInterface):
 
         with smtplib.SMTP(self.settings.url, self.settings.port) as server:
             server.ehlo()
-            server.starttls(context=self.context)
-            server.ehlo()
-            server.login(self.settings.username, self.settings.password)
             exceptions = []
             for e in emails:
                 try:
@@ -218,6 +215,7 @@ class EmailSender(EmailSenderInterface):
                         emails.append(email)
                     else:
                         logger.error(f"User '{name}' does not have a valid email account: '{email}'")
+                    return emails
             except Exception as e:
                 # Since this is running in a background notification thread, we can't inform the
                 # user that something went wrong with notifications. Therefore we can only log

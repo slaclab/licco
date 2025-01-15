@@ -45,7 +45,7 @@ else:
         "user": config["email"]["user"],
         "password": config["email"]["password"],
         "username_to_email_service": config["email"]["username_to_email_service"],
-        "development_mode": not send_smtp_emails,
+        "development_mode": send_smtp_emails,
     }
 
 root = logging.getLogger()
