@@ -37,6 +37,11 @@ def replaceInfNan(d):
     return d
 
 
+def emptyStringOrNone(val: str) -> bool:
+    isEmpty = not val or val.strip() == ""
+    return isEmpty
+
+
 def escape_chars_for_mongo(attrname):
     '''
     Mongo uses the '$' and '.' characters for query syntax. So, if your attributes have these characters, they get converted to dictionaires etc.

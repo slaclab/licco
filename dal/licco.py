@@ -20,7 +20,7 @@ from .projdetails import get_project_attributes, get_all_project_changes
 
 __author__ = 'mshankar@slac.stanford.edu'
 
-from .utils import diff_arrays
+from .utils import diff_arrays, emptyStringOrNone
 
 line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
@@ -441,7 +441,7 @@ def find_or_create_fft(fc_name, fg_name) -> Tuple[bool, str, Optional[Dict[str, 
         # fft was not found, fallthrough and create it
 
     # fc and fg do not exist, create a new fft
-    ok, err, fft = create_new_fft(fc_name, fg_name, " ", " ")
+    ok, err, fft = create_new_fft(fc_name, fg_name, "Auto generated", "Auto generated")
     if not ok:
         return False, err, None
     return ok, err, fft
@@ -452,6 +452,14 @@ def create_new_fft(fc, fg, fcdesc=None, fgdesc=None) -> Tuple[bool, str, Optiona
     Create a new functional component + fungible token based on their names
     If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
     """
+    if emptyStringOrNone(fc) or emptyStringOrNone(fg):
+        err = "can't create a new fft"
+        if emptyStringOrNone(fc):
+            err += ": FC can't be empty"
+        if emptyStringOrNone(fg):
+            err += ": FG can't be empty"
+        return False, err, None
+
     logger.info("Creating new fft with %s and %s", fc, fg)
     fcobj = licco_db[line_config_db_name]["fcs"].find_one({"name": fc})
     if not fcobj:
