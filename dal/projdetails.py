@@ -1,14 +1,10 @@
-import json
-import os
 import logging
-
+from typing import List, Dict
 from bson import ObjectId
-from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import PyMongoError
 
 logger = logging.getLogger(__name__)
 
-def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
+def get_project_attributes(propdb, projectid, fftid=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
     project = propdb["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
         logger.error("Cannot find project for id %s", projectid)
@@ -19,6 +15,8 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
         mtch["$match"]["$and"].append({"time": {"$gt": project["creation_time"]}})
     if asoftimestamp:   # find the values before a specific timestamp
         mtch["$match"]["$and"].append({"time": {"$lte": asoftimestamp}})
+    if fftid:  # only values of a specific fftid should be returned
+        mtch["$match"]["$and"].append({"fft": ObjectId(fftid)})
 
     histories = [ x for x in propdb["projects_history"].aggregate([
         mtch,
@@ -60,7 +58,7 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
     if commentAfterTimestamp:
         commentFilter["$match"]["$and"].append({"time": {"$gt": commentAfterTimestamp}})
 
-    comments = [x for x in propdb["projects_history"].aggregate([
+    comments: List[Dict[str, any]] = [x for x in propdb["projects_history"].aggregate([
         mtch,
         commentFilter,
         {"$sort": {"time": -1}},
@@ -87,9 +85,9 @@ def get_project_attributes(propdb, projectid, skipClonedEntries=False, asoftimes
             # this comment is not relevant since the project no longer has this device
             continue
 
-        comments = device.get(field_name, [])
-        comments.append({'id': comment_id, 'author': user, 'time': timestamp, 'comment': val})
-        details[fft_id][field_name] = comments
+        device_comments = device.get(field_name, [])
+        device_comments.append({'id': comment_id, 'author': user, 'time': timestamp, 'comment': val})
+        details[fft_id][field_name] = device_comments
 
     for device in details.values():
         # ensures discussion field is always present (at least as an empty array)

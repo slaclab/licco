@@ -230,13 +230,13 @@ def get_project_by_name(name):
     return prj
 
 
-def get_project_ffts(prjid, showallentries=True, asoftimestamp=None):
+def get_project_ffts(prjid, showallentries=True, asoftimestamp=None, fftid=None):
     """
     Get the FFTs for a project given its id.
     """
     oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db[line_config_db_name], prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
+    return get_project_attributes(licco_db[line_config_db_name], prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, fftid=fftid)
 
 
 def get_project_changes(prjid):
@@ -431,7 +431,23 @@ def create_new_fungible_token(name, description):
         return False, str(e), None
 
 
-def create_new_fft(fc, fg, fcdesc=None, fgdesc=None):
+def find_or_create_fft(fc_name, fg_name) -> Tuple[bool, str, Optional[Dict[str, any]]]:
+    fcobj = licco_db[line_config_db_name]["fcs"].find_one({"name": fc_name})
+    fgobj = licco_db[line_config_db_name]["fgs"].find_one({"name": fg_name})
+    if fcobj and fgobj:
+        fft = licco_db[line_config_db_name]["ffts"].find_one({"fc": ObjectId(fcobj["_id"]), "fg": ObjectId(fgobj["_id"])})
+        if fft:
+            return True, "", fft
+        # fft was not found, fallthrough and create it
+
+    # fc and fg do not exist, create a new fft
+    ok, err, fft = create_new_fft(fc_name, fg_name, " ", " ")
+    if not ok:
+        return False, err, None
+    return ok, err, fft
+
+
+def create_new_fft(fc, fg, fcdesc=None, fgdesc=None) -> Tuple[bool, str, Optional[Dict[str, any]]]:
     """
     Create a new functional component + fungible token based on their names
     If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
@@ -629,7 +645,66 @@ def get_fcattrs(fromstr=False):
     return fcattrscopy
 
 
-def update_fft_in_project(prjid, fftid, fcupdate, userid,
+def change_of_fft_in_project(userid: str, prjid: str, fftid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
+    project = get_project(prjid)
+    if not project:
+        return False, f"Project {prjid} does not exist", ""
+    fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": ObjectId(fftid)})
+    if not fft:
+        return False, f"Cannot find functional+fungible token for {fftid}", ""
+
+    change_of_fft = 'fc' in fcupdate or 'fg' in fcupdate
+    if not change_of_fft:
+        # this is a regular update, and as such this method was not really used correctly, but it's not a bug
+        # since we fallback to the regular fft update
+        ok, err, _ = update_fft_in_project(prjid, fftid, fcupdate, userid)
+        return ok, err, fftid
+
+    # When the user wants to update a device, but change it's fc or fg we have to:
+    # 1) Create new fft if necessary
+    # 2) Copy all latest values from the old fft together with the current user changes (if any)
+    # 3) Delete old device
+
+    # get old fft values
+    old_values = get_project_attributes(licco_db[line_config_db_name], prjid, fftid=fftid)
+    old_values = old_values[fftid]
+    old_fft = old_values.pop('fft')
+    new_fc_name = fcupdate.pop('fc', old_fft['fc'])
+    new_fg_name = fcupdate.pop('fg', old_fft['fg'])
+
+    # 1) create new fft if necessary
+    ok, err, new_fft = find_or_create_fft(new_fc_name, new_fg_name)
+    if not ok:
+        return False, err, ""
+
+    # overwrite the old values
+    for key, val in fcupdate.items():
+        if key == 'discussion':
+            old_discussion = old_values.get(key, [])
+            if old_discussion:
+                val = val + old_discussion
+            old_values[key] = val
+        else:
+            old_values[key] = val
+
+    # 2) insert new values into db and delete the values with old fft
+    overwritten_values = old_values
+    new_fft_id = str(new_fft["_id"])
+    ok, err, inserts = update_fft_in_project(prjid, new_fft_id, overwritten_values, userid)
+    if not ok:
+        return False, f"failed to change fft '{fftid}': failed to update ffts: {err}", ""
+
+    # 3) delete old device from project
+    old_fft = fftid
+    ok, err = remove_ffts_from_project(userid, prjid, [old_fft])
+    if not ok:
+        return False, f"failed to change fft '{fftid}': failed to remove old device: {err}", ""
+
+    # fft was successfully changed
+    return True, "", new_fft_id
+
+
+def update_fft_in_project(prjid: str, fftid: str, fcupdate: Dict[str, any], userid: str,
                           modification_time=None,
                           current_project_attributes=None) -> Tuple[bool, str, Dict[str, int]]:
     """
@@ -684,15 +759,17 @@ def update_fft_in_project(prjid, fftid, fcupdate, userid,
 
                 author = comment['author']
                 newval = comment['comment']
+                time = comment.get('time', modification_time)
                 all_inserts.append({
                     "prj": ObjectId(prjid),
                     "fft": ObjectId(fftid),
                     "key": attrname,
                     "val": newval,
                     "user": author,
-                    "time": modification_time
+                    "time": time,
                 })
             continue
+
         try:
             attrmeta = fcattrs[attrname]
         except KeyError:
@@ -826,8 +903,7 @@ def copy_ffts_from_project(srcprjid, destprjid, fftid, attrnames, userid):
     return True, "", get_project_attributes(licco_db[line_config_db_name], ObjectId(destprjid)).get(fftid, {})
 
 
-
-def remove_ffts_from_project(userid, prjid, fft_ids: List[str]):
+def remove_ffts_from_project(userid, prjid, fft_ids: List[str]) -> Tuple[bool, str]:
     project = get_project(prjid)
     if not project:
         return False, f"Project {prjid} does not exist"
