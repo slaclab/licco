@@ -20,7 +20,7 @@ from .projdetails import get_project_attributes, get_all_project_changes
 
 __author__ = 'mshankar@slac.stanford.edu'
 
-from .utils import diff_arrays, emptyStringOrNone
+from .utils import diff_arrays, empty_string_or_none
 
 line_config_db_name = "lineconfigdb"
 logger = logging.getLogger(__name__)
@@ -452,11 +452,11 @@ def create_new_fft(fc, fg, fcdesc=None, fgdesc=None) -> Tuple[bool, str, Optiona
     Create a new functional component + fungible token based on their names
     If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
     """
-    if emptyStringOrNone(fc) or emptyStringOrNone(fg):
+    if empty_string_or_none(fc) or empty_string_or_none(fg):
         err = "can't create a new fft"
-        if emptyStringOrNone(fc):
+        if empty_string_or_none(fc):
             err += ": FC can't be empty"
-        if emptyStringOrNone(fg):
+        if empty_string_or_none(fg):
             err += ": FG can't be empty"
         return False, err, None
 
@@ -657,6 +657,9 @@ def change_of_fft_in_project(userid: str, prjid: str, fftid: str, fcupdate: Dict
     project = get_project(prjid)
     if not project:
         return False, f"Project {prjid} does not exist", ""
+    if project['status'] != 'development':
+        return False, f"Can't change fft {fftid}: Project {project['name']} is not in a development mode (status={project['status']})", ""
+
     fft = licco_db[line_config_db_name]["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", ""
@@ -700,13 +703,13 @@ def change_of_fft_in_project(userid: str, prjid: str, fftid: str, fcupdate: Dict
     new_fft_id = str(new_fft["_id"])
     ok, err, inserts = update_fft_in_project(prjid, new_fft_id, overwritten_values, userid)
     if not ok:
-        return False, f"failed to change fft '{fftid}': failed to update ffts: {err}", ""
+        return False, f"Failed to change fft '{fftid}': failed to update ffts: {err}", ""
 
     # 3) delete old device from project
     old_fft = fftid
     ok, err = remove_ffts_from_project(userid, prjid, [old_fft])
     if not ok:
-        return False, f"failed to change fft '{fftid}': failed to remove old device: {err}", ""
+        return False, f"Failed to change fft '{fftid}': failed to remove old device: {err}", ""
 
     # fft was successfully changed
     return True, "", new_fft_id

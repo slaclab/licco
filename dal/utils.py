@@ -37,9 +37,9 @@ def replaceInfNan(d):
     return d
 
 
-def emptyStringOrNone(val: str) -> bool:
-    isEmpty = not val or val.strip() == ""
-    return isEmpty
+def empty_string_or_none(val: str) -> bool:
+    is_empty = not val or val.strip() == ""
+    return is_empty
 
 
 def escape_chars_for_mongo(attrname):
