@@ -2,12 +2,9 @@ import os
 import json
 import logging
 import pkg_resources
-
 import context
-
 from flask import Blueprint, render_template, send_file, abort, request
-
-from dal.mcd_model import get_project
+from dal import mcd_model
 
 pages_blueprint = Blueprint('pages_api', __name__)
 
@@ -25,7 +22,7 @@ def index():
 @pages_blueprint.route("/projects/<prjid>/index.html")
 @context.security.authentication_required
 def project(prjid):
-    prjobj = get_project(context.licco_db, prjid)
+    prjobj = mcd_model.get_project(context.licco_db, prjid)
     privileges = { x : context.security.check_privilege_for_project(x, prjid) for x in [ "read", "write", "edit", "approve" ]}
     return render_template("project.html", 
                            logged_in_user=context.security.get_current_user_id(), 
@@ -38,7 +35,7 @@ def project(prjid):
 @pages_blueprint.route("/projects/<prjid>/diff.html")
 @context.security.authentication_required
 def project_diff(prjid):
-    prjobj = get_project(context.licco_db, prjid)
+    prjobj = mcd_model.get_project(context.licco_db, prjid)
     otherprjid = request.args["otherprjid"]
     approved = request.args["approved"]
 

@@ -25,6 +25,7 @@ licco_ws_blueprint = Blueprint('business_service_api', __name__)
 
 logger = logging.getLogger(__name__)
 
+
 def logAndAbortJson(error_msg, ret_status=500):
     logger.error(error_msg)
     return {'status': False, 'errormsg': error_msg, 'value': None}, ret_status
@@ -52,24 +53,6 @@ def project_writable(wrapped_function):
         raise Exception(
             f"Project with id {prjid} is not in development status")
     return function_interceptor
-
-
-def create_status_update(prj_name, status: ImportCounter):
-    """
-    Helper function to make the import status message based on the dictionary results
-    """
-    line_brk = "_"*40
-    status_str = '\n'.join([
-        f'{line_brk}',
-        f'Summary of Results:',
-        f'Project Name: {prj_name}.',
-        f'Valid headers recognized: {status.headers}.',
-        f'{line_brk}',
-        f'Successful row imports: {status.success}.',
-        f'Failed row imports: {status.fail}.',
-        f'Ignored row imports: {status.ignored}.',
-    ])
-    return status_str
 
 
 @licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
@@ -383,7 +366,7 @@ def svc_update_fc_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
     if not status:
-        return JSONEncoder().encode({"success": False, "errormsg": msg})
+        return logAndAbortJson(msg)
 
     discussion = fcupdate.get('discussion', '')
     if discussion:
@@ -392,8 +375,17 @@ def svc_update_fc_in_project(prjid, fftid):
             'author': userid,
             'comment': discussion
         }]
+
+    change_of_device = 'fc' in fcupdate or 'fg' in fcupdate
+    if change_of_device:
+        status, errormsg, new_fft_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
+        if not status:
+            return logAndAbortJson(errormsg)
+        fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=new_fft_id)[new_fft_id]
+        return JSONEncoder().encode({"success": status, "value": fc})
+
     status, errormsg, results = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
-    fc = mcd_model.get_project_ffts(licco_db, prjid)
+    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)[fftid]
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
@@ -531,21 +523,19 @@ def svc_import_project(prjid):
             response_value = {"status_str": error_msg, "log_name": None}
             return JSONEncoder().encode({"success": False, "value": response_value})
 
+    prj_name = mcd_model.get_project(licco_db, prjid)['name']
+    log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
+    log_name = f"{userid}_{prj_name.replace('/', '_')}_{log_time}"
+    log, log_handler = create_logger(log_name)
 
-    # TODO: figure out the logging problem
-    #
-    # prj_name = mcd_model.get_project(licco_db, prjid)['name']
-    # log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
-    # log_name = f"{userid}_{prj_name.replace('/', '_')}_{log_time}"
-    # log, log_handler = create_logger("")
-
-    ok, err, import_status = mcd_import.import_project(context.licco_db, userid, prjid, filestring)
+    ok, err, import_status = mcd_import.import_project(context.licco_db, userid, prjid, filestring, log)
     if not ok:
         return JSONEncoder().encode({"success": False, "errormsg": err})
+    log.removeHandler(log_handler)
+    log_handler.close()
 
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
-    status_str = create_status_update(prj_name, import_status)
-    logger.debug(re.sub('[\n_]', '', status_str))
+    status_str = mcd_import.create_status_update(prj_name, import_status)
     response_value = {"status_str": status_str, "log_name": log_name}
     return JSONEncoder().encode({"success": True, "value": response_value})
 

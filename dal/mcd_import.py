@@ -1,9 +1,5 @@
 import csv
-import logging
-import os
-import tempfile
 from dataclasses import dataclass
-import datetime
 from io import StringIO
 from logging import Logger
 from typing import Tuple
@@ -11,7 +7,7 @@ import re
 import json
 
 from dal import mcd_model
-from dal.mcd_types import MongoDb, KEYMAP, KEYMAP_REVERSE
+from dal.mcd_model import MongoDb
 from dal.utils import ImportCounter
 
 @dataclass
@@ -21,7 +17,25 @@ class McdDataImport:
     import_log = ""
     import_counter = ImportCounter()
 
-def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, logger: Logger) -> Tuple[bool, str, ImportCounter]:
+
+def create_status_update(prj_name, status: ImportCounter):
+    """
+    Helper function to make the import status message based on the dictionary results
+    """
+    line_break = "_"*40
+    status_str = '\n'.join([
+        f'{line_break}',
+        f'Summary of Results:',
+        f'Project Name: {prj_name}.',
+        f'Valid headers recognized: {status.headers}.',
+        f'{line_break}',
+        f'Successful row imports: {status.success}.',
+        f'Failed row imports: {status.fail}.',
+        f'Ignored row imports: {status.ignored}.',
+    ])
+    return status_str
+
+def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, imp_log: Logger) -> Tuple[bool, str, ImportCounter]:
     import_counter = ImportCounter()
     with StringIO(filestring) as fp:
         fp.seek(0)
@@ -64,17 +78,12 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, 
             err = "Import Error: No data detected in import file."
             return False, err, import_counter
 
-    prj_name = mcd_model.get_project(licco_db, prjid)['name']
-    log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
-    log_name = f"{userid}_{prj_name.replace('/', '_')}_{log_time}"
-    imp_log, imp_handler = create_logger(log_name)
-
     if import_counter.fail > 0:
         imp_log.debug(f"FAIL: {import_counter.fail} FFTS malformed. (FC values likely missing)")
 
     fc2id = {
         value["name"]: value["_id"]
-        for value in json.loads(mcd_model.get_fcs(licco_db))["value"]
+        for value in mcd_model.get_fcs(licco_db)
     }
 
     for nm, fc_list in fcs.items():
@@ -91,7 +100,6 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, 
                     # Count failed imports - excluding FC & FG
                     import_counter.fail += 1
                     error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
-                    logger.debug(error_str)
                     imp_log.info(error_str)
             else:
                 current_list.append(fc)
@@ -99,7 +107,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, 
 
     fg2id = {
         fgs["name"]: fgs["_id"]
-        for fgs in json.loads(mcd_model.get_fgs(licco_db))["value"]
+        for fgs in mcd_model.get_fgs(licco_db)
     }
 
     for nm, fc_list in fcs.items():
@@ -121,7 +129,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, 
         for fc in fc_list:
             fcupload = {}
             fcupload["_id"] = ffts[(fc["FC"], fc["Fungible"])]
-            for k, v in KEYMAP.items():
+            for k, v in mcd_model.KEYMAP.items():
                 if k not in fc:
                     continue
                 fcupload[v] = fc[k]
@@ -136,17 +144,14 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, 
 
     # number of recognized headers minus the id used for DB reference
     import_counter.headers = len(fcuploads[0].keys())-1
-    #status_str = create_status_update(prj_name, import_counter)
-    #logger.debug(re.sub('[\n_]', '', status_str))
+    status_str = create_status_update(prj_name, import_counter)
     imp_log.info(status_str)
-    imp_log.removeHandler(imp_handler)
-    imp_handler.close()
     return True, "", import_counter
 
 
 def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
     with StringIO() as stream:
-        writer = csv.DictWriter(stream, fieldnames=KEYMAP.keys())
+        writer = csv.DictWriter(stream, fieldnames=mcd_model.KEYMAP.keys())
         writer.writeheader()
         prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
 
@@ -155,13 +160,13 @@ def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
             fft_dict = prj_ffts[fft]
             for key in fft_dict:
                 # Check for keys we handle later, or dont want the end user downloading
-                if key in ["fft", "discussion"]:
+                if (key in ["fft", "discussion"]) or (key not in mcd_model.KEYMAP_REVERSE):
                     continue
-                row_dict[KEYMAP_REVERSE[key]] = fft_dict[key]
+                row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict[key]
             for key in fft_dict["fft"]:
                 if key == "_id":
                     continue
-                row_dict[KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
+                row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
 
             # Download file will have column order of KEYMAP var
             writer.writerow(row_dict)

@@ -198,7 +198,7 @@ def test_project_approval_workflow(db):
     prjid = project["_id"]
 
     email_sender = TestEmailSender()
-    notifier = Notifier('', email_sender)
+    notifier = Notifier('', email_sender, 'admin@example.com')
     ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']}, notifier)
     assert err == ""
     assert ok
@@ -212,10 +212,11 @@ def test_project_approval_workflow(db):
 
     # an editor user should be able to save an fft
     fftid = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
-    ok, err, update_status = mcd_model.update_fft_in_project(db, "editor_user", prjid, {"_id": fftid, "tc_part_no": "PART 123"})
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "editor_user", prjid,
+                                                             {"_id": fftid, "tc_part_no": "PART 123"})
     assert err == ""
     assert ok
-    assert update_status['success'] == 1
+    assert update_status.success == 1
 
     # verify status and submitter (should not exist right now)
     project = mcd_model.get_project(db, prjid)
@@ -286,7 +287,7 @@ def test_project_rejection(db):
     prjid = project["_id"]
 
     email_sender = TestEmailSender()
-    notifier = Notifier('', email_sender)
+    notifier = Notifier('', email_sender, 'admin@example.com')
     ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']},
                                                notifier)
     assert err == ""

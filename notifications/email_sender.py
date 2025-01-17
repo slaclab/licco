@@ -61,7 +61,8 @@ class EmailSenderMock(EmailSenderInterface):
         return True
 
 class EmailSettings:
-    def __init__(self, url: str, port: int, username: str, password: str,
+    def __init__(self, url: str, port: int, email_auth: bool, 
+                 username: str, password: str,
                  username_to_email_service_url: str = "",
                  email_send_as_ssl: bool = False):
         if not url:
@@ -75,6 +76,8 @@ class EmailSettings:
 
         self.url = url
         self.port = port
+        # bool for if we need email authentication
+        self.email_auth = email_auth
         self.username = username
         self.password = password
         # url of a service that turns licco username into an email
@@ -156,7 +159,8 @@ class EmailSender(EmailSenderInterface):
     def _send_emails(self, emails: List[Message]) -> List[Exception]:
         if self.settings.email_send_as_ssl:
             with smtplib.SMTP_SSL(self.settings.url, self.settings.port, context=self.context) as server:
-                server.login(self.settings.username, self.settings.password)
+                if self.settings.email_auth:
+                    server.login(self.settings.username, self.settings.password)
                 # If sending an email to a certain account has failed for some reason (account doesn't exist)
                 # that should not stop sending the rest of the emails.
                 exceptions = []
@@ -169,9 +173,10 @@ class EmailSender(EmailSenderInterface):
 
         with smtplib.SMTP(self.settings.url, self.settings.port) as server:
             server.ehlo()
-            server.starttls(context=self.context)
-            server.ehlo()
-            server.login(self.settings.username, self.settings.password)
+            if self.settings.email_auth:
+                server.starttls(context=self.context)
+                server.ehlo()
+                server.login(self.settings.username, self.settings.password)
             exceptions = []
             for e in emails:
                 try:
@@ -218,6 +223,7 @@ class EmailSender(EmailSenderInterface):
                         emails.append(email)
                     else:
                         logger.error(f"User '{name}' does not have a valid email account: '{email}'")
+                    return emails
             except Exception as e:
                 # Since this is running in a background notification thread, we can't inform the
                 # user that something went wrong with notifications. Therefore we can only log

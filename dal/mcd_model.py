@@ -2,7 +2,6 @@
 The model level business logic goes here.
 Most of the code here gets a connection to the database, executes a query and formats the results.
 """
-import csv
 import logging
 import datetime
 import collections
@@ -10,20 +9,42 @@ from enum import Enum
 import copy
 import json
 import math
-from io import StringIO
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, TypeAlias
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
+from pymongo.synchronous.database import Database
+
 from notifications.notifier import Notifier
-from .mcd_types import MongoDb, McdProject
 from .projdetails import get_project_attributes, get_all_project_changes
-from .utils import diff_arrays, ImportCounter
-import re
+from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
 
 MASTER_PROJECT_NAME = 'LCLS Machine Configuration Database'
+
+MongoDb: TypeAlias = Database[Dict[str, any]]
+McdProject: TypeAlias = Dict[str, any]
+
+KEYMAP = {
+    # Column names defined in confluence
+    "FC": "fc",
+    "Fungible": "fg",
+    "TC_part_no": "tc_part_no",
+    "State": "state",
+    "Comments": "comments",
+    "LCLS_Z_loc": "nom_loc_z",
+    "LCLS_X_loc": "nom_loc_x",
+    "LCLS_Y_loc": "nom_loc_y",
+    "Z_dim": "nom_dim_z",
+    "X_dim": "nom_dim_x",
+    "Y_dim": "nom_dim_y",
+    "LCLS_Z_roll": "nom_ang_z",
+    "LCLS_X_pitch": "nom_ang_x",
+    "LCLS_Y_yaw": "nom_ang_y",
+    "Must_Ray_Trace": "ray_trace"
+}
+KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
 
 
 class FCState(Enum):
@@ -195,7 +216,7 @@ def get_projects_for_user(licco_db: MongoDb, username):
     return owned_projects + editable_projects
 
 
-def get_project(licco_db: MongoDb, id) -> McdProject:
+def get_project(licco_db: MongoDb, id) -> Optional[McdProject]:
     """
     Get the details for the project given its id.
     """
@@ -212,13 +233,13 @@ def get_project_by_name(licco_db: MongoDb, name) -> Optional[McdProject]:
     return prj
 
 
-def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None):
+def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None, fftid=None):
     """
     Get the FFTs for a project given its id.
     """
     oid = ObjectId(prjid)
     logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp)
+    return get_project_attributes(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, fftid=fftid)
 
 
 def get_project_changes(licco_db: MongoDb, prjid):
@@ -413,11 +434,35 @@ def create_new_fungible_token(licco_db: MongoDb, name, description):
         return False, str(e), None
 
 
-def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc=None, fgdesc=None):
+def find_or_create_fft(licco_db: MongoDb, fc_name: str, fg_name: str) -> Tuple[bool, str, Optional[Dict[str, any]]]:
+    fcobj = licco_db["fcs"].find_one({"name": fc_name})
+    fgobj = licco_db["fgs"].find_one({"name": fg_name})
+    if fcobj and fgobj:
+        fft = licco_db["ffts"].find_one({"fc": ObjectId(fcobj["_id"]), "fg": ObjectId(fgobj["_id"])})
+        if fft:
+            return True, "", fft
+        # fft was not found, fallthrough and create it
+
+    # fc and fg do not exist, create a new fft
+    ok, err, fft = create_new_fft(licco_db, fc_name, fg_name, "Auto generated", "Auto generated")
+    if not ok:
+        return False, err, None
+    return ok, err, fft
+
+
+def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc=None, fgdesc=None) -> Tuple[bool, str, Optional[Dict[str, any]]]:
     """
     Create a new functional component + fungible token based on their names
     If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
     """
+    if empty_string_or_none(fc) or empty_string_or_none(fg):
+        err = "can't create a new fft"
+        if empty_string_or_none(fc):
+            err += ": FC can't be empty"
+        if empty_string_or_none(fg):
+            err += ": FG can't be empty"
+        return False, err, None
+
     logger.info("Creating new fft with %s and %s", fc, fg)
     fcobj = licco_db["fcs"].find_one({"name": fc})
     if not fcobj:
@@ -608,6 +653,73 @@ def get_fcattrs(fromstr=False):
     return fcattrscopy
 
 
+def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
+    fftid = fcupdate["_id"]
+    if empty_string_or_none(fftid):
+        return False, f"Can't change device of a project: fftid should not be empty", ""
+
+    project = get_project(licco_db, prjid)
+    if not project:
+        return False, f"Project {prjid} does not exist", ""
+    if project['status'] != 'development':
+        return False, f"Can't change fft {fftid}: Project {project['name']} is not in a development mode (status={project['status']})", ""
+
+    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
+    if not fft:
+        return False, f"Cannot find functional+fungible token for {fftid}", ""
+
+    change_of_fft = 'fc' in fcupdate or 'fg' in fcupdate
+    if not change_of_fft:
+        # this is a regular update, and as such this method was not really used correctly, but it's not a bug
+        # since we fallback to the regular fft update
+        ok, err, _ = update_fft_in_project(licco_db, userid, prjid, fcupdate)
+        return ok, err, fftid
+
+    # When the user wants to update a device, but change it's fc or fg we have to:
+    # 1) Create new fft if necessary
+    # 2) Copy all latest values from the old fft together with the current user changes (if any)
+    # 3) Delete old device
+
+    # get old fft values
+    old_values = get_project_attributes(licco_db, prjid, fftid=fftid)
+    old_values = old_values[fftid]
+    old_fft = old_values.pop('fft')
+    new_fc_name = fcupdate.pop('fc', old_fft['fc'])
+    new_fg_name = fcupdate.pop('fg', old_fft['fg'])
+
+    # 1) create new fft if necessary
+    ok, err, new_fft = find_or_create_fft(licco_db, new_fc_name, new_fg_name)
+    if not ok:
+        return False, err, ""
+
+    # overwrite the old values
+    for key, val in fcupdate.items():
+        if key == 'discussion':
+            old_discussion = old_values.get(key, [])
+            if old_discussion:
+                val = val + old_discussion
+            old_values[key] = val
+        else:
+            old_values[key] = val
+
+    # 2) insert new values into db and delete the values with old fft
+    new_fft_id = str(new_fft["_id"])
+    overwritten_values = old_values
+    overwritten_values["_id"] = new_fft_id
+    ok, err, inserts = update_fft_in_project(licco_db, userid, prjid, overwritten_values)
+    if not ok:
+        return False, f"Failed to change fft '{fftid}': failed to update ffts: {err}", ""
+
+    # 3) delete old device from project
+    old_fft = fftid
+    ok, err = remove_ffts_from_project(licco_db, userid, prjid, [old_fft])
+    if not ok:
+        return False, f"Failed to change fft '{fftid}': failed to remove old device: {err}", ""
+
+    # fft was successfully changed
+    return True, "", new_fft_id
+
+
 def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
                           current_project_attributes=None) -> Tuple[bool, str, ImportCounter]:
     """
@@ -668,15 +780,17 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
 
                 author = comment['author']
                 newval = comment['comment']
+                time = comment.get('time', modification_time)
                 all_inserts.append({
                     "prj": ObjectId(prjid),
                     "fft": ObjectId(fftid),
                     "key": attrname,
                     "val": newval,
                     "user": author,
-                    "time": modification_time
+                    "time": time,
                 })
             continue
+
         try:
             attrmeta = fcattrs[attrname]
         except KeyError:
@@ -958,7 +1072,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     return True, "", get_project_attributes(licco_db, ObjectId(destprjid)).get(fftid, {})
 
 
-def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str]):
+def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str]) -> Tuple[bool, str]:
     project = get_project(licco_db, prjid)
     if not project:
         return False, f"Project {prjid} does not exist"
