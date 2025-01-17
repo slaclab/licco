@@ -37,7 +37,7 @@ export const MultiChoiceSelector = <T,>({ availableItems: allSelections, default
         }
         setAvailableItems(availItems);
         setAvailableItemsStrings(availItemsString);
-    }, [defaultValue, allSelections, selectedItems])
+    }, [defaultValue, allSelections, selectedItems, renderer])
 
 
     const setCurrentSelectionViaIndex = (index: number) => {

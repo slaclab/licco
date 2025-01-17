@@ -219,7 +219,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
             case 'identical': return diff.identical.length == 0;
             case 'listOfIdenticalDevices': return diff.identical.length == 0
         }
-    }, [diff]);
+    }, [diff, type]);
 
     const replaceDeviceDiscussion = (newDevice: ProjectDeviceDetails, devices: ProjectDeviceDetails[]) => {
         for (let device of devices) {
