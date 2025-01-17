@@ -28,7 +28,7 @@ from dal.licco import get_fcattrs, get_project, get_project_ffts, get_fcs, \
     get_projects_approval_history, delete_fft, delete_fc, delete_fg, get_project_attributes, validate_insert_range, \
     get_fft_values_by_project, \
     get_users_with_privilege, get_fft_name_by_id, get_fft_id_by_names, get_projects_recent_edit_time, \
-    delete_fft_comment, add_fft_comment, remove_ffts_from_project, delete_project
+    delete_fft_comment, add_fft_comment, remove_ffts_from_project, delete_project, change_of_fft_in_project
 
 __author__ = 'mshankar@slac.stanford.edu'
 
@@ -561,7 +561,7 @@ def svc_update_fc_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     status, msg = validate_import_headers(fcupdate, prjid, fftid)
     if not status:
-        return JSONEncoder().encode({"success": False, "errormsg": msg})
+        return logAndAbortJson(msg)
 
     discussion = fcupdate.get('discussion', '')
     if discussion:
@@ -570,8 +570,17 @@ def svc_update_fc_in_project(prjid, fftid):
             'author': userid,
             'comment': discussion
         }]
+
+    change_of_device = 'fc' in fcupdate or 'fg' in fcupdate
+    if change_of_device:
+        status, errormsg, new_fft_id = change_of_fft_in_project(userid, prjid, fftid, fcupdate)
+        if not status:
+            return logAndAbortJson(errormsg)
+        fc = get_project_ffts(prjid, fftid=new_fft_id)[new_fft_id]
+        return JSONEncoder().encode({"success": status, "value": fc})
+
     status, errormsg, results = update_fft_in_project(prjid, fftid, fcupdate, userid)
-    fc = get_project_ffts(prjid)
+    fc = get_project_ffts(prjid, fftid=fftid)[fftid]
     return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])

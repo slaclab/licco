@@ -631,6 +631,23 @@ export const TagSelectionDialog: React.FC<{
 };
 
 
+// sort project value changes according to the order in which device fields appear in the device table
+const sortProjectValueChanges = (changes: Record<string, any>) => {
+  let order: (keyof ProjectDeviceDetails)[] = ['fc', 'fg', 'tc_part_no', 'stand', 'state', 'comments', 'nom_loc_z', 'nom_loc_x', 'nom_loc_y', 'nom_ang_z', 'nom_ang_x', 'nom_ang_y', 'ray_trace'];
+  let sortOrder: Record<any, number> = {};
+  for (let i = 0; i < order.length; i++) {
+    sortOrder[order[i]] = i;
+  }
+
+  const values = Object.entries(changes);
+  values.sort((a: any, b: any) => {
+    let orderA = sortOrder[a[0]] ?? 100;
+    let orderB = sortOrder[b[0]] ?? 100;
+    return orderA - orderB;
+  });
+  return values;
+}
+
 // dialog for confirming the changed values and adding comments to value change
 export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, valueChanges, onClose, onSubmit }) => {
   const [dialogErr, setDialogErr] = useState('');
@@ -647,7 +664,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
       return <NonIdealState icon="clean" title="No Value Changes" description={`There were no value changes for device ${device.fc}-${device.fg}`} />
     }
 
-    const values = Object.entries(valueChanges);
+    const values = sortProjectValueChanges(valueChanges);
     const d = device as any;
     return (
       <>
@@ -698,17 +715,11 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
     }
 
     syncDeviceUserChanges(project._id, device.id, valueChanges)
-      .then((response) => {
-        // TODO: for some reason server returns data for all devices again
-        // when we don't really need it. We just update our changed device
-        // We should really just return the last device...
-        let d = response[device.id];
-        if (!d) { // this should never happen, we should always get back this device
-          throw new Error(`Synced device (${device.fc}-${device.fg}, id=${device.id}) was not found in server response: this should never happen`);
-        }
-
-        let backendDevice = deviceDetailsBackendToFrontend(d);
-        onSubmit(backendDevice);
+      .then((device) => {
+        // There are 2 things that may happen:
+        // 1) the user wanted to update a few fields of an existing device (an existing device will come back)
+        // 2) the user wanted to update a few fields and change fc/fg (change a device)
+        onSubmit(device);
       }).catch((e: JsonErrorMsg) => {
         let msg = `Failed to sync user device changes: ${e.error}`;
         console.error(msg, e);
