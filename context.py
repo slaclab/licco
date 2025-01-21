@@ -16,11 +16,16 @@ __author__ = 'mshankar@slac.stanford.edu'
 # Application context.
 app = None
 
+def create_mongo_client(mongodb_url: str = ""):
+    if not mongodb_url:
+        mongodb_url = os.environ.get("MONGODB_URL", None)
+        if not mongodb_url:
+            print("Please use the environment variable MONGODB_URL to configure the database connection.")
+    return MongoClient(host=mongodb_url, tz_aware=True)
+
+
 # Set up the Mongo connection.
-MONGODB_URL = os.environ.get("MONGODB_URL", None)
-if not MONGODB_URL:
-    print("Please use the environment variable MONGODB_URL to configure the database connection.")
-mongo_client = MongoClient(host=MONGODB_URL, tz_aware=True)
+mongo_client = create_mongo_client()
 licco_db = mongo_client["lineconfigdb"]
 
 

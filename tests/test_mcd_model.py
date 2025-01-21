@@ -1,6 +1,8 @@
-from typing import List, Dict
+from typing import List, Dict, Mapping, Any
 
 import pytest
+from bson import ObjectId
+from pymongo import MongoClient
 
 import context
 from dal import mcd_model
@@ -10,12 +12,14 @@ from notifications.notifier import Notifier
 
 _TEST_DB_NAME = "_licco_test_db_"
 
+client: MongoClient[Mapping[str, Any]]
+
 @pytest.fixture(scope="session")
 def db():
     """Create db at the start of the session"""
-    client = context.mongo_client
+    global client
+    client = context.create_mongo_client()
     db = client[_TEST_DB_NAME]
-    context.licco_db = db
     initialize_collections(db)
 
     # we expect a fresh test database to only have 1 project (master project)
@@ -43,7 +47,7 @@ def db():
 def destroy_db():
     """Destroy db and its data at the end of the testing session"""
     yield
-    client = context.mongo_client
+    global client
     client.drop_database(_TEST_DB_NAME)
     client.close()
 
@@ -73,7 +77,7 @@ class NoOpEmailSender(EmailSenderInterface):
 
 class NoOpNotifier(Notifier):
     def __init__(self):
-        super().__init__('', NoOpEmailSender())
+        super().__init__('', NoOpEmailSender(), "admin@example.com")
         pass
 
     def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
@@ -190,6 +194,33 @@ def test_remove_fft_from_project(db):
 
     project_ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
+
+
+def test_get_project_ffts(db):
+    project = mcd_model.create_new_project(db, "test_get_project_ffts", "", "test_user")
+    prjid = str(project["_id"])
+
+    # insert new fft
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_y': 1.23, 'nom_ang_x': 2.31}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    assert ok
+    assert err == ""
+
+    inserted_ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(inserted_ffts) == 1
+
+    fft = inserted_ffts[fft_id]
+    assert fft['nom_ang_y'] == 1.23
+    assert fft['nom_ang_x'] == 2.31
+    assert fft.get('nom_ang_z', None) is None
+
+    # check what is stored in the database, we should find only the values that we have stored
+    changes = db['projects_history'].find({'fft': ObjectId(fft_id), 'prj': ObjectId(prjid)}).to_list()
+    for change in changes:
+        assert change['user'] == "test_user", f"expected something else for change: {change}"
+        assert str(change['prj']) == prjid, f"wrong project id; change: {change}"
+    assert len(changes) == 2, "we made only 2 value changes, so only 2 value changes should be present in db"
 
 
 def test_project_approval_workflow(db):
@@ -323,3 +354,6 @@ def test_project_rejection(db):
     assert email['to'] == ['approve_user', 'approve_user_2', 'editor_user', 'editor_user_2', 'test_user']
     assert email['subject'] == 'Project test_project_rejection_workflow was rejected'
     assert 'This is my rejection message' in email['content']
+
+
+# TODO: import/export csv file into a project
