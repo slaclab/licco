@@ -4,8 +4,8 @@ from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
-def get_project_attributes(propdb, projectid, fftid=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
-    project = propdb["projects"].find_one({"_id": ObjectId(projectid)})
+def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
+    project = db["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
         logger.error("Cannot find project for id %s", projectid)
         return {}
@@ -18,7 +18,7 @@ def get_project_attributes(propdb, projectid, fftid=None, skipClonedEntries=Fals
     if fftid:  # only values of a specific fftid should be returned
         mtch["$match"]["$and"].append({"fft": ObjectId(fftid)})
 
-    histories = [ x for x in propdb["projects_history"].aggregate([
+    histories = [x for x in db["projects_history"].aggregate([
         mtch,
         {"$match": {"key": {"$ne": "discussion"}}},
         {"$sort": {"time": -1}},
@@ -58,7 +58,7 @@ def get_project_attributes(propdb, projectid, fftid=None, skipClonedEntries=Fals
     if commentAfterTimestamp:
         commentFilter["$match"]["$and"].append({"time": {"$gt": commentAfterTimestamp}})
 
-    comments: List[Dict[str, any]] = [x for x in propdb["projects_history"].aggregate([
+    comments: List[Dict[str, any]] = [x for x in db["projects_history"].aggregate([
         mtch,
         commentFilter,
         {"$sort": {"time": -1}},
