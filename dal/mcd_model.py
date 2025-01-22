@@ -746,11 +746,14 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         current_attrs = get_project_attributes(licco_db, ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
-        modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+        modification_time = datetime.datetime.now(pytz.utc)
     # Make sure the timestamp on this server is monotonically increasing.
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
-        if modification_time < latest_changes[0]["time"]:
+        # NOTE: not sure if this is the best approach, but when using mongomock for testing
+        # we get an error (can't compare offset-naive vs offset aware timestamps), hence we
+        # set the timezone info manually.
+        if modification_time < latest_changes[0]["time"].replace(tzinfo=pytz.utc):
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_counter
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":

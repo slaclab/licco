@@ -1,13 +1,13 @@
 import datetime
 from typing import List, Dict, Mapping, Any
 
+import mongomock.mongo_client
 import pytest
 import pytz
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-import dal.db_utils
 from dal import mcd_model, db_utils
 from dal.mcd_model import initialize_collections
 from notifications.email_sender import EmailSenderInterface
@@ -21,18 +21,20 @@ client: MongoClient[Mapping[str, Any]]
 def create_db_client():
     try:
         # NOTE: short timeout so that switch to mongomock is fast
-        client = dal.db_utils.create_mongo_client(timeout=500)
+        client = db_utils.create_mongo_client(timeout=500)
         # this ping is necessary for checking the connection,
         # as the client is only connected on the first db call
         client.admin.command('ping')
+        print("\n==== MongoDb is connected ====\n")
         return client
     except ServerSelectionTimeoutError as e:
         # mongo db is not connected (maybe it doesn't even exist on this system)
         # therefore we switch to mongo mock in order to mock db calls
-        print("==== MongoDb is not connected, switching to MongoMock ====")
-        raise Exception("Can't execute tests: mongodb is not connected")
+        print("\n==== MongoDb is not connected, switching to MongoMock ====\n")
+        client = mongomock.mongo_client.MongoClient()
+        return client
     except Exception as e:
-        print("Failed to create a mongodb client for tests:")
+        print("\nFailed to create a mongodb client for tests:\n")
         raise e
 
 @pytest.fixture(scope="session")
@@ -44,7 +46,7 @@ def db():
     initialize_collections(db)
 
     # we expect a fresh test database to only have 1 project (master project)
-    projects = db['projects'].find().to_list()
+    projects = list(db['projects'].find())
     assert len(projects) == 1, "only one project should be present (master project)"
     assert projects[0]['name'] == "LCLS Machine Configuration Database", "expected a master project"
 
@@ -136,7 +138,7 @@ def test_create_delete_project(db):
     assert len(project["editors"]) == 0, "no editors should be there"
     assert len(project["approvers"]) == 0, "no approvers should be there"
 
-    projects = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    projects = list(db["projects"].find({"name": "test_create_delete_project"}))
     assert len(projects) == 1, "Only one such project should be found"
 
     prj = projects[0]
@@ -147,7 +149,7 @@ def test_create_delete_project(db):
     assert ok
 
     # regular user can't delete a project, only hide it
-    found_after_delete = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    found_after_delete = list(db["projects"].find({"name": "test_create_delete_project"}))
     assert len(found_after_delete) == 1, "project should not be deleted"
     assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
 
@@ -238,7 +240,7 @@ def test_get_project_ffts(db):
     assert fft.get('nom_ang_z', None) is None
 
     # check what is stored in the database, we should find only the values that we have stored
-    changes = db['projects_history'].find({'fft': ObjectId(fft_id), 'prj': ObjectId(prjid)}).to_list()
+    changes = list(db['projects_history'].find({'fft': ObjectId(fft_id), 'prj': ObjectId(prjid)}))
     for change in changes:
         assert change['user'] == "test_user", f"expected something else for change: {change}"
         assert str(change['prj']) == prjid, f"wrong project id; change: {change}"
