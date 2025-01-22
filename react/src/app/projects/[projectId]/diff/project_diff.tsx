@@ -119,8 +119,13 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         }
 
         const formatField = (val: any, field: keyof ProjectDeviceDetails) => {
-            if (val === undefined || val == "") {
-                // TODO: decide whether to display empty or just a single empty space?
+            if (val === undefined) {
+                // undefined fields are not displayed at all
+                return <></>;
+            }
+
+            if (val === "") {
+                // empty strings are made more obvious this way
                 return "<empty>";
             }
 

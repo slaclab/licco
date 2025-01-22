@@ -200,9 +200,19 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
             continue;
         }
 
-        if (a[key] != b[key]) {
-            // there is a difference in value
-            return true;
+        const aVal = a[key];
+        const bVal = b[key];
+        if (aVal != bVal) {
+            if ((aVal == undefined && bVal == '') || (aVal == '' && bVal == undefined)) {
+                // both fields are empty, and we shouldn't display them as a change of value 
+                // since that would cause <empty>-<empty> to be displayed in the GUI which 
+                // would look confusing.
+                // 
+                // In this case we do nothing and simply retry this check for another key
+            } else {
+                // there is a difference in value
+                return true;
+            }
         }
     }
     return false;
