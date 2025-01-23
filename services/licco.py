@@ -4,11 +4,11 @@ Web service endpoints for licco
 import datetime
 import fnmatch
 import os
-import re
 from io import BytesIO
 import tempfile
 from functools import wraps
-from typing import Tuple
+from typing import Tuple, Dict, List
+from http import HTTPStatus
 
 import pytz
 import logging
@@ -19,20 +19,23 @@ from flask import Blueprint, request, Response, send_file
 
 from dal import mcd_model, mcd_import
 from dal.mcd_model import FCState
-from dal.utils import JSONEncoder, ImportCounter
+from dal.utils import JSONEncoder
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
-
 logger = logging.getLogger(__name__)
 
+def json_response(data: Dict[str, any] | List[any], ret_status=200):
+    # NOTE: in general it's better to always return a dictionary of elements (and not a plain array)
+    # since a dictionary is easier to extend with new fields in the future
+    #
+    # we need to use our custom encoder, otherwise ObjectIds are not correctly serialized
+    out = JSONEncoder().encode(data)
+    return Response(out, mimetype="application/json", status=ret_status)
 
-def logAndAbortJson(error_msg, ret_status=500):
-    logger.error(error_msg)
-    return {'status': False, 'errormsg': error_msg, 'value': None}, ret_status
 
-def logAndAbort(error_msg, ret_status=500):
-    logger.error(error_msg)
-    return Response(error_msg, status=ret_status)
+def json_error(error_msg: str, ret_status=400):
+    out = JSONEncoder().encode({'errormsg': error_msg})
+    return Response(out, mimetype="application/json", status=ret_status)
 
 
 def project_writable(wrapped_function):
@@ -60,12 +63,15 @@ def project_writable(wrapped_function):
 def svc_get_enum_descriptions(enumName):
     """
     Get the labels and descriptions for the specified enum
+
+    TODO: this method is no longer used in the new GUI and could be removed
     """
     emumMappings = {
         "FCState": FCState
     }
     descs = emumMappings[enumName].descriptions()
-    return JSONEncoder().encode({"success": True, "value": {k.value: v for k, v in descs.items()}})
+    data = {k.value: v for k, v in descs.items()}
+    return json_response(data)
 
 
 @licco_ws_blueprint.route("/fcattrs/", methods=["GET"])
@@ -74,7 +80,7 @@ def svc_get_fcattrs():
     """
     Get the metadata for the attributes for the functional components
     """
-    return JSONEncoder().encode({"success": True, "value": mcd_model.get_fcattrs()})
+    return json_response(mcd_model.get_fcattrs())
 
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -84,9 +90,8 @@ def svc_get_users():
     Get the users in the system.
     For now, this is simply the owners of projects.
     """
-    logged_in_user = context.security.get_current_user_id()
     users = mcd_model.get_all_users(licco_db)
-    return JSONEncoder().encode({"success": True, "value": users})
+    return json_response(users)
 
 
 @licco_ws_blueprint.route("/users/<username>/", methods=["GET"])
@@ -98,10 +103,10 @@ def svc_get_logged_in_user(username):
     if username == "WHOAMI":
         # get the currently logged in user data
         logged_in_user = context.security.get_current_user_id()
-        return JSONEncoder().encode({"success": True, "value": logged_in_user})
+        return json_response(logged_in_user)
 
     # get the specified user data (for now we don't have any, so we just return username)
-    return JSONEncoder().encode({"success": True, "value": username})
+    return json_response(username)
 
 
 @licco_ws_blueprint.route("/approvers/", methods=["GET"])
@@ -111,7 +116,7 @@ def svc_get_users_with_approve_privilege():
     Get the users in the system who have the approve privilege
     """
     users = mcd_model.get_users_with_privilege(licco_db, "approve")
-    return JSONEncoder().encode({"success": True, "value": users})
+    return json_response(users)
 
 @licco_ws_blueprint.route("/editors/", methods=["GET"])
 @context.security.authentication_required
@@ -120,7 +125,7 @@ def svc_get_users_with_edit_privilege():
     Get the users in the system who have the edit privilege
     """
     users = mcd_model.get_users_with_privilege(licco_db, "edit")
-    return JSONEncoder().encode({"success": True, "value": users})
+    return json_response(users)
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
 @context.security.authentication_required
@@ -138,7 +143,7 @@ def svc_get_projects_for_user():
         reverse = (sort_criteria[0][1] == -1)
         min_date = datetime.datetime.min.replace(tzinfo=pytz.UTC)
         projects = sorted(projects, key=lambda d: d['edit_time'] or min_date, reverse=reverse)
-    return JSONEncoder().encode({"success": True, "value": projects})
+    return json_response(projects)
 
 
 @licco_ws_blueprint.route("/approved/", methods=["GET"])
@@ -149,10 +154,11 @@ def svc_get_currently_approved_project():
     prj = mcd_model.get_master_project(licco_db)
     if not prj:
          # no currently approved project (this can happen when the project is submitted for the first time)
-        return JSONEncoder().encode({"success": True, "value": None})
+        return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
+
     prj_ffts = mcd_model.get_project_ffts(licco_db, prj["_id"])
     prj["ffts"] = prj_ffts
-    return JSONEncoder().encode({"success": True, "value": prj})
+    return json_response(prj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["GET"])
@@ -163,7 +169,7 @@ def svc_get_project(prjid):
     """
     logged_in_user = context.security.get_current_user_id()
     project_details = mcd_model.get_project(licco_db, prjid)
-    return JSONEncoder().encode({"success": True, "value": project_details})
+    return json_response(project_details)
 
 
 @licco_ws_blueprint.route("/projects/", methods=["POST"])
@@ -175,11 +181,12 @@ def svc_create_project():
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
     if not prjdetails.get("name", None):
-        return JSONEncoder().encode({"success": False, "errormsg": "Name cannot be empty"})
+        return json_error("Name cannot be empty")
     if not prjdetails.get("description", None):
-        return JSONEncoder().encode({"success": False, "errormsg": "Description cannot be empty"})
+        return json_error("Description cannot be empty")
+
     prj = mcd_model.create_new_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
-    return JSONEncoder().encode({"success": True, "value": prj})
+    return json_response(prj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["POST"])
@@ -192,9 +199,10 @@ def svc_update_project(prjid):
     prjdetails = request.json
     status, err = mcd_model.update_project_details(licco_db, logged_in_user, prjid, prjdetails, context.notifier)
     if not status:
-        return JSONEncoder().encode({"success": False, "errormsg": err})
+        return json_error(err)
 
-    return JSONEncoder().encode({"success": True, "value": mcd_model.get_project(licco_db, prjid)})
+    project = mcd_model.get_project(licco_db, prjid)
+    return json_response(project)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["DELETE"])
@@ -206,8 +214,8 @@ def svc_delete_project(prjid):
     logged_in_user = context.security.get_current_user_id()
     status, err = mcd_model.delete_project(licco_db, logged_in_user, prjid)
     if not status:
-        return JSONEncoder().encode({"success": False, "errormsg": err})
-    return JSONEncoder().encode({"success": True})
+        return json_error(err)
+    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["GET"])
@@ -243,7 +251,7 @@ def svc_get_project_ffts(prjid):
                         " " + request.args.get(attrname, ""))
             project_fcs = __filter__(lmda, project_fcs)
 
-    return JSONEncoder().encode({"success": True, "value": project_fcs})
+    return json_response(project_fcs)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/changes/", methods=["GET"])
@@ -253,7 +261,7 @@ def svc_get_project_changes(prjid):
     Get the functional component objects
     """
     changes = mcd_model.get_project_changes(licco_db, prjid)
-    return JSONEncoder().encode({"success": True, "value": changes})
+    json_response(changes)
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])
@@ -263,7 +271,7 @@ def svc_get_fcs():
     Get the functional component objects
     """
     fcs = mcd_model.get_fcs(licco_db)
-    return JSONEncoder().encode({"success": True, "value": fcs})
+    return json_response(fcs)
 
 
 @licco_ws_blueprint.route("/fgs/", methods=["GET"])
@@ -273,7 +281,7 @@ def svc_get_fgs():
     Get the fungible tokens
     """
     fgs = mcd_model.get_fgs(licco_db)
-    return JSONEncoder().encode({"success": True, "value": fgs})
+    return json_response(fgs)
 
 
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
@@ -283,7 +291,7 @@ def svc_get_ffts():
     Get a list of functional fungible tokens
     """
     ffts = mcd_model.get_ffts(licco_db)
-    return JSONEncoder().encode({"success": True, "value": ffts})
+    return json_response(ffts)
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["POST"])
@@ -295,7 +303,9 @@ def svc_create_fc():
     newfc = request.json
     status, errormsg, fc = mcd_model.create_new_functional_component(licco_db,
         name=newfc.get("name", ""), description=newfc.get("description", ""))
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fc)
 
 
 @licco_ws_blueprint.route("/fgs/", methods=["POST"])
@@ -307,7 +317,9 @@ def svc_create_fg():
     newfg = request.json
     status, errormsg, fg = mcd_model.create_new_fungible_token(licco_db,
         name=newfg.get("name", ""), description=newfg.get("description", ""))
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fg})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fg)
 
 
 @licco_ws_blueprint.route("/ffts/", methods=["POST"])
@@ -318,10 +330,12 @@ def svc_create_fft():
     For now, we expect the ID's of the functional component and the fungible token ( and not the names )
     """
     newfft = request.json
-    status, errormsg, fft = mcd_model.create_new_fft(licco_db,
-        fc=newfft["fc"], fg=newfft["fg"], fcdesc=newfft.get(
-        "fc_description", None), fgdesc=newfft.get("fg_description", None))
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
+    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], fg=newfft["fg"],
+                                                     fcdesc=newfft.get("fc_description", None),
+                                                     fgdesc=newfft.get("fg_description", None))
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fft)
 
 
 @licco_ws_blueprint.route("/ffts/<fftid>", methods=["DELETE"])
@@ -331,7 +345,9 @@ def svc_delete_fft(fftid):
     Delete a FFT if it is not being used in any project
     """
     status, errormsg, _ = mcd_model.delete_fft(licco_db, fftid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route("/fcs/<fcid>", methods=["DELETE"])
@@ -341,7 +357,9 @@ def svc_delete_fc(fcid):
     Delete a FC if it is not being used by an FFT
     """
     status, errormsg, _ = mcd_model.delete_fc(licco_db, fcid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response({}, HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route("/fgs/<fgid>", methods=["DELETE"])
@@ -351,7 +369,9 @@ def svc_delete_fg(fgid):
     Delete a FG if it is not being used by an FFT
     """
     status, errormsg, _ = mcd_model.delete_fg(licco_db, fgid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
@@ -366,7 +386,7 @@ def svc_update_fc_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
     if not status:
-        return logAndAbortJson(msg)
+        return json_error(msg)
 
     discussion = fcupdate.get('discussion', '')
     if discussion:
@@ -380,13 +400,16 @@ def svc_update_fc_in_project(prjid, fftid):
     if change_of_device:
         status, errormsg, new_fft_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
         if not status:
-            return logAndAbortJson(errormsg)
+            return json_error(errormsg)
         fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=new_fft_id)[new_fft_id]
-        return JSONEncoder().encode({"success": status, "value": fc})
+        return json_response(fc)
 
     status, errormsg, results = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
     fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)[fftid]
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fc)
+
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
 @context.security.authentication_required
@@ -398,20 +421,20 @@ def svc_add_fft_comment(prjid, fftid):
     update = request.json
     comment = update.get('comment')
     if comment is None:
-        return logAndAbortJson("Comment field does not exist", ret_status=400)
+        return json_error("Comment field does not exist")
     comment = comment.strip()
     if comment == "":
-        return logAndAbortJson("Comment should not be empty", ret_status=400)
+        return json_error("Comment should not be empty")
 
     userid = context.security.get_current_user_id()
     status, errormsg, results = mcd_model.add_fft_comment(licco_db, userid, prjid, fftid, comment)
-    if not status:
-        return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": None})
+    if errormsg:
+        return json_error(errormsg)
 
-    # TODO: refactor: we should be able to get just one specific device (and not fetch all devices everytime we want one)
-    fc = mcd_model.get_project_ffts(licco_db, prjid)
+    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)
     val = fc[fftid]
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": val})
+    return json_response(val)
+
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["DELETE"])
@@ -420,7 +443,7 @@ def svc_remove_fft_comment(prjid, fftid):
     """Remove a specific fft device comment or a set of comments"""
     comment_ids = request.json().get('comments')
     if not comment_ids:
-        return logAndAbortJson("Comment field should not be empty")
+        return json_error("Comment field should not be empty")
 
     errors = []
     for comment_id in comment_ids:
@@ -431,9 +454,9 @@ def svc_remove_fft_comment(prjid, fftid):
     if len(errors) != 0:
         err = "\n".join(errors)
         msg = f"There were errors while deleting comments: {err}"
-        return JSONEncoder().encode({"success": False, "errormsg": msg})
+        return json_error(msg)
 
-    return JSONEncoder().encode({"success": True, "errormsg": ""})
+    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route(
@@ -456,7 +479,9 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
         x["name"] for x in mcd_model.get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
         userid=userid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fc})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fc)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["POST"])
@@ -473,7 +498,10 @@ def svc_update_ffts_in_project(prjid):
     userid = context.security.get_current_user_id()
     status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
     fft = mcd_model.get_project_ffts(licco_db, prjid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": fft})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(fft)
+
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])
 @project_writable
@@ -485,7 +513,9 @@ def svc_remove_ffts_from_project(prjid):
     userid = context.security.get_current_user_id()
     fft_ids = request.json.get('ids', [])
     status, errormsg = mcd_model.remove_ffts_from_project(licco_db, userid, prjid, fft_ids)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 def create_logger(logname: str) -> Tuple[logging.Logger, logging.FileHandler]:
@@ -520,8 +550,7 @@ def svc_import_project(prjid):
         except UnicodeDecodeError as e:
             error_msg = "Import Rejected: File not fully in Unicode (utf-8) Format."
             logger.debug(error_msg)
-            response_value = {"status_str": error_msg, "log_name": None}
-            return JSONEncoder().encode({"success": False, "value": response_value})
+            return json_error(error_msg)
 
     prj_name = mcd_model.get_project(licco_db, prjid)['name']
     log_time = datetime.datetime.now().strftime("%m%d%Y.%H%M%S")
@@ -529,15 +558,16 @@ def svc_import_project(prjid):
     log, log_handler = create_logger(log_name)
 
     ok, err, import_status = mcd_import.import_project(context.licco_db, userid, prjid, filestring, log)
-    if not ok:
-        return JSONEncoder().encode({"success": False, "errormsg": err})
+    if err:
+        return json_error(err)
     log.removeHandler(log_handler)
     log_handler.close()
 
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     status_str = mcd_import.create_status_update(prj_name, import_status)
     response_value = {"status_str": status_str, "log_name": log_name}
-    return JSONEncoder().encode({"success": True, "value": response_value})
+    return json_response(response_value)
+
 
 @licco_ws_blueprint.route("/projects/<report>/download/", methods=["GET", "POST"])
 @context.security.authentication_required
@@ -555,7 +585,8 @@ def svc_download_report(report):
         repfile = f"{dir_path}/{report}.log"
         return send_file(f"{repfile}",as_attachment=True,mimetype="text/plain")
     except FileNotFoundError:
-        return JSONEncoder().encode({"success": False, "errormsg": "Something went wrong.", "value": None})
+        return json_error(f"Something went wrong: file {report} was not found")
+
 
 @licco_ws_blueprint.route("/projects/<prjid>/export/", methods=["GET"])
 @context.security.authentication_required
@@ -565,12 +596,12 @@ def svc_export_project(prjid):
     """
     project = mcd_model.get_project(licco_db, prjid)
     if not project:
-        return logAndAbortJson(f"project '{prjid}' does not exist")
+        return json_error(f"Project '{prjid}' does not exist")
     project_name = project["name"]
 
     ok, err, csv_string = mcd_import.export_project(licco_db, prjid)
     if not ok:
-        return logAndAbortJson(f"failed to export a project {project['name']}: {err}")
+        return json_error(f"Failed to export a project {project['name']}: {err}")
 
     return Response(csv_string, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={project_name}.csv"})
 
@@ -586,21 +617,14 @@ def svc_submit_for_approval(prjid):
     if request.json:
         approvers = request.json.get("approvers", [])
         if len(approvers) == 0:
-            return JSONEncoder().encode({"success": False, "errormsg": "At least 1 approver is expected"})
+            return json_error("At least 1 approver is expected")
         editors = request.json.get("editors", [])
-    else:
-        # TODO: DEPRECATED: old gui approved project this way
-        # Once old GUI is removed, this else statement should go away as well
-        # We should remove the "GET" option as well: only POST should be used (or PUT)
-        approver = request.args.get("approver", None)
-        if approver:
-            approvers.append(approver)
-        old_prj = mcd_model.get_project(licco_db, prjid)
-        editors = old_prj["editors"]
 
     userid = context.security.get_current_user_id()
-    status, errormsg, prj = mcd_model.submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+    status, err, prj = mcd_model.submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
+    if err:
+        return json_error(err)
+    return json_response(prj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/approve_project", methods=["GET", "POST"])
@@ -612,8 +636,8 @@ def svc_approve_project(prjid):
     userid = context.security.get_current_user_id()
     status, all_approved, errormsg, prj = mcd_model.approve_project(licco_db, prjid, userid, context.notifier)
     if not status:
-        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+        return json_error(errormsg)
+    return json_response(prj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/reject_project", methods=["GET", "POST"])
@@ -627,12 +651,12 @@ def svc_reject_project(prjid):
     if not reason and request.json:
         reason = request.json.get("reason")
     if not reason:
-        return logAndAbortJson("Please provide a reason for why this project is not being approved")
+        return json_error("Please provide a reason for why this project is not being approved")
 
     status, errormsg, prj = mcd_model.reject_project(licco_db, prjid, userid, reason, context.notifier)
-    if not status:
-        return JSONEncoder().encode({"success": status, "errormsg": errormsg})
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": prj})
+    if errormsg:
+        return json_error(errormsg)
+    return json_response(prj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET"])
@@ -646,9 +670,11 @@ def svc_project_diff(prjid):
     approved = request.args.get("approved", None)
 
     if not other_prjid:
-        return logAndAbort("Please specify the other project id using the parameter other_id")
-    status, errormsg, diff = mcd_model.diff_project(licco_db, prjid, other_prjid, userid, approved=approved)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": diff})
+        return json_error("Please specify the other project id using the parameter other_id")
+    status, err, diff = mcd_model.diff_project(licco_db, prjid, other_prjid, userid, approved=approved)
+    if err:
+        return json_error(err)
+    return json_response(diff)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/clone/", methods=["POST"])
@@ -665,10 +691,12 @@ def svc_clone_project(prjid):
     project_editors = project_data.get("editors", [])
 
     if not project_name or not project_description:
-        return JSONEncoder().encode({"success": False, "errormsg": "Please specify a project name and description"})
+        return json_error("Please specify a project name and description")
 
-    status, erorrmsg, newprj = mcd_model.clone_project(licco_db, userid, prjid, project_name, project_description, project_editors, context.notifier)
-    return JSONEncoder().encode({"success": status, "errormsg": erorrmsg, "value": newprj})
+    status, err, newprj = mcd_model.clone_project(licco_db, userid, prjid, project_name, project_description, project_editors, context.notifier)
+    if err:
+        return json_error(err)
+    return json_response(newprj)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/tags/", methods=["GET"])
@@ -677,8 +705,10 @@ def svc_project_tags(prjid):
     """
     Get the tags for the project
     """
-    status, errormsg, tags = mcd_model.get_tags_for_project(licco_db, prjid)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
+    status, err, tags = mcd_model.get_tags_for_project(licco_db, prjid)
+    if err:
+        return json_error(err)
+    return json_response(tags)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/add_tag", methods=["GET"])
@@ -691,16 +721,20 @@ def svc_add_project_tag(prjid):
     tagname = request.args.get("tag_name", None)
     asoftimestamp = request.args.get("asoftimestamp", None)
     if not tagname:
-        return JSONEncoder().encode({"success": False, "errormsg": "Please specify the tag_name", "value": None})
+        return json_error("Please specify the tag_name")
+
     if not asoftimestamp:
         changes = mcd_model.get_project_changes(licco_db, prjid)
         if not changes:
-            return JSONEncoder().encode({"success": False, "errormsg": "Cannot tag a project without a change", "value": None})
+            return json_error("Cannot tag a project without a change")
         logger.info("Latest change is at " + str(changes[0]["time"]))
         asoftimestamp = changes[0]["time"]
+
     logger.debug(f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
-    status, errormsg, tags = mcd_model.add_project_tag(licco_db, prjid, tagname, asoftimestamp)
-    return JSONEncoder().encode({"success": status, "errormsg": errormsg, "value": tags})
+    status, err, tags = mcd_model.add_project_tag(licco_db, prjid, tagname, asoftimestamp)
+    if err:
+        return json_error(err)
+    return json_response(tags)
 
 
 @licco_ws_blueprint.route("/history/project_approvals", methods=["GET"])
@@ -709,4 +743,5 @@ def svc_get_projects_approval_history():
     """
     Get the approval history of projects in the system
     """
-    return JSONEncoder().encode({"success": True, "value": mcd_model.get_projects_approval_history(licco_db, limit=100)})
+    history = mcd_model.get_projects_approval_history(licco_db, limit=100)
+    return json_response(history)

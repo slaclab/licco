@@ -1,6 +1,6 @@
-import { ok } from "assert";
 
 export const HOSTNAME = process.env.NEXT_PUBLIC_BACKEND_URL;
+const NO_CONTENT = 204;
 const FORBIDDEN = 403;
 const UNAUTHORIZED = 401;
 const INVALID_JSON = 500;
@@ -12,10 +12,8 @@ export interface JsonErrorMsg {
     code: number;
 }
 
-interface LiccoRequest<T> {
-    success: boolean;
-    value: T;
-    errormsg?: string;
+interface LiccoError {
+    errormsg?: string
 }
 
 export class Fetch {
@@ -98,33 +96,61 @@ export class Fetch {
             if (config["headers"]["Accept"] !== "application/json") {
                 return response.blob() as T;
             }
+
+            if (response.status == NO_CONTENT) {
+                // sometimes the response will be empty (usually a delete respone) in which case
+                // we don't have anything to return but undefined to satisfy the generic type T
+                let t: T;
+                return new Promise(ok => ok(t));
+            }
+
+            // fetch text from response
+            let text: string = "";
             try {
-                let json = await response.json() as LiccoRequest<T>;
-                if (json.success) {
-                    return new Promise(ok => ok(json.value))
+                text = await response.text();
+            } catch (e) {
+                let errorMessage = "Failed to read response for " + HOSTNAME + path;
+                if (e instanceof Error) {
+                    errorMessage += ": " + e.message;
                 }
-                let msg = json.errormsg || `There was an error when making request for ${HOSTNAME}${path}`;
-                let e: JsonErrorMsg = { error: msg, code: response.status }
-                return new Promise((_, err) => err(e));
+                let errMsg: JsonErrorMsg = { 'error': errorMessage, code: INVALID_JSON };
+                return new Promise((_, err) => err(errMsg));
+            }
+
+            // NOTE: when parsing an empty string '' as json, it will throw a json parse error.
+            // This should never happen since the backend should always return either {} or []
+            // If this edge case happens, however, we still have to handle it
+            if (text == "") {
+                let errMsg: JsonErrorMsg = { error: 'Server returned an empty string, which is not a valid json', code: INVALID_JSON };
+                return new Promise((_, reject) => reject(errMsg))
+            }
+
+            // try to parse text as a json response
+            try {
+                let data = JSON.parse(text) as T;
+                return new Promise(ok => ok(data));
             } catch (e) {
                 // failed to parse json.
                 let errorMessage = "Failed to parse response to " + HOSTNAME + path + " as JSON";
                 if (e instanceof Error) {
                     errorMessage += ": " + e.message;
                 }
-                return new Promise((_, errResponse) => errResponse({ error: errorMessage, code: INVALID_JSON }));
+                errorMessage += "\nOriginal Response:\n" + text;
+                let errMsg: JsonErrorMsg = { error: errorMessage, code: INVALID_JSON };
+                return new Promise((_, errResponse) => errResponse(errMsg));
             }
         }
 
-
+        // we received an error, parse it
         try {
-            let errJson = await response.json() as LiccoRequest<T>;
+            let errJson = await response.json() as LiccoError;
             let msg = errJson.errormsg || `There was an error when making a request for ${HOSTNAME}${path}`;
             let e: JsonErrorMsg = { error: msg, code: response.status }
             return new Promise((_, err) => err(e));
         } catch (e) {
             // failed to parse response as json
-            return new Promise((_, errResponse) => errResponse({ error: response.statusText, code: response.status }));
+            let errMsg: JsonErrorMsg = { 'error': response.statusText, code: response.status };
+            return new Promise((_, errResponse) => errResponse(errMsg));
         }
     }
 }
