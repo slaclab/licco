@@ -1,11 +1,14 @@
+import datetime
 from typing import List, Dict, Mapping, Any
 
+import mongomock.mongo_client
 import pytest
+import pytz
 from bson import ObjectId
 from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
 
-import context
-from dal import mcd_model
+from dal import mcd_model, db_utils
 from dal.mcd_model import initialize_collections
 from notifications.email_sender import EmailSenderInterface
 from notifications.notifier import Notifier
@@ -14,16 +17,36 @@ _TEST_DB_NAME = "_licco_test_db_"
 
 client: MongoClient[Mapping[str, Any]]
 
+
+def create_db_client():
+    try:
+        # NOTE: short timeout so that switch to mongomock is fast
+        client = db_utils.create_mongo_client(timeout=500)
+        # this ping is necessary for checking the connection,
+        # as the client is only connected on the first db call
+        client.admin.command('ping')
+        print("\n==== MongoDb is connected ====\n")
+        return client
+    except ServerSelectionTimeoutError as e:
+        # mongo db is not connected (maybe it doesn't even exist on this system)
+        # therefore we switch to mongo mock in order to mock db calls
+        print("\n==== MongoDb is not connected, switching to MongoMock ====\n")
+        client = mongomock.mongo_client.MongoClient()
+        return client
+    except Exception as e:
+        print("\nFailed to create a mongodb client for tests:\n")
+        raise e
+
 @pytest.fixture(scope="session")
 def db():
     """Create db at the start of the session"""
     global client
-    client = context.create_mongo_client()
+    client = create_db_client()
     db = client[_TEST_DB_NAME]
     initialize_collections(db)
 
     # we expect a fresh test database to only have 1 project (master project)
-    projects = db['projects'].find().to_list()
+    projects = list(db['projects'].find())
     assert len(projects) == 1, "only one project should be present (master project)"
     assert projects[0]['name'] == "LCLS Machine Configuration Database", "expected a master project"
 
@@ -48,8 +71,9 @@ def destroy_db():
     """Destroy db and its data at the end of the testing session"""
     yield
     global client
-    client.drop_database(_TEST_DB_NAME)
-    client.close()
+    if client:
+        client.drop_database(_TEST_DB_NAME)
+        client.close()
 
 
 class TestEmailSender(EmailSenderInterface):
@@ -114,18 +138,18 @@ def test_create_delete_project(db):
     assert len(project["editors"]) == 0, "no editors should be there"
     assert len(project["approvers"]) == 0, "no approvers should be there"
 
-    projects = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    projects = list(db["projects"].find({"name": "test_create_delete_project"}))
     assert len(projects) == 1, "Only one such project should be found"
 
     prj = projects[0]
     assert prj["owner"] == "test_user", "wrong project owner set"
     assert prj["status"] == "development", "newly created project should be in development"
     ok, err = mcd_model.delete_project(db, "test_user", prj["_id"])
-    assert ok
     assert err == "", "there should be no error"
+    assert ok
 
     # regular user can't delete a project, only hide it
-    found_after_delete = db["projects"].find({"name": "test_create_delete_project"}).to_list()
+    found_after_delete = list(db["projects"].find({"name": "test_create_delete_project"}))
     assert len(found_after_delete) == 1, "project should not be deleted"
     assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
 
@@ -153,8 +177,8 @@ def test_add_fft_to_project(db):
     assert fft_id, "fft_id should exist"
     fft_update = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
     ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
-    assert ok, "fft should be inserted"
     assert err == "", "there should be no error"
+    assert ok, "fft should be inserted"
 
     project_ffts = mcd_model.get_project_ffts(db, project["_id"])
     assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
@@ -179,8 +203,8 @@ def test_remove_fft_from_project(db):
     fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
     fft_update = {'_id': fft_id, 'nom_ang_y': 1.23}
     ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
-    assert ok
     assert err == ""
+    assert ok
 
     inserted_ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(inserted_ffts) == 1
@@ -189,8 +213,8 @@ def test_remove_fft_from_project(db):
 
     # remove inserted fft
     ok, err = mcd_model.remove_ffts_from_project(db, "test_user", prjid, [fft_id])
-    assert ok
     assert err == ""
+    assert ok
 
     project_ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
@@ -204,8 +228,8 @@ def test_get_project_ffts(db):
     fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
     fft_update = {'_id': fft_id, 'nom_ang_y': 1.23, 'nom_ang_x': 2.31}
     ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
-    assert ok
     assert err == ""
+    assert ok
 
     inserted_ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(inserted_ffts) == 1
@@ -216,11 +240,36 @@ def test_get_project_ffts(db):
     assert fft.get('nom_ang_z', None) is None
 
     # check what is stored in the database, we should find only the values that we have stored
-    changes = db['projects_history'].find({'fft': ObjectId(fft_id), 'prj': ObjectId(prjid)}).to_list()
+    changes = list(db['projects_history'].find({'fft': ObjectId(fft_id), 'prj': ObjectId(prjid)}))
     for change in changes:
         assert change['user'] == "test_user", f"expected something else for change: {change}"
         assert str(change['prj']) == prjid, f"wrong project id; change: {change}"
     assert len(changes) == 2, "we made only 2 value changes, so only 2 value changes should be present in db"
+
+
+def test_get_project_ffts_after_timestamp(db):
+    """Only fetch the ffts inserted after a certain timestamp"""
+    project = mcd_model.create_new_project(db, "test_get_project_ffts_after_timestamp", "", "test_user")
+    prjid = str(project["_id"])
+
+    # insert new fft
+    timestamp = datetime.datetime.now(tz=pytz.UTC) - datetime.timedelta(seconds=1)
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_y': 1.23}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    assert err == ""
+    assert ok
+
+    ffts = mcd_model.get_project_ffts(db, prjid, asoftimestamp=timestamp)
+    assert len(ffts) == 0, "there should be no fft before insertion"
+
+    timestamp = datetime.datetime.now(tz=pytz.UTC)
+    ffts = mcd_model.get_project_ffts(db, prjid, asoftimestamp=timestamp)
+    assert len(ffts) == 1, "there should be 1 fft insert"
+
+    fft = ffts[fft_id]
+    assert fft['nom_ang_y'] == 1.23
+    assert fft.get('nom_ang_x', None) is None
 
 
 def test_project_approval_workflow(db):

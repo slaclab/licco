@@ -1,31 +1,20 @@
 import logging
-import os
 from functools import wraps
 
-from pymongo import MongoClient
 from bson import ObjectId
 from flask import abort
 
+from dal import db_utils
 from modules.flask_authnz.flask_authnz import FlaskAuthnz, MongoDBRoles, UserGroups
 from notifications.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
-__author__ = 'mshankar@slac.stanford.edu'
-
 # Application context.
 app = None
 
-def create_mongo_client(mongodb_url: str = ""):
-    if not mongodb_url:
-        mongodb_url = os.environ.get("MONGODB_URL", None)
-        if not mongodb_url:
-            print("Please use the environment variable MONGODB_URL to configure the database connection.")
-    return MongoClient(host=mongodb_url, tz_aware=True)
-
-
 # Set up the Mongo connection.
-mongo_client = create_mongo_client()
+mongo_client = db_utils.create_mongo_client()
 licco_db = mongo_client["lineconfigdb"]
 
 

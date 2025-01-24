@@ -53,6 +53,10 @@ def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, a
         # all other fields are primitive types (scalars, strings) and only the latest values are important
         details[fft_id][field_name] = field_val
 
+    if len(details) == 0:
+        # we found nothing for this set of filters, early return
+        return details
+
     # fetch and aggregate comments for all ffts
     commentFilter = {"$match": {"$and": [{"key": "discussion"}]}}
     if commentAfterTimestamp:
