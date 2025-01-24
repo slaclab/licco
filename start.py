@@ -1,6 +1,7 @@
 import configparser
+from json import JSONEncoder
 
-from flask import Flask
+from flask import Flask, Response
 import logging
 import os
 import sys
@@ -14,6 +15,8 @@ from pages import pages_blueprint
 from services.licco import licco_ws_blueprint
 from dal.mcd_model import initialize_collections
 
+logger = logging.getLogger(__name__)
+
 # Initialize application.
 app = Flask("licco")
 CORS(app, supports_credentials=True)
@@ -23,6 +26,14 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300
 app.secret_key = "A secret key for licco"
 app.debug = json.loads(os.environ.get("DEBUG", "false").lower())
 app.config["TEMPLATES_AUTO_RELOAD"] = app.debug
+
+# unexpected app exceptions are rendered as json
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(e)
+    out = JSONEncoder().encode({'errormsg': str(e)})
+    return Response(out, status=500, mimetype="application/json")
+
 
 send_smtp_emails = os.environ.get("LICCO_SEND_EMAILS", False)
 
