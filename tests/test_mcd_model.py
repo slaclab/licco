@@ -1,4 +1,6 @@
 import datetime
+import io
+import logging
 from typing import List, Dict, Mapping, Any
 
 import mongomock.mongo_client
@@ -8,7 +10,7 @@ from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-from dal import mcd_model, db_utils
+from dal import mcd_model, db_utils, mcd_import
 from dal.mcd_model import initialize_collections
 from notifications.email_sender import EmailSenderInterface
 from notifications.notifier import Notifier
@@ -18,21 +20,21 @@ _TEST_DB_NAME = "_licco_test_db_"
 client: MongoClient[Mapping[str, Any]]
 
 
-def create_db_client():
+def create_test_db_client():
     try:
         # NOTE: short timeout so that switch to mongomock is fast
-        client = db_utils.create_mongo_client(timeout=500)
+        db_client = db_utils.create_mongo_client(timeout=500)
         # this ping is necessary for checking the connection,
         # as the client is only connected on the first db call
-        client.admin.command('ping')
+        db_client.admin.command('ping')
         print("\n==== MongoDb is connected ====\n")
-        return client
-    except ServerSelectionTimeoutError as e:
+        return db_client
+    except ServerSelectionTimeoutError:
         # mongo db is not connected (maybe it doesn't even exist on this system)
         # therefore we switch to mongo mock in order to mock db calls
         print("\n==== MongoDb is not connected, switching to MongoMock ====\n")
-        client = mongomock.mongo_client.MongoClient()
-        return client
+        db_client = mongomock.mongo_client.MongoClient()
+        return db_client
     except Exception as e:
         print("\nFailed to create a mongodb client for tests:\n")
         raise e
@@ -41,7 +43,7 @@ def create_db_client():
 def db():
     """Create db at the start of the session"""
     global client
-    client = create_db_client()
+    client = create_test_db_client()
     db = client[_TEST_DB_NAME]
     initialize_collections(db)
 
@@ -405,4 +407,76 @@ def test_project_rejection(db):
     assert 'This is my rejection message' in email['content']
 
 
-# TODO: import/export csv file into a project
+def create_string_logger(stream: io.StringIO) -> logging.Logger:
+    logger = logging.getLogger('str_logger')
+    logger.setLevel(logging.DEBUG)
+    stream_handler = logging.StreamHandler(stream)
+    stream_handler.setLevel(logging.DEBUG)
+    logger.addHandler(stream_handler)
+    return logger
+
+
+def test_import_csv_into_a_project(db):
+    project = mcd_model.create_new_project(db, "test_import_csv_into_a_project", "", "test_user")
+    prjid = project["_id"]
+
+    ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(ffts) == 0, "There should be no project ffts for a freshly created project"
+
+    # import via csv endpoint
+    import_csv = """
+Machine Config Database,,,
+
+FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
+AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
+AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,729.295995,-1.25,-0.895304,,,,
+"""
+
+    with io.StringIO() as stream:
+        log_reporter = create_string_logger(stream)
+        ok, err, counter = mcd_import.import_project(db, "test_user", prjid, import_csv, log_reporter)
+        assert err == ""
+        assert ok
+
+        assert counter.success == 2
+        assert counter.fail == 0
+        assert counter.ignored == 0
+        headers = "FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace"
+        assert counter.headers == len(headers.split(",")), "wrong number of csv fields"
+
+        log = stream.getvalue()
+        # validate export log?
+
+        # check if fields were actually inserted in the db
+        ffts = mcd_model.get_project_ffts(db, prjid)
+        assert len(ffts) == 2, "There should be 2 ffts inserted into a project"
+
+        expected_ffts = {
+            'COMBO': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
+                      'state': 'Conceptual', 'comments': 'TEST',
+                      'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
+            'GAS': {'fc': 'AT1L0', 'fg': 'GAS', 'tc_part_no': '3213221',
+                    'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
+                    'nom_loc_z': 729.295995, 'nom_loc_x': -1.25, 'nom_loc_y': -0.895304},
+        }
+
+        # convert received ffts into a format that we can compare (fgs are unique)
+        got_ffts = {}
+        for _, f in ffts.items():
+            fc = f['fft']['fc']
+            fg = f['fft']['fg']
+            f['fc'] = fc
+            f['fg'] = fg
+            got_ffts[fg] = f
+
+        # assert fft values
+        for expected in expected_ffts.values():
+            fg = expected['fg']
+            assert fg in got_ffts, f"{expected['fg']} fg was not found in ffts: fft was not inserted correctly"
+            got = got_ffts[fg]
+
+            for field in mcd_model.KEYMAP.values():
+                # empty fields are by default set to '' (not None) even if they are numeric fields. Is this okay?
+                assert got.get(field, '') == expected.get(field, ''), f"{fg}: invalid field value '{field}'"
+
+        assert len(got_ffts) == len(expected_ffts), "wrong number of fft fetched from db"

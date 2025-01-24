@@ -4,7 +4,6 @@ from io import StringIO
 from logging import Logger
 from typing import Tuple
 import re
-import json
 
 from dal import mcd_model
 from dal.mcd_model import MongoDb
@@ -35,9 +34,9 @@ def create_status_update(prj_name, status: ImportCounter):
     ])
     return status_str
 
-def import_project(licco_db: MongoDb, userid: str, prjid: str, filestring: str, imp_log: Logger) -> Tuple[bool, str, ImportCounter]:
+def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str, imp_log: Logger) -> Tuple[bool, str, ImportCounter]:
     import_counter = ImportCounter()
-    with StringIO(filestring) as fp:
+    with StringIO(csv_content) as fp:
         fp.seek(0)
         # Find the header row
         loc = 0
