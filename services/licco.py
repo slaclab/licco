@@ -261,7 +261,7 @@ def svc_get_project_changes(prjid):
     Get the functional component objects
     """
     changes = mcd_model.get_project_changes(licco_db, prjid)
-    json_response(changes)
+    return json_response(changes)
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])
