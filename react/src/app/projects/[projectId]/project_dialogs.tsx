@@ -449,7 +449,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
   )
 }
 
-export const TagCreationDialog: React.FC<{
+export const SnapshotCreationDialog: React.FC<{
   isOpen: boolean;
   projectId: string;
   onClose: () => void;
@@ -486,9 +486,9 @@ export const TagCreationDialog: React.FC<{
   };
 
   return (
-    <Dialog onClose={onClose} isOpen={isOpen} title={`Create a New Tag`}>
+    <Dialog onClose={onClose} isOpen={isOpen} title={`Create a New Snapshot`}>
       <DialogBody>
-        <FormGroup label="Enter a Name for a New Tag:">
+        <FormGroup label="Enter a Name for a New Snapshot:">
           <InputGroup id="tag-name"
             placeholder=""
             value={tagName}
@@ -510,7 +510,7 @@ export const TagCreationDialog: React.FC<{
               loading={submittingForm}
               onClick={(e) => submitCreateTag()}
             >
-              Create Tag
+              Create Snapshot
             </Button>
           </>
         }
@@ -520,14 +520,14 @@ export const TagCreationDialog: React.FC<{
 };
 
 
-export const TagSelectionDialog: React.FC<{
+export const SnapshotSelectionDialog: React.FC<{
   isOpen: boolean;
   projectId: string;
   onClose: () => void;
   onSubmit: (tagDate: Date) => void;
 }> = ({ isOpen, projectId, onClose, onSubmit }) => {
-  const DEFAULT_TAG = "Please select a tag";
-  const [selectedTag, setSelectedTag] = useState(DEFAULT_TAG);
+  const DEFAULT_SNAPSHOT = "Please select a snapshot";
+  const [selectedTag, setSelectedTag] = useState(DEFAULT_SNAPSHOT);
   const [tagNames, setTagNames] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [submittingForm, setSubmittingForm] = useState(false);
@@ -547,10 +547,10 @@ export const TagSelectionDialog: React.FC<{
 
           if (projectTags && projectTags.length) {
             setAllTags(projectTags);
-            const tags = [DEFAULT_TAG, ...projectTags.map((p) => p.name)];
+            const tags = [DEFAULT_SNAPSHOT, ...projectTags.map((p) => p.name)];
             setTagNames(tags);
           } else {
-            const tags = ["No Available Tags"]
+            const tags = ["No Available Snapshots"]
             setTagNames(tags);
           }
         })
@@ -564,13 +564,13 @@ export const TagSelectionDialog: React.FC<{
   }, [isOpen, projectId]);
 
   useEffect(() => {
-    const tagNotSelected = !selectedTag || selectedTag === DEFAULT_TAG;
+    const tagNotSelected = !selectedTag || selectedTag === DEFAULT_SNAPSHOT;
     const emptyProjectId = !projectId;
     setDisableSubmit(tagNotSelected || emptyProjectId);
   }, [selectedTag, projectId]);
 
   const submitTag = () => {
-    if (!selectedTag || selectedTag == DEFAULT_TAG) {
+    if (!selectedTag || selectedTag == DEFAULT_SNAPSHOT) {
       setDialogErr("Please select a valid tag");
       return;
     }
@@ -595,9 +595,9 @@ export const TagSelectionDialog: React.FC<{
   };
 
   return (
-    <Dialog onClose={onClose} isOpen={isOpen} title={`Filter the Project by a Specified Tag`}>
+    <Dialog onClose={onClose} isOpen={isOpen} title={`Filter the Project by a Specified Snapshot`}>
       <DialogBody>
-        <FormGroup label="Tags:">
+        <FormGroup label="Snapshots:">
           <HTMLSelect
             iconName="caret-down"
             value={selectedTag}
@@ -621,7 +621,7 @@ export const TagSelectionDialog: React.FC<{
               disabled={disableSubmit}
               onClick={(e) => submitTag()}
             >
-              Filter Tag
+              Filter Snapshot
             </Button>
           </>
         }
