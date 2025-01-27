@@ -224,7 +224,8 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                             />
 
                                             {project.owner === currentlyLoggedInUser ?
-                                                <Button icon="trash" minimal={true} small={true}
+                                                <Button icon="trash" title="Delete this project"
+                                                    minimal={true} small={true}
                                                     onClick={(e) => {
                                                         setSelectedProject(project);
                                                         setIsDeleteDialogOpen(true);

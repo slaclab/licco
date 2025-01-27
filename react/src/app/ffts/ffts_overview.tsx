@@ -1,34 +1,8 @@
 import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useState } from "react";
+import { FFTInfo, deleteFft, fetchFfts } from "../projects/project_model";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
-
-export interface FFTInfo {
-    _id: string;
-    is_being_used: boolean;
-    fc: FC;
-    fg: FG;
-}
-
-interface FC {
-    _id: string;
-    name: string;
-    description: string;
-}
-
-interface FG {
-    _id: string;
-    name: string;
-    description: string;
-}
-
-export function fetchFfts(): Promise<FFTInfo[]> {
-    return Fetch.get<FFTInfo[]>("/ws/ffts/");
-}
-
-function deleteFft(fftId: string): Promise<void> {
-    return Fetch.delete<void>(`/ws/ffts/${fftId}`);
-}
 
 export const FFTOverviewTable: React.FC = () => {
     const [data, setData] = useState<FFTInfo[]>([]);

@@ -511,3 +511,39 @@ export function whoAmIHook() {
     }, []);
     return { user, userLoadingError, isUserDataLoading };
 }
+
+
+export interface FFTInfo {
+    _id: string;
+    is_being_used: boolean;
+    fc: FC;
+    fg: FG;
+}
+
+interface FC {
+    _id: string;
+    name: string;
+    description: string;
+}
+
+interface FG {
+    _id: string;
+    name: string;
+    description: string;
+}
+
+export function fetchFfts(): Promise<FFTInfo[]> {
+    return Fetch.get<FFTInfo[]>("/ws/ffts/");
+}
+
+export function deleteFft(fftId: string): Promise<void> {
+    return Fetch.delete<void>(`/ws/ffts/${fftId}`);
+}
+
+export function fetchFcs(): Promise<FC[]> {
+    return Fetch.get<FC[]>("/ws/fcs/");
+}
+
+export function fetchFgs(): Promise<FG[]> {
+    return Fetch.get<FG[]>("/ws/fgs/");
+}

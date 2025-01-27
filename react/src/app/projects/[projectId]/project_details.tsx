@@ -7,12 +7,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
+import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
 import { LoadingSpinner } from "@/app/components/loading";
-import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
+import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
@@ -396,11 +397,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Divider />
 
-                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true}
+                                        <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
                                             disabled={disableActionButtons}
                                             onClick={(e) => { setIsTagCreationDialogOpen(true) }}
                                         />
-                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true}
+                                        <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
                                             onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
                                         />
                                         <Divider />
@@ -636,7 +637,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 />
                 : null}
             {project ?
-                <TagSelectionDialog
+                <SnapshotSelectionDialog
                     isOpen={isTagSelectionDialogOpen}
                     projectId={project._id}
                     onSubmit={(tagDate) => {
@@ -649,7 +650,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 />
                 : null}
             {project ?
-                <TagCreationDialog
+                <SnapshotCreationDialog
                     isOpen={isTagCreationDialogOpen}
                     projectId={project._id}
                     onSubmit={() => setIsTagCreationDialogOpen(false)}
