@@ -30,7 +30,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = app.debug
 # unexpected app exceptions are rendered as json
 @app.errorhandler(Exception)
 def handle_exception(e):
-    logger.error(e)
+    logger.error(e, exc_info=True)
     out = JSONEncoder().encode({'errormsg': str(e)})
     return Response(out, status=500, mimetype="application/json")
 
