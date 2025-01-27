@@ -396,11 +396,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Divider />
 
-                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true}
+                                        <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
                                             disabled={disableActionButtons}
                                             onClick={(e) => { setIsTagCreationDialogOpen(true) }}
                                         />
-                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true}
+                                        <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
                                             onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
                                         />
                                         <Divider />
