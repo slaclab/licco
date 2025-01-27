@@ -410,6 +410,9 @@ def test_project_rejection(db):
 def create_string_logger(stream: io.StringIO) -> logging.Logger:
     logger = logging.getLogger('str_logger')
     logger.setLevel(logging.DEBUG)
+    for handler in logger.handlers[:]:
+        # remove previous handlers, to avoid getting writing to a closed stream error during tests
+        logger.removeHandler(handler)
     stream_handler = logging.StreamHandler(stream)
     stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(stream_handler)
@@ -429,7 +432,7 @@ Machine Config Database,,,
 
 FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
 AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
-AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,729.295995,-1.25,-0.895304,,,,
+AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
     with io.StringIO() as stream:
@@ -457,7 +460,7 @@ AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,729.295995,-1.25,-0.895304,,,,
                       'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
             'GAS': {'fc': 'AT1L0', 'fg': 'GAS', 'tc_part_no': '3213221',
                     'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
-                    'nom_loc_z': 729.295995, 'nom_loc_x': -1.25, 'nom_loc_y': -0.895304},
+                    'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
         }
 
         # convert received ffts into a format that we can compare (fgs are unique)
@@ -480,3 +483,32 @@ AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,729.295995,-1.25,-0.895304,,,,
                 assert got.get(field, '') == expected.get(field, ''), f"{fg}: invalid field value '{field}'"
 
         assert len(got_ffts) == len(expected_ffts), "wrong number of fft fetched from db"
+
+
+def test_export_csv_from_a_project(db):
+    project = mcd_model.create_new_project(db, "test_export_from_a_project", "", "test_user")
+    prjid = project["_id"]
+
+    ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(ffts) == 0, "There should be no project ffts for a freshly created project"
+
+    # import via csv endpoint
+    import_csv = """
+FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
+AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
+AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
+"""
+
+    with io.StringIO() as stream:
+        log_reporter = create_string_logger(stream)
+        ok, err, counter = mcd_import.import_project(db, "test_user", prjid, import_csv, log_reporter)
+        assert err == ""
+        assert ok
+        assert counter.success == 2
+
+    ok, err, csv = mcd_import.export_project(db, prjid)
+    assert ok
+    assert err == ""
+    # by default the csv writer ends the lines with \r\n, so this assert would fail without our replace
+    csv = csv.replace("\r\n", "\n")
+    assert import_csv.strip() == csv.strip(), "wrong csv output"
