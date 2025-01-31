@@ -281,9 +281,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         // create the csv document from filtered devices
-        let data = `FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace\n`;
+        let data = `FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.comments)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)}\n`;
+            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
@@ -317,7 +317,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
                     <thead>
                         <tr>
-                            <th colSpan={isProjectInDevelopment ? 7 : 6}>
+                            <th colSpan={isProjectInDevelopment ? 6 : 5}>
                                 {!project ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
@@ -432,6 +432,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
                             <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
                             <th></th>
+                            <th></th>
                         </tr>
                         <tr>
                             {isProjectInDevelopment ? <th></th> : null}
@@ -440,7 +441,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
                             <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('stand')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
-                            <th>Comments</th>
 
                             <th onClick={e => changeSortOrder('nom_loc_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_loc_z')}</th>
                             <th onClick={e => changeSortOrder('nom_loc_x')} className="text-center">X {displaySortOrderIconInColumn('nom_loc_x')}</th>
@@ -450,6 +450,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('nom_ang_x')} className="text-center">Rx {displaySortOrderIconInColumn('nom_ang_x')}</th>
                             <th onClick={e => changeSortOrder('nom_ang_y')} className="text-center">Ry {displaySortOrderIconInColumn('nom_ang_y')}</th>
                             <th onClick={e => changeSortOrder('ray_trace')}>Must Ray Trace {displaySortOrderIconInColumn('ray_trace')}</th>
+
+                            <th>Comments</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -745,7 +747,6 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.tc_part_no}</td>
                 <td>{device.stand}</td>
                 <td>{device.state}</td>
-                <td>{device.comments}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
@@ -756,6 +757,8 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td className="text-number">{formatDevicePositionNumber(device.nom_ang_y)}</td>
 
                 <td>{device.ray_trace ?? null}</td>
+
+                <td>{device.comments}</td>
             </tr>
         )
     }, [project, device, currentUser, disabled])
@@ -796,7 +799,6 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
-        { key: 'comments', type: "string", value: useState<string>(), err: useState(false) },
 
         { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_loc_x', type: "number", value: useState<string>(), err: useState(false) },
@@ -806,7 +808,9 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'nom_ang_x', type: "number", value: useState<string>(), err: useState(false) },
         { key: 'nom_ang_y', type: "number", value: useState<string>(), err: useState(false) },
 
-        { key: 'ray_trace', type: "number", value: useState<string>(), err: useState(false), max: 1, min: 0, allowNumbersOnly: true }
+        { key: 'ray_trace', type: "number", value: useState<string>(), err: useState(false), max: 1, min: 0, allowNumbersOnly: true },
+
+        { key: 'comments', type: "string", value: useState<string>(), err: useState(false) },
     ]
 
     useEffect(() => {

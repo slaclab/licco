@@ -13,8 +13,8 @@
 we don't want to push the rest of the columns so far to the right side, just
 because of one long comment field; hence we wrap the text
 */
-.detailsTable.dev td:nth-child(6),
-.detailsTable td:nth-child(7) {
+.detailsTable.dev td:nth-last-child(),
+.detailsTable td:nth-last-child() {
     min-width: 20ch;
     max-width: 30ch;
     white-space: wrap;

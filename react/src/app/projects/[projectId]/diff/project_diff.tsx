@@ -53,10 +53,11 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
         <thead>
             {title ? <tr><th colSpan={17}><h5>{title}</h5></th></tr> : null}
             <tr>
-                <th colSpan={6}></th>
+                <th colSpan={5}></th>
 
                 <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
                 <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
+                <th></th>
                 <th></th>
                 <th></th>
             </tr>
@@ -66,7 +67,6 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th>TC Part No.</th>
                 <th>Stand/Nearest Stand</th>
                 <th>State</th>
-                <th>Comments</th>
 
                 <th className="text-center">Z</th>
                 <th className="text-center">X</th>
@@ -76,6 +76,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th className="text-center">Rx</th>
                 <th className="text-center">Ry</th>
                 <th>Must Ray Trace</th>
+                <th>Comments</th>
                 <th>Communications</th>
             </tr>
         </thead>
@@ -164,7 +165,6 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
                 <td>{renderField(devices.a, devices.b, 'stand')}</td>
                 <td>{renderField(devices.a, devices.b, 'state')}</td>
-                <td>{renderField(devices.a, devices.b, 'comments')}</td>
 
                 <td>{renderField(devices.a, devices.b, 'nom_loc_z')}</td>
                 <td>{renderField(devices.a, devices.b, 'nom_loc_x')}</td>
@@ -175,6 +175,9 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 <td>{renderField(devices.a, devices.b, 'nom_ang_y')}</td>
 
                 <td>{renderField(devices.a, devices.b, 'ray_trace')}</td>
+
+                <td>{renderField(devices.a, devices.b, 'comments')}</td>
+
                 <td>{renderDiscussionButton(devices.a)}</td>
             </tr>
             )
@@ -190,7 +193,6 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                     <td>{d.tc_part_no}</td>
                     <td>{d.stand}</td>
                     <td>{d.state}</td>
-                    <td>{d.comments}</td>
 
                     <td>{formatDevicePositionNumber(d.nom_loc_z)}</td>
                     <td>{formatDevicePositionNumber(d.nom_loc_x)}</td>
@@ -199,7 +201,10 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                     <td>{formatDevicePositionNumber(d.nom_ang_z)}</td>
                     <td>{formatDevicePositionNumber(d.nom_ang_x)}</td>
                     <td>{formatDevicePositionNumber(d.nom_ang_y)}</td>
+
                     <td>{d.ray_trace}</td>
+                    <td>{d.comments}</td>
+
                     <td>{renderDiscussion ? renderDiscussionButton(d) : null}</td>
                 </tr>
             )
