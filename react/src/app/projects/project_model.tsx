@@ -242,9 +242,19 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
             continue;
         }
 
-        if (a[key] != b[key]) {
-            // there is a difference in value
-            return true;
+        const aVal = a[key];
+        const bVal = b[key];
+        if (aVal != bVal) {
+            if ((aVal == undefined && bVal == '') || (aVal == '' && bVal == undefined)) {
+                // both fields are empty, and we shouldn't display them as a change of value 
+                // since that would cause <empty>-<empty> to be displayed in the GUI which 
+                // would look confusing.
+                // 
+                // In this case we do nothing and simply retry this check for another key
+            } else {
+                // there is a difference in value
+                return true;
+            }
         }
     }
     return false;
@@ -410,10 +420,11 @@ export class DeviceState {
     }
 }
 
-export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<Record<string, ProjectDeviceDetailsBackend>> {
+export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<ProjectDeviceDetails> {
     // undefined values are not serialized, hence deleting a field (field == undefined) should be replaced with an empty string
     let data = { body: JSON.stringify(changes, (k, v) => v === undefined ? '' : v) };
-    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/fcs/${fftId}`, data);
+    return Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectId}/fcs/${fftId}`, data)
+        .then(d => deviceDetailsBackendToFrontend(d));
 }
 
 export async function addDeviceComment(projectId: string, fftId: string, comment: string): Promise<ProjectDeviceDetails> {
@@ -541,4 +552,40 @@ export function whoAmIHook() {
             })
     }, []);
     return { user, userLoadingError, isUserDataLoading };
+}
+
+
+export interface FFTInfo {
+    _id: string;
+    is_being_used: boolean;
+    fc: FC;
+    fg: FG;
+}
+
+interface FC {
+    _id: string;
+    name: string;
+    description: string;
+}
+
+interface FG {
+    _id: string;
+    name: string;
+    description: string;
+}
+
+export function fetchFfts(): Promise<FFTInfo[]> {
+    return Fetch.get<FFTInfo[]>("/ws/ffts/");
+}
+
+export function deleteFft(fftId: string): Promise<void> {
+    return Fetch.delete<void>(`/ws/ffts/${fftId}`);
+}
+
+export function fetchFcs(): Promise<FC[]> {
+    return Fetch.get<FC[]>("/ws/fcs/");
+}
+
+export function fetchFgs(): Promise<FG[]> {
+    return Fetch.get<FG[]>("/ws/fgs/");
 }

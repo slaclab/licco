@@ -74,13 +74,13 @@ class Notifier:
     # TODO: decide on the default 'from' username, should probably come from email configuration as well
     DEFAULT_FROM_USER = "slac noreply"
 
-    def __init__(self, licco_service_url: str, email_sender: EmailSenderInterface):
+    def __init__(self, licco_service_url: str, email_sender: EmailSenderInterface, admin_email: str):
         # service url is necessary so we can construct a valid url that points to the project
         # during development this url will in the form of "localhost:port", in production it
         # should have the url that gets assigned to the licco project.
         self.licco_service_url = licco_service_url
         self.email_sender = email_sender
-        self.admin_email = "XX@slac.stanford.edu"  # TODO: this should come from the configuration
+        self.admin_email = admin_email
 
     def validate_email(self, username_or_email: str):
         """Validates email with the chosen email sender. If a production verifier is used, this method

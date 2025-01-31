@@ -292,7 +292,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                             disabled={selectedApprovers.length == 0}
                                             onClick={e => submitButtonClicked()}
                                         >
-                                            Edit Submitted Project
+                                            Save Changes
                                         </Button>
 
                                         <AnchorButton intent="none" href={createLink(`/projects/${diff.a._id}/approval`)} large={true} icon="arrow-right">See Approval Page</AnchorButton>

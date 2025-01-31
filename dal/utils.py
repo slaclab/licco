@@ -1,10 +1,11 @@
-'''
-Various small utilties.
-'''
+"""
+Various small utilities.
+"""
 import json
 import math
 import collections
-from typing import List
+from dataclasses import dataclass
+from typing import List, Tuple
 
 from bson import ObjectId
 from datetime import datetime, timezone
@@ -37,6 +38,11 @@ def replaceInfNan(d):
     return d
 
 
+def empty_string_or_none(val: str) -> bool:
+    is_empty = not val or val.strip() == ""
+    return is_empty
+
+
 def escape_chars_for_mongo(attrname):
     '''
     Mongo uses the '$' and '.' characters for query syntax. So, if your attributes have these characters, they get converted to dictionaires etc.
@@ -48,6 +54,20 @@ def escape_chars_for_mongo(attrname):
     For example, use something like so to find the param - db.runs.findOne({}, {"params.AMO:HFP:MMS:72\uFF0ERBV": 1})
     '''
     return attrname.replace(".", u"\uFF0E").replace("$", u"\uFF04")
+
+
+@dataclass
+class ImportCounter:
+    headers: int = 0
+    fail: int = 0
+    success: int = 0
+    ignored: int = 0
+
+    def add(self, counter: "ImportCounter"):
+        self.headers += counter.headers
+        self.fail += counter.fail
+        self.success += counter.success
+        self.ignored += counter.ignored
 
 
 class Difference:

@@ -7,12 +7,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, TagCreationDialog, TagSelectionDialog } from "./project_dialogs";
+import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
 import { LoadingSpinner } from "@/app/components/loading";
-import { AddFftDialog, FFTInfo } from "@/app/ffts/ffts_overview";
+import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
@@ -396,11 +397,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                         <Divider />
 
-                                        <Button icon="tag-add" title="Create a tag" minimal={true} small={true}
+                                        <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
                                             disabled={disableActionButtons}
                                             onClick={(e) => { setIsTagCreationDialogOpen(true) }}
                                         />
-                                        <Button icon="tags" title="Show assigned tags" minimal={true} small={true}
+                                        <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
                                             onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
                                         />
                                         <Divider />
@@ -482,16 +483,21 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         return;
                                     }
 
-                                    // update existing fft data
-                                    let newDeviceData = [];
-                                    for (let d of fftData) {
-                                        if (d.id != updatedDeviceData.id) {
-                                            newDeviceData.push(d);
-                                            continue
+                                    // replace the change device with new/updated data
+                                    // if the user replaced 'fc' or 'fg' of the device, the new device
+                                    // will have a different id.
+                                    const oldDevice = device;
+                                    let updatedDevices = [...fftData];
+                                    for (let i = 0; i < updatedDevices.length; i++) {
+                                        const device = updatedDevices[i];
+                                        if (device.id === oldDevice.id) {
+                                            // found the device index that has to be replaced
+                                            updatedDevices[i] = updatedDeviceData;
+                                            break;
                                         }
-                                        newDeviceData.push(updatedDeviceData);
                                     }
-                                    setFftData(newDeviceData);
+
+                                    setFftData(updatedDevices);
                                     setEditedDevice(undefined);
                                 }}
                             />
@@ -631,7 +637,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 />
                 : null}
             {project ?
-                <TagSelectionDialog
+                <SnapshotSelectionDialog
                     isOpen={isTagSelectionDialogOpen}
                     projectId={project._id}
                     onSubmit={(tagDate) => {
@@ -644,7 +650,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 />
                 : null}
             {project ?
-                <TagCreationDialog
+                <SnapshotCreationDialog
                     isOpen={isTagCreationDialogOpen}
                     projectId={project._id}
                     onSubmit={() => setIsTagCreationDialogOpen(false)}
@@ -785,6 +791,8 @@ const DeviceDataEditTableRow: React.FC<{
     }, [availableFftStates])
 
     const editableDeviceFields: EditField[] = [
+        { key: 'fc', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
@@ -803,7 +811,7 @@ const DeviceDataEditTableRow: React.FC<{
 
     useEffect(() => {
         for (let field of editableDeviceFields) {
-            if (field.key == 'id' || field.key == 'fg' || field.key == 'fc') { // fft field is not editable
+            if (field.key == 'id') { // fft field is not editable
                 continue;
             }
             field.value[1](device[field.key] as any);
@@ -858,7 +866,7 @@ const DeviceDataEditTableRow: React.FC<{
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
         let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
-        fieldNames = fieldNames.filter(field => field != "id" && field != "fg" && field != "fc" && field != "discussion");
+        fieldNames = fieldNames.filter(field => field != "id" && field != "discussion");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             let value = deviceWithChanges[field];
@@ -866,7 +874,14 @@ const DeviceDataEditTableRow: React.FC<{
                 value = value.trim();
             }
 
-            if (value !== device[field]) { // this field has changed
+            const currentValue = device[field]
+            if (value !== currentValue) { // this field has changed
+                if (currentValue === undefined && value === '') {
+                    // this field has not changed (the current device value is not set and 'new' value is not set [empty])
+                    continue;
+                }
+
+            // field has changed
                 if (field === "state") {
                     // we have to transform the state from what's displayed into an enum that
                     // a backend understands, hence this transformation
@@ -912,9 +927,6 @@ const DeviceDataEditTableRow: React.FC<{
                 />
             </td>
 
-            <td>{device.fc}</td>
-            <td>{device.fg}</td>
-
             {editableDeviceFields.map((field) => {
                 // the reason why we use components instead of rendering edit fields directly is due to performance
                 // Rerendering the entire row and all its fields on every keystroke is noticably slow, therefore
@@ -945,11 +957,11 @@ const DeviceDataEditTableRow: React.FC<{
                         // to cancel the editing process
                         setConfirmDialogOpen(false);
                     }}
-                    onSubmit={(backendDevice) => {
+                    onSubmit={(updatedDevice) => {
                         // the user confirmed the changes, and the device data was submitted 
                         // close the dialog and stop editing this row.
                         setConfirmDialogOpen(false);
-                        onEditDone(backendDevice, 'ok');
+                        onEditDone(updatedDevice, 'ok');
                     }}
                 />
                 : null

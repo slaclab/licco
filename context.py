@@ -1,26 +1,21 @@
 import logging
-import os
 from functools import wraps
 
-from pymongo import MongoClient
 from bson import ObjectId
 from flask import abort
 
+from dal import db_utils
 from modules.flask_authnz.flask_authnz import FlaskAuthnz, MongoDBRoles, UserGroups
 from notifications.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
-__author__ = 'mshankar@slac.stanford.edu'
-
 # Application context.
 app = None
 
 # Set up the Mongo connection.
-MONGODB_URL = os.environ.get("MONGODB_URL", None)
-if not MONGODB_URL:
-    print("Please use the environment variable MONGODB_URL to configure the database connection.")
-licco_db = MongoClient(host=MONGODB_URL, tz_aware=True)
+mongo_client = db_utils.create_mongo_client()
+licco_db = mongo_client["lineconfigdb"]
 
 
 class LiccoAuthnz(FlaskAuthnz):
@@ -34,7 +29,7 @@ class LiccoAuthnz(FlaskAuthnz):
         if prjid and priv_name in ["write", "edit"]:            
             logged_in_user = super().get_current_user_id()
             oid = ObjectId(prjid)
-            prj = licco_db["lineconfigdb"]["projects"].find_one({"_id": oid})
+            prj = licco_db["projects"].find_one({"_id": oid})
             if prj and (prj["owner"] == logged_in_user) or logged_in_user in prj.get("editors", []):
                 return True
         return False
@@ -63,7 +58,7 @@ class LiccoAuthnz(FlaskAuthnz):
 
 # Set up the security manager
 usergroups = UserGroups()
-roleslookup = MongoDBRoles(licco_db, usergroups, "lineconfigdb")
+roleslookup = MongoDBRoles(mongo_client, usergroups, "lineconfigdb")
 security = LiccoAuthnz(roleslookup, "Licco")
 
 # notifier is constructed in start.py, due to problems with passing around app context and
