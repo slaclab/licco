@@ -1118,9 +1118,12 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
     if not user_is_allowed_to_edit:
         return False, f"User {userid} is not allowed to submit a project '{project_name}'", None
 
+    # the list of approvers could be empty, since we automatically add super approvers to this list
+    #
     # an approver could be anyone with a SLAC account. These approvers could be given in the
     # form of an email (e.g., username@example.com), which we have to validate
-    approvers = list(set(approvers))
+    super_approvers = get_users_with_privilege(licco_db, "super_approve")
+    approvers = list(set(approvers).union(super_approvers))
     approvers.sort()
 
     # validate a list of approvers
@@ -1212,6 +1215,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
 
     assigned_approvers = prj.get("approvers", [])
     if userid not in assigned_approvers:
+        # super approvers are stored as project approvers so we don't have an extra check just for them
         return False, False, f"User {userid} is not allowed to approve the project", {}
 
     # update the project metadata
@@ -1468,6 +1472,16 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
+    super_approvers = get_users_with_privilege(licco_db, "super_approve")
+    if userid in super_approvers:
+        # super approvers should not be editors or owner of projects
+        return False, f"Super approver is not allowed to clone the project", None
+
+    if editors:
+        for e in editors:
+            if e in super_approvers:
+                return False, f"Selected editor {e} is also a super approver: super approvers are not allowed to be project editors", None
+
     # check if a project with this name already exists
     existing_project = licco_db["projects"].find_one({"name": name})
     if existing_project:
@@ -1581,7 +1595,11 @@ def update_project_details(licco_db: MongoDb, userid, prjid, user_changes: Dict[
 
             # anyone with a SLAC account could be an editor
             invalid_editor_emails = []
+            super_approvers = get_users_with_privilege(licco_db, "super_approve")
             for user in val:
+                if user in super_approvers:
+                    return False, f"User '{user}' is a super approver and can't be an editor"
+
                 if not notifier.validate_email(user):
                     invalid_editor_emails.append(user)
 

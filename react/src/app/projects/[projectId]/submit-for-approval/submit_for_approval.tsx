@@ -3,10 +3,10 @@ import { ErrorDisplay, LoadingSpinner } from "@/app/components/loading";
 import { MultiChoiceStringSelector } from "@/app/components/selector";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createLink } from "@/app/utils/path_utils";
-import { AnchorButton, Button, Colors, NonIdealState } from "@blueprintjs/core";
+import { AnchorButton, Button, Colors, Icon, NonIdealState } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
-import { ProjectEditData, ProjectInfo, editProject, fetchProjectApprovers, fetchProjectEditors, fetchProjectInfo, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
+import { ProjectEditData, ProjectInfo, UserRoles, editProject, fetchUsers, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
 import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
@@ -33,12 +33,23 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
     const [editEditorsError, setEditEditorsError] = useState('');
 
     const fetchData = async (projectId: string) => {
-        let projectInfo = await fetchProjectInfo(projectId);
-        let whoami = await whoAmI();
-        let allApprovers = await fetchProjectApprovers(projectInfo.owner);
-        let allEditors = await fetchProjectEditors(projectInfo.owner);
-        let diff = await fetchDiffWithMasterProject(projectId);
-        return { projectInfo, whoami, allEditors, allApprovers, diff };
+        const [whoami, users, diff] = await Promise.all([
+            whoAmI(),
+            fetchUsers(UserRoles.Approvers | UserRoles.Editors | UserRoles.SuperApprovers),
+            fetchDiffWithMasterProject(projectId),
+        ]);
+
+        const projectInfo = diff.a;
+        const superApprovers = users.super_approvers ?? [];
+
+        let allEditors = users.editors ?? [];
+        // super approver should not be selectable as an editor
+        allEditors = allEditors.filter(editor => !superApprovers.includes(editor) && editor != diff.a.owner);
+
+        let allApprovers = users.approvers ?? [];
+        // super approver should not be selectable as an approver
+        allApprovers = allApprovers.filter(approver => !superApprovers.includes(approver));
+        return { projectInfo, whoami, allEditors, allApprovers, superApprovers, diff };
     }
 
     useEffect(() => {
@@ -50,6 +61,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
 
                 // submitter or editor can't be an approver, that's why the currently logged in user should never appear in the list
                 // of all available approvers
+                setSuperApprovers(data.superApprovers);
                 setAllApprovers(data.allApprovers.filter(e => e != data.whoami));
                 setAllEditors(data.allEditors.filter(e => e != data.whoami));
 
@@ -112,11 +124,14 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         }
 
         return (
-            <ul className="list-unstyled">
-                {approvers.map(approver => {
-                    return <li key={approver}>{approver}</li>
-                })}
-            </ul>
+            <>
+                <p className="mb-1" style={{ color: Colors.GRAY1 }}>These users will be automatically added as project approvers!</p>
+                <ul className="list-unstyled">
+                    {approvers.map(approver => {
+                        return <li key={approver}><Icon icon="tick" color={Colors.GRAY1} className="me-1" />{approver}</li>
+                    })}
+                </ul>
+            </>
         )
     }
 
@@ -221,7 +236,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                         defaultValue=""
                                         placeholder={"Please select an editor..."}
                                         disabled={disableEditActions}
-                                        noSelectionMessage={"No Editors Were Selected"}
+                                        noSelectionMessage={"No editors were selected"}
                                         onChange={newEditors => setSelectedEditors(newEditors)}
                                     />
 
@@ -243,7 +258,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
                                     placeholder={"Please select an approver..."}
                                     defaultValue=""
                                     disabled={disableEditActions}
-                                    noSelectionMessage={"No Approvers Were Selected"}
+                                    noSelectionMessage={"No approvers were selected"}
                                     onChange={newApprovers => setSelectedApprovers(newApprovers)}
                                 />
                             </td>

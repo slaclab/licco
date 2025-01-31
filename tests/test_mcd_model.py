@@ -316,8 +316,7 @@ def test_project_approval_workflow(db):
     # verify notifications
     assert len(email_sender.emails_sent) == 2, "wrong number of notification emails sent"
     approver_email = email_sender.emails_sent[0]
-    # TODO: add a super approver once that branch is merged in
-    assert approver_email['to'] == ['approve_user']
+    assert approver_email['to'] == ['approve_user', 'super_approver']
     assert approver_email['subject'] == "You were selected as an approver for the project test_approval_workflow"
 
     # this project was submitted for the first time, therefore an initial message should be sent to editors
@@ -327,18 +326,17 @@ def test_project_approval_workflow(db):
     email_sender.clear()
 
     project = mcd_model.get_project(db, prjid)
-    # TODO: add "super_approver" to the list once the super approvers branch is merged in
-    assert project['approvers'] == ["approve_user"]
+    assert project['approvers'] == ["approve_user", "super_approver"]
     assert project.get('approved_by', []) == []
 
     # TODO: once super_approver branch is merged in approve by super approver
-    # ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, "super_approver", notifier)
-    # assert err == ""
-    # assert ok
-    # assert all_approved == False
-    # assert prj['approved_by'] == ['super_approver']
-    # assert len(email_sender.emails_sent) == 0, "there should be no notifications"
-    # assert prj['status'] == 'submitted'
+    ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, "super_approver", notifier)
+    assert err == ""
+    assert ok
+    assert all_approved == False
+    assert prj['approved_by'] == ['super_approver']
+    assert len(email_sender.emails_sent) == 0, "there should be no notifications"
+    assert prj['status'] == 'submitted'
 
     # approve by the final approver, we should receive notifications about approved project
     ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, 'approve_user', notifier)
@@ -358,8 +356,7 @@ def test_project_approval_workflow(db):
 
     assert len(email_sender.emails_sent) == 1, "only one set of messages should be sent"
     email = email_sender.emails_sent[0]
-    # TODO: once super approve branch is merged in, we have to add super_approver to the list
-    assert email['to'] == ['approve_user', 'editor_user', 'editor_user_2', 'test_user']  # , 'super_approver']
+    assert email['to'] == ['approve_user', 'editor_user', 'editor_user_2', 'super_approver', 'test_user']
     assert email['subject'] == 'Project test_approval_workflow was approved'
     email_sender.clear()
 
@@ -397,12 +394,12 @@ def test_project_rejection(db):
     assert ok
     assert prj['status'] == "development", "status should go back into a development state"
     assert prj['editors'] == ['editor_user', 'editor_user_2']
-    assert prj['approvers'] == ['approve_user', 'approve_user_2']
+    assert prj['approvers'] == ['approve_user', 'approve_user_2', 'super_approver']
 
     # validate that notifications were send
     assert len(email_sender.emails_sent) == 1
     email = email_sender.emails_sent[0]
-    assert email['to'] == ['approve_user', 'approve_user_2', 'editor_user', 'editor_user_2', 'test_user']
+    assert email['to'] == ['approve_user', 'approve_user_2', 'editor_user', 'editor_user_2', 'super_approver', 'test_user']
     assert email['subject'] == 'Project test_project_rejection_workflow was rejected'
     assert 'This is my rejection message' in email['content']
 

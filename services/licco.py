@@ -90,7 +90,29 @@ def svc_get_users():
     Get the users in the system.
     For now, this is simply the owners of projects.
     """
-    users = mcd_model.get_all_users(licco_db)
+    roles = request.args.get('roles', '')
+    if not roles:
+        out = {"all": mcd_model.get_all_users(licco_db)}
+        return JSONEncoder().encode({"success": True, "value": out})
+
+    # user wanted specific roles
+    roles = roles.split(",")
+    users = {}
+    for role in roles:
+        role = role.strip()
+        if role == "all":
+            users["all"] = mcd_model.get_all_users(licco_db)
+        elif role == "admins":
+            users["admins"] = mcd_model.get_users_with_privilege(licco_db, "admin")
+        elif role == "editors":
+            users["editors"] = mcd_model.get_users_with_privilege(licco_db, "edit")
+        elif role == "approvers":
+            users["approvers"] = mcd_model.get_users_with_privilege(licco_db, "approve")
+        elif role == "super_approvers":
+            users["super_approvers"] = mcd_model.get_users_with_privilege(licco_db, "super_approve")
+        else:
+            return json_error(f"invalid user role '{role}'")
+
     return json_response(users)
 
 
@@ -108,24 +130,6 @@ def svc_get_logged_in_user(username):
     # get the specified user data (for now we don't have any, so we just return username)
     return json_response(username)
 
-
-@licco_ws_blueprint.route("/approvers/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_users_with_approve_privilege():
-    """
-    Get the users in the system who have the approve privilege
-    """
-    users = mcd_model.get_users_with_privilege(licco_db, "approve")
-    return json_response(users)
-
-@licco_ws_blueprint.route("/editors/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_users_with_edit_privilege():
-    """
-    Get the users in the system who have the edit privilege
-    """
-    users = mcd_model.get_users_with_privilege(licco_db, "edit")
-    return json_response(users)
 
 @licco_ws_blueprint.route("/projects/", methods=["GET"])
 @context.security.authentication_required
@@ -178,6 +182,8 @@ def svc_create_project():
     """
     Create an empty project
     """
+    # TODO: I think this endpoint is no longer used in the new GUI. Projects are created via
+    # /clone endpoint (svc_clone_project).
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
     if not prjdetails.get("name", None):
