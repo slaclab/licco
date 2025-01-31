@@ -33,14 +33,14 @@ KEYMAP = {
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
     "State": "state",
-    "Comments": "comments",
     "LCLS_Z_loc": "nom_loc_z",
     "LCLS_X_loc": "nom_loc_x",
     "LCLS_Y_loc": "nom_loc_y",
     "LCLS_Z_roll": "nom_ang_z",
     "LCLS_X_pitch": "nom_ang_x",
     "LCLS_Y_yaw": "nom_ang_y",
-    "Must_Ray_Trace": "ray_trace"
+    "Must_Ray_Trace": "ray_trace",
+    "Comments": "comments"
 }
 KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
 

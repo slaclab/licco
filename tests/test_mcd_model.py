@@ -492,7 +492,7 @@ def test_export_csv_from_a_project(db):
     ffts = mcd_model.get_project_ffts(db, prjid)
     assert len(ffts) == 0, "There should be no project ffts for a freshly created project"
 
-    # import via csv endpoint
+    # import via csv endpoint (import should be possible in any order of columns)
     import_csv = """
 FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
 AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
@@ -510,5 +510,11 @@ AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
     assert ok
     assert err == ""
     # by default the csv writer ends the lines with \r\n, so this assert would fail without our replace
+    expected_export = """
+FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
+AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,1.21,0.21,2.213,1.231,,,,TEST
+AT1L0,GAS,3213221,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
+"""
+
     csv = csv.replace("\r\n", "\n")
-    assert import_csv.strip() == csv.strip(), "wrong csv output"
+    assert expected_export.strip() == csv.strip(), "wrong csv output"
