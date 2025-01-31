@@ -106,6 +106,9 @@ class NoOpNotifier(Notifier):
         super().__init__('', NoOpEmailSender(), "admin@example.com")
         pass
 
+    def validate_email(self, username_or_email: str):
+        return True
+
     def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
                                 plain_text_msg: str = ""):
         # do nothing
@@ -164,6 +167,77 @@ def test_create_delete_project_admin(db):
     # TODO: check that project and all its fft fields (such as comments) are properly deleted when admin
     # deletes the project
     pass
+
+
+def test_project_filter_for_owner(db):
+    """Checking if the project filtering is correct for a specific non-admin project owner"""
+    # create project that should appear in the result
+    project = mcd_model.create_new_project(db, "test_project_filter_for_owner", "", "test_project_filter_owner")
+    assert project
+
+    projects = mcd_model.get_all_projects(db, 'test_project_filter_owner')
+    assert len(projects) == 2
+    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == "test_project_filter_for_owner"
+
+
+def test_project_filter_for_editor(db):
+    """Check if project editor gets back this project"""
+    # create irrelevant project that should not appear after applying a filter
+    project = mcd_model.create_new_project(db, "test_project_filter_for_editor_irrelevant_project", "", "test_project_filter_owner_2")
+    assert project
+
+    # create project that should appear in the result
+    project = mcd_model.create_new_project(db, "test_project_filter_for_editor", "", "test_project_filter_owner_2")
+    assert project
+    ok, err = mcd_model.update_project_details(db, "test_project_filter_owner_2", project["_id"],
+                                               {'editors': ["test_project_filter_editor"]}, NoOpNotifier())
+    assert err == ""
+    assert ok
+    # get projects for the user that was chosen as editor
+    projects = mcd_model.get_all_projects(db, 'test_project_filter_editor')
+    assert len(projects) == 2
+    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == 'test_project_filter_for_editor'
+
+
+def test_project_filter_for_approver(db):
+    # create irrelevant project that should not appear after applying a filter
+    project = mcd_model.create_new_project(db, "test_project_filter_for_approver_irrelevant_project", "", "test_project_filter_owner_3")
+    assert project
+
+    # create project that should appear in result
+    project = mcd_model.create_new_project(db, "test_project_filter_for_approver", "", "test_project_filter_owner_3")
+    assert project
+    result = db['projects'].update_one({'_id': ObjectId(project["_id"])}, {"$set": {'editors': [], 'approvers': ['test_project_filter_approver']}})
+    assert result.modified_count == 1
+
+    projects = mcd_model.get_all_projects(db, 'test_project_filter_approver')
+    assert len(projects) == 2
+    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == 'test_project_filter_for_approver'
+
+
+def test_project_filter_for_user_with_no_projects(db):
+    project = mcd_model.create_new_project(db, "test_project_filter_for_user_with_no_projects", "", "test_project_filter_owner_4")
+    assert project
+    # user with no projects should find only a master project
+    projects = mcd_model.get_all_projects(db, 'test_project_filter_user_with_no_projects')
+    assert len(projects) == 1
+    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+
+
+def test_project_filter_for_admins(db):
+    # admins should see every project
+    project = mcd_model.create_new_project(db, "test_project_filter_for_admins", "", "test_project_filter_owner")
+    assert project
+
+    projects = mcd_model.get_all_projects(db, 'admin_user')
+    assert len(projects) >= 2, "there should be at least master project and 'test_project_filter_for_admins' in the db"
+    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+
+    project_names = [project['name'] for project in projects]
+    assert "test_project_filter_for_admins" in project_names, "created file was not found"
 
 
 def test_add_fft_to_project(db):
