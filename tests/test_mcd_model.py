@@ -191,7 +191,12 @@ def test_project_filter_for_editor(db):
     project = mcd_model.create_new_project(db, "test_project_filter_for_editor", "", "test_project_filter_owner_2")
     assert project
     ok, err = mcd_model.update_project_details(db, "test_project_filter_owner_2", project["_id"],
-                                               {'editors': ["test_project_filter_editor"]}, NoOpNotifier())
+                                               {'editors': [
+                                                   # NOTE: we use multiple editors in this field to check if mongo
+                                                   # array filtering works as expected
+                                                   "test_project_filter_editor",
+                                                   "test_project_filter_editor_2"
+                                               ]}, NoOpNotifier())
     assert err == ""
     assert ok
     # get projects for the user that was chosen as editor
@@ -209,7 +214,14 @@ def test_project_filter_for_approver(db):
     # create project that should appear in result
     project = mcd_model.create_new_project(db, "test_project_filter_for_approver", "", "test_project_filter_owner_3")
     assert project
-    result = db['projects'].update_one({'_id': ObjectId(project["_id"])}, {"$set": {'editors': [], 'approvers': ['test_project_filter_approver']}})
+    result = db['projects'].update_one({'_id': ObjectId(project["_id"])}, {"$set": {
+        'editors': [],
+        # NOTE: we use multiple approvers in this field to check if mongo array filtering works as expected
+        'approvers': [
+            'test_project_filter_approver_2',
+            'test_project_filter_approver',
+        ]
+    }})
     assert result.modified_count == 1
 
     projects = mcd_model.get_all_projects(db, 'test_project_filter_approver')
