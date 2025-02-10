@@ -288,6 +288,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         return data;
     }
 
+    const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
     const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
@@ -396,16 +397,18 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         />
 
                                         <Divider />
-
-                                        <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
-                                            disabled={disableActionButtons}
-                                            onClick={(e) => { setIsTagCreationDialogOpen(true) }}
-                                        />
-                                        <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
-                                            onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
-                                        />
-                                        <Divider />
-
+                                        {isProjectApproved ?
+                                            <>
+                                                <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
+                                                    onClick={(e) => { setIsTagCreationDialogOpen(true) }}
+                                                />
+                                                <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
+                                                    onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
+                                                />
+                                                <Divider />
+                                            </>
+                                            : null
+                                        }
                                         <Button icon="history" title="Show the history of changes" minimal={true} small={true}
                                             intent={asOfTimestampFilter ? "danger" : "none"}
                                             onClick={(e) => setIsProjectHistoryDialogOpen(true)}
@@ -638,7 +641,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 />
                 : null}
-            {project ?
+            {project && isProjectApproved ?
                 <SnapshotSelectionDialog
                     isOpen={isTagSelectionDialogOpen}
                     projectId={project._id}
@@ -651,7 +654,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onClose={() => setIsTagSelectionDialogOpen(false)}
                 />
                 : null}
-            {project ?
+            {project && isProjectApproved ?
                 <SnapshotCreationDialog
                     isOpen={isTagCreationDialogOpen}
                     projectId={project._id}
@@ -885,7 +888,7 @@ const DeviceDataEditTableRow: React.FC<{
                     continue;
                 }
 
-            // field has changed
+                // field has changed
                 if (field === "state") {
                     // we have to transform the state from what's displayed into an enum that
                     // a backend understands, hence this transformation

@@ -162,7 +162,13 @@ def get_users_with_privilege(licco_db: MongoDb, privilege):
     We return a unique list of userid's, for example, [ "awallace", "klafortu", "mlng" ]
     """
     ret = set()
-    for role in licco_db["roles"].find({"privileges": privilege}):
+    # Super approvers and admins are a separate entry
+    if privilege == "superapprover" or privilege == "admin":
+        lookup = {"name": privilege} 
+    else:
+        lookup = {"privileges": privilege} 
+    # looking for editors, owners, approvers, etc
+    for role in licco_db["roles"].find(lookup):
         for player in role.get("players", []):
             if player.startswith("uid:"):
                 ret.add(player.replace("uid:", ""))
@@ -404,8 +410,9 @@ def create_new_functional_component(licco_db: MongoDb, name, description):
     """
     if not name:
         return False, "The name is a required field", None
+    # Add in default data as temporary fix
     if not description:
-        return False, "The description is a required field", None
+        description = ""
     if licco_db["fcs"].find_one({"name": name}):
         return False, f"Functional component {name} already exists", None
     try:
@@ -421,8 +428,9 @@ def create_new_fungible_token(licco_db: MongoDb, name, description):
     """
     if not name:
         name = ""
+    # Add in default data as temporary fix
     if not description:
-        return False, "The description is a required field", None
+        description = ""
     if licco_db["fgs"].find_one({"name": name}):
         return False, f"Fungible token {name} already exists", None
     try:
@@ -448,10 +456,10 @@ def find_or_create_fft(licco_db: MongoDb, fc_name: str, fg_name: str) -> Tuple[b
     return ok, err, fft
 
 
-def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc=None, fgdesc=None) -> Tuple[bool, str, Optional[Dict[str, any]]]:
+def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc="Default", fgdesc="Default") -> Tuple[bool, str, Optional[Dict[str, any]]]:
     """
     Create a new functional component + fungible token based on their names
-    If the FC or FT don't exist; these are created if the associated descriptions are also passed in.
+    If the FC or FG don't exist; these are created if the associated descriptions are also passed in.
     """
     if empty_string_or_none(fc) or empty_string_or_none(fg):
         err = "can't create a new fft"
@@ -1122,7 +1130,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
     #
     # an approver could be anyone with a SLAC account. These approvers could be given in the
     # form of an email (e.g., username@example.com), which we have to validate
-    super_approvers = get_users_with_privilege(licco_db, "super_approve")
+    super_approvers = get_users_with_privilege(licco_db, "superapprover")
     approvers = list(set(approvers).union(super_approvers))
     approvers.sort()
 
@@ -1472,7 +1480,7 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     """
     Clone the existing project specified by prjid as a new project with the name and description.
     """
-    super_approvers = get_users_with_privilege(licco_db, "super_approve")
+    super_approvers = get_users_with_privilege(licco_db, "superapprover")
     if userid in super_approvers:
         # super approvers should not be editors or owner of projects
         return False, f"Super approver is not allowed to clone the project", None
@@ -1595,7 +1603,7 @@ def update_project_details(licco_db: MongoDb, userid, prjid, user_changes: Dict[
 
             # anyone with a SLAC account could be an editor
             invalid_editor_emails = []
-            super_approvers = get_users_with_privilege(licco_db, "super_approve")
+            super_approvers = get_users_with_privilege(licco_db, "superapprover")
             for user in val:
                 if user in super_approvers:
                     return False, f"User '{user}' is a super approver and can't be an editor"

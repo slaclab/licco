@@ -185,9 +185,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
     }, [ffts, isOpen])
 
 
-    const renderFcDescription = fcName != "" && !fcNames.has(fcName);
-    const renderFgDescription = fgName != "" && !fgNames.has(fgName);
-    const disableSubmit = fcName.trim() == "" || fgName.trim() == "" || (renderFcDescription && fcDescription.trim() == "" || renderFgDescription && fgDescription.trim() == "");
+    const disableSubmit = fcName.trim() == "" || fgName.trim() == "";
 
     const submit = () => {
         const fc = fcName.trim();
@@ -214,12 +212,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
         let data: any = {
             fc: fc,
             fg: fg,
-        }
-        if (renderFcDescription) {
-            data["fc_description"] = fcDescription.trim();
-        }
-        if (renderFgDescription) {
-            data["fg_description"] = fgDescription.trim();
         }
 
         setIsSubmitting(true);
@@ -270,30 +262,12 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
                                 onValueChange={(val: string) => setFcName(val)} />
                         </FormGroup>
 
-                        <FormGroup label="FC Description:" labelInfo="(required)" labelFor="fc-description"
-                            disabled={!renderFcDescription}>
-                            <InputGroup id="fc-description"
-                                disabled={!renderFcDescription}
-                                value={fcDescription}
-                                onValueChange={(val: string) => setFcDescription(val)}
-                            />
-                        </FormGroup>
-
                         <FormGroup label="Fungible Token:" labelFor="fg-name" className="mt-4">
                             <InputGroup id="fg-name"
                                 list="fg-names-list"
                                 rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
                                 value={fgName}
                                 onValueChange={(val: string) => setFgName(val)} />
-                        </FormGroup>
-
-                        <FormGroup label="FG Description:" labelInfo="(required)" labelFor="fg-description"
-                            disabled={!renderFgDescription}>
-                            <InputGroup id="fg-description"
-                                disabled={!renderFgDescription}
-                                value={fgDescription}
-                                onValueChange={(val: string) => setFgDescription(val)}
-                            />
                         </FormGroup>
                     </>
                 }

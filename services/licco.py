@@ -109,7 +109,7 @@ def svc_get_users():
         elif role == "approvers":
             users["approvers"] = mcd_model.get_users_with_privilege(licco_db, "approve")
         elif role == "super_approvers":
-            users["super_approvers"] = mcd_model.get_users_with_privilege(licco_db, "super_approve")
+            users["super_approvers"] = mcd_model.get_users_with_privilege(licco_db, "superapprover")
         else:
             return json_error(f"invalid user role '{role}'")
 
@@ -336,9 +336,7 @@ def svc_create_fft():
     For now, we expect the ID's of the functional component and the fungible token ( and not the names )
     """
     newfft = request.json
-    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], fg=newfft["fg"],
-                                                     fcdesc=newfft.get("fc_description", None),
-                                                     fgdesc=newfft.get("fg_description", None))
+    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], fg=newfft["fg"])
     if errormsg:
         return json_error(errormsg)
     return json_response(fft)
