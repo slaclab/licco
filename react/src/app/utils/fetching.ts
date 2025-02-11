@@ -100,7 +100,7 @@ export class Fetch {
             if (response.status == NO_CONTENT) {
                 // sometimes the response will be empty (usually a delete respone) in which case
                 // we don't have anything to return but undefined to satisfy the generic type T
-                let t: T;
+                const t = undefined as T;
                 return new Promise(ok => ok(t));
             }
 

@@ -88,7 +88,7 @@ class Notifier:
         return self.email_sender.validate_email(username_or_email)
 
     def add_project_editors(self, new_editor_ids: List[str], project_name: str, project_id: str):
-        subject = f"You were selected as an editor for the project {project_name}"
+        subject = f"(MCD) You were selected as an editor for the project {project_name}"
         content = create_notification_msg("add_editor", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -96,7 +96,7 @@ class Notifier:
         self.send_email_notification(new_editor_ids, subject, content)
 
     def remove_project_editors(self, removed_editor_ids: List[str], project_name: str, project_id: str):
-        subject = f"You were removed as an editor for the project {project_name}"
+        subject = f"(MCD) You were removed as an editor for the project {project_name}"
         content = create_notification_msg("remove_editor", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -104,7 +104,7 @@ class Notifier:
         self.send_email_notification(removed_editor_ids, subject, content)
 
     def add_project_approvers(self, notified_user_ids: List[str], project_name: str, project_id: str):
-        subject = f"You were selected as an approver for the project {project_name}"
+        subject = f"(MCD) You were selected as an approver for the project {project_name}"
         content = create_notification_msg("add_approver", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -112,7 +112,7 @@ class Notifier:
         self.send_email_notification(notified_user_ids, subject, content)
 
     def remove_project_approvers(self, notified_user_ids: List[str], project_name: str, project_id: str):
-        subject = f"You were removed from the approvers for the project {project_name}"
+        subject = f"(MCD) You were removed from the approvers for the project {project_name}"
         content = create_notification_msg("remove_approver", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -120,7 +120,7 @@ class Notifier:
         self.send_email_notification(notified_user_ids, subject, content)
 
     def inform_editors_of_approver_change(self, notified_user_ids: List[str], project_name: str, project_id: str, current_approvers: List[str]):
-        subject = f"Approvers have been updated for the project {project_name}"
+        subject = f"(MCD) Approvers have been updated for the project {project_name}"
         content = create_notification_msg("inform_editors_of_approver_update", "html",
                                           project_url=self._create_project_url(project_id),
                                           project_name=project_name,
@@ -129,7 +129,7 @@ class Notifier:
         self.send_email_notification(notified_user_ids, subject, content)
 
     def project_submitted_for_approval(self, notified_user_ids: List[str], project_name: str, project_id: str):
-        subject = f"Project {project_name} was submitted for approval"
+        subject = f"(MCD) Project {project_name} was submitted for approval"
         content = create_notification_msg("project_approval_submitted", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -137,7 +137,7 @@ class Notifier:
         self.send_email_notification(notified_user_ids, subject, content)
 
     def project_approval_approved(self, notified_user_ids: List[str], project_name: str, project_id: str):
-        subject = f"Project {project_name} was approved"
+        subject = f"(MCD) Project {project_name} was approved"
         content = create_notification_msg("project_approval_approved", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
@@ -146,7 +146,7 @@ class Notifier:
 
     def project_approval_rejected(self, notified_user_ids: List[str], project_name: str, project_id: str,
                                   user_who_rejected: str, reason: str):
-        subject = f"Project {project_name} was rejected"
+        subject = f"(MCD) Project {project_name} was rejected"
         content = create_notification_msg("project_approval_rejected", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),

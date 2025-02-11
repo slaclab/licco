@@ -61,9 +61,9 @@ def db():
     assert len(res.inserted_ids) == 4, "roles should be inserted"
 
     # ffts used in tests
-    ffts = [{"fc": "TESTFC", "fc_desc": "fcDesc", "fg": "TESTFG", "fg_desc": "fgDesc"}]
+    ffts = [{"fc": "TESTFC", "fg": "TESTFG"}]
     for f in ffts:
-        ok, err, fft = mcd_model.create_new_fft(db, f['fc'], f['fg'], f.get('fc_desc', ''), f.get('fg_desc', ''))
+        ok, err, fft = mcd_model.create_new_fft(db, f['fc'], f['fg'])
         assert ok, f"fft '{f['fc']}' could not be inserted due to: {err}"
 
     return db

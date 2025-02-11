@@ -119,7 +119,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     for fc_list in fcs.values():
         for fc in fc_list:
             if (fc["FC"], fc["Fungible"]) not in ffts:
-                status, errormsg, newfft = mcd_model.create_new_fft(licco_db, fc=fc["FC"], fg=fc["Fungible"], fcdesc=None, fgdesc=None)
+                status, errormsg, newfft = mcd_model.create_new_fft(licco_db, fc=fc["FC"], fg=fc["Fungible"])
                 ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
                 if "fg" in newfft else None)] = newfft["_id"]
 
