@@ -189,7 +189,7 @@ def get_fft_values_by_project(licco_db: MongoDb, fftid, prjid):
     return fft_pairings
 
 
-def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria):
+def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria = None):
     """
     Return all the projects in the system.
     :return: List of projects
@@ -201,11 +201,25 @@ def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria):
         # admin users should see all projects, hence we don't specify the filter
         pass
     else:
-        # regular user should only see projects that are visible (not hidden)
-        filter = {"status": {"$ne": "hidden"}}
+        # regular user should only see the projects that are applicable (they are owner, editor or approver)
+        # and which are visible (not hidden/deleted)
+        filter = {"status": {"$ne": "hidden"},
+                  "$and": [{
+                      "$or": [
+                          # master project should be always returned
+                          {'name': MASTER_PROJECT_NAME},
+                          {'owner': logged_in_user},
+                          {'editors': logged_in_user},
+                          {'approvers': logged_in_user},
+                      ]
+                  }]
+                  }
+
+    if not sort_criteria:
+        # order in descending order
+        sort_criteria = [["start_time", -1]]
 
     all_projects = list(licco_db["projects"].find(filter).sort(sort_criteria))
-
     return all_projects
 
 
@@ -1573,7 +1587,7 @@ def create_empty_project(licco_db: MongoDb, name, description, logged_in_user):
     return get_project(licco_db, prjid)
 
 
-def update_project_details(licco_db: MongoDb, userid, prjid, user_changes: Dict[str, any], notifier: Notifier) -> Tuple[bool, str]:
+def update_project_details(licco_db: MongoDb, userid: str, prjid: str, user_changes: Dict[str, any], notifier: Notifier) -> Tuple[bool, str]:
     """
     Just update the project name ands description
     """
