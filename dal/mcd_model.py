@@ -1204,7 +1204,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         # split out superapprovers, we email them later
         new_regular_approvers = set(new_approvers) - set(super_approvers)
         if new_regular_approvers:
-            notifier.add_project_approvers(new_regular_approvers, project_name, project_id)
+            notifier.add_project_approvers(list(new_regular_approvers), project_name, project_id)
 
     deleted_approvers = diff.removed
     if deleted_approvers:

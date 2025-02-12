@@ -1,6 +1,6 @@
 import inspect
 import logging
-from typing import List, Literal, Optional, Set
+from typing import List, Literal, Optional
 from notifications.email_sender import EmailSettings, EmailSender, EmailSenderInterface
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class Notifier:
                                           admin_email=self.admin_email)
         self.send_email_notification(removed_editor_ids, subject, content)
 
-    def add_project_approvers(self, notified_user_ids: Set[str], project_name: str, project_id: str):
+    def add_project_approvers(self, notified_user_ids: List[str], project_name: str, project_id: str):
         subject = f"(MCD) You were selected as an approver for the project {project_name}"
         content = create_notification_msg("add_approver", "html",
                                           project_name=project_name,
