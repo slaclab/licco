@@ -1187,7 +1187,10 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
 
     new_approvers = diff.new
     if new_approvers:
-        notifier.add_project_approvers(new_approvers, project_name, project_id)
+        # split out superapprovers, we email them later
+        new_regular_approvers = set(new_approvers) - set(super_approvers)
+        if new_regular_approvers:
+            notifier.add_project_approvers(new_regular_approvers, project_name, project_id)
 
     deleted_approvers = diff.removed
     if deleted_approvers:
@@ -1197,6 +1200,8 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         # project was submitted for the first time
         project_editors = list(set([prj["owner"]] + editors))
         notifier.project_submitted_for_approval(project_editors, project_name, project_id)
+        notifier.add_project_superapprovers(super_approvers, project_name, project_id)
+
     else:
         # project was edited
         project_editors = list(set([prj["owner"]] + editors))
