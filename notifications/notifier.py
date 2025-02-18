@@ -9,10 +9,16 @@ _NOTIFICATION_TEMPLATES = {
     "add_approver": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
-        <p>You have been added to project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database as Project Approver. Please take action at <a href="{project_url}">{project_url}</a></p>
+        <p>You have been added to project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database as Project Approver. Please take action at <a href="{project_url}">{project_url}.</a></p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>"""),
         # if more templates are necessary, simply add them to this map, e.g:
         # "markdown": You have been added to the project [project_name](project_url)...
+    },
+    "add_superapprover": {
+        "html": inspect.cleandoc("""
+        <p>Automated Message - Please Do Not Reply</p>
+        <p>As a Super Approver, your review has been requested for project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database. Your action is required at <a href="{project_url}">{project_url}.</a></p>
+        <p>If you have any questions, please contact the database administrator at {admin_email}.</p>"""),
     },
     "remove_approver": {
         "html": inspect.cleandoc("""
@@ -106,6 +112,14 @@ class Notifier:
     def add_project_approvers(self, notified_user_ids: List[str], project_name: str, project_id: str):
         subject = f"(MCD) You were selected as an approver for the project {project_name}"
         content = create_notification_msg("add_approver", "html",
+                                          project_name=project_name,
+                                          project_url=self._create_project_url(project_id),
+                                          admin_email=self.admin_email)
+        self.send_email_notification(notified_user_ids, subject, content)
+
+    def add_project_superapprovers(self, notified_user_ids: List[str], project_name: str, project_id: str):
+        subject = f"(MCD) You were added as a Super Approver for the project {project_name}"
+        content = create_notification_msg("add_superapprover", "html",
                                           project_name=project_name,
                                           project_url=self._create_project_url(project_id),
                                           admin_email=self.admin_email)
