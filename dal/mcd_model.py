@@ -397,7 +397,9 @@ def delete_fft_comment(licco_db: MongoDb, user_id, comment_id):
     allowed_to_delete = False
     allowed_to_delete |= comment["user"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
     allowed_to_delete |= project["owner"] == user_id   # project owner is always allowed to delete project comments
-    # TODO: check for admin user as well once we have user roles
+    if not allowed_to_delete:
+        # if user is admin, they should be allowed to delete
+        allowed_to_delete |= user_id in get_users_with_privilege(licco_db, "admin")
 
     if not allowed_to_delete:
         return False, f"You are not allowed to delete comment {comment_id}"
