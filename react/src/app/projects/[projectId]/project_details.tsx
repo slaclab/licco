@@ -33,12 +33,12 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                 if (diff != 0) {
                     return diff;
                 }
-                return sortString(a.fg, b.fg, false); // asc 
+                return sortString(a.fg_desc, b.fg_desc, false); // asc 
             });
             break;
         case "fg":
             data.sort((a, b) => {
-                let diff = sortString(a.fg, b.fg, desc);
+                let diff = sortString(a.fg_desc, b.fg_desc, desc);
                 if (diff != 0) {
                     return diff;
                 }
@@ -148,7 +148,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         {
             // set filters based on query params
             setFcFilter(queryParams.get("fc") ?? "");
-            setFgFilter(queryParams.get("fg") ?? "");
+            setFgFilter(queryParams.get("fg_desc") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
             setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
         }
@@ -190,7 +190,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             return true;
         }).filter(d => {
             if (fgFilter) {
-                return fgGlobMatcher.test(d.fg);
+                return fgGlobMatcher.test(d.fg_desc);
             }
             return true;
         }).filter(d => {
@@ -247,7 +247,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
             if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
-                setErrorAlertMsg(<>FFT <b>{fft.fc}-{fft.fg}</b> is already a part of the project: "{project.name}".</>);
+                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: "{project.name}".</>);
                 return
             }
         }
@@ -283,7 +283,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // create the csv document from filtered devices
         let data = `FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
+            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
@@ -440,7 +440,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         <tr>
                             {isProjectInDevelopment ? <th></th> : null}
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
-                            <th onClick={e => changeSortOrder('fg')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg')}</th>
+                            <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
                             <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('stand')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
@@ -728,7 +728,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                                 <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
                                     onClick={(e) => onEdit(device)}
                                 />
-                                <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from the currently approved project"}
+                                <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from another project"}
                                     onClick={(e) => onCopyFft(device)}
                                 />
                                 <Button icon="trash" minimal={true} small={true} title={"Delete this device"}
@@ -746,7 +746,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 }
 
                 <td>{device.fc}</td>
-                <td>{device.fg}</td>
+                <td>{device.fg_desc}</td>
                 <td>{device.tc_part_no}</td>
                 <td>{device.stand}</td>
                 <td>{device.state}</td>
@@ -798,7 +798,7 @@ const DeviceDataEditTableRow: React.FC<{
 
     const editableDeviceFields: EditField[] = [
         { key: 'fc', type: "string", value: useState<string>(), err: useState(false) },
-        { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'fg_desc', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },

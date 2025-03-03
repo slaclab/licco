@@ -130,31 +130,20 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-
     const [fcNames, setFcNames] = useState<Set<string>>(new Set());
-    const [fcDescription, setFcDescription] = useState('');
-
-    const [fgNames, setFgNames] = useState<Set<string>>(new Set());
-    const [fgDescription, setFgDescription] = useState('');
 
     const createFgFcNames = (ffts: FFTInfo[]) => {
         let fcSet = new Set<string>();
-        let fgSet = new Set<string>();
 
         for (let fft of ffts) {
             let fcName = fft.fc.name;
             if (fcName != "") {
                 fcSet.add(fcName);
             }
-
-            let fgName = fft.fg.name;
-            if (fgName != "") {
-                fgSet.add(fgName);
-            }
         }
 
         setFcNames(fcSet);
-        setFgNames(fgSet);
+        setFgName('');
     }
 
     useEffect(() => {
@@ -185,7 +174,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
     }, [ffts, isOpen])
 
 
-    const disableSubmit = fcName.trim() == "" || fgName.trim() == "";
+    const disableSubmit = fcName.trim() == "";
 
     const submit = () => {
         const fc = fcName.trim();
@@ -230,10 +219,9 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Add a new FFT" autoFocus={true} style={{ width: "70ch" }}>
             <DialogBody useOverflowScrollContainer>
-                <p>Please choose/enter a functional component name and fungible token.
-                    You can choose one of the existing entities or you can type in a brand new functional component name or fungible token.
+                <p>Please choose/enter a functional component name.
+                    You can choose one of the existing entities or you can type in a brand new functional component name.
                 </p>
-                <p>If either entity does not exist in the system, description inputs will be enabled. Please enter a valid description; and these will be automatically created in the system for you as part of creating the new FFT.</p>
 
                 {isLoading ?
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
@@ -246,12 +234,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
                             }
                         </datalist>
 
-                        <datalist id="fg-names-list">
-                            {Array.from(fgNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
-                                return <option key={name} value={name} />
-                            })
-                            }
-                        </datalist>
                         <FormGroup label="Functional Component:" labelFor="fc-name">
                             <InputGroup id="fc-name"
                                 autoFocus={true}
@@ -262,13 +244,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
                                 onValueChange={(val: string) => setFcName(val)} />
                         </FormGroup>
 
-                        <FormGroup label="Fungible Token:" labelFor="fg-name" className="mt-4">
-                            <InputGroup id="fg-name"
-                                list="fg-names-list"
-                                rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
-                                value={fgName}
-                                onValueChange={(val: string) => setFgName(val)} />
-                        </FormGroup>
                     </>
                 }
 

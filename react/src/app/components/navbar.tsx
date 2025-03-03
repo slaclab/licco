@@ -2,13 +2,12 @@
 
 import { Alignment, AnchorButton, Navbar } from '@blueprintjs/core';
 import { usePathname } from 'next/navigation';
-import { Anchor } from 'react-bootstrap';
+import { Anchor, NavbarBrand } from 'react-bootstrap';
 import styles from './navbar.module.css';
 import { createLink } from "@/app/utils/path_utils";
 
 const links = [
     { link: createLink('/'), label: 'Projects' },
-    { link: createLink('/ffts'), label: 'FFTs' },
 ];
 
 export function Navigation() {
@@ -20,16 +19,16 @@ export function Navigation() {
         return `${styles.btn} bp5-minimal`;
     }
 
-    
+
 
     return (
         <Navbar className={styles.navbar}>
             <Navbar.Group align={Alignment.LEFT}>
                 <Navbar.Heading>
-                    <Anchor href={createLink("/")} style={{ fontSize: "1.3rem", textDecoration: "none", fontWeight: "bold" }}>
+                    <NavbarBrand style={{ fontSize: "1.3rem", textDecoration: "none", fontWeight: "bold" }}>
                         {/* <img className={styles.logo} src="/assets/licco-logo.png" alt="Licco logo" /> */}
                         Machine Configuration Database
-                    </Anchor>
+                    </NavbarBrand>
                 </Navbar.Heading>
             </Navbar.Group>
             <Navbar.Group align={Alignment.LEFT}>

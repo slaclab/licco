@@ -35,20 +35,20 @@ _NOTIFICATION_TEMPLATES = {
     "project_approval_submitted": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
-        <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been submitted to approval.</p>
+        <p>The project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database has been submitted for approval.</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
     "project_approval_rejected": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
-        <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been rejected by {user_who_rejected}.<br/>Reason:</p>
+        <p>The project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database has been rejected by {user_who_rejected}.<br/>Reason:</p>
         <p>{reason}</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
     "project_approval_approved": {
         "html": inspect.cleandoc("""
         <p>Automated Message - Please Do Not Reply</p>
-        <p>Your project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database have been approved.</p>
+        <p>The project <a href="{project_url}">{project_name}</a> in the Machine Configuration Database has been approved.</p>
         <p>If you have any questions, please contact the database administrator at {admin_email}.</p>""")
     },
     "add_editor": {
@@ -113,7 +113,7 @@ class Notifier:
         subject = f"(MCD) You were selected as an approver for the project {project_name}"
         content = create_notification_msg("add_approver", "html",
                                           project_name=project_name,
-                                          project_url=self._create_project_url(project_id),
+                                          project_url=self._create_approval_url(project_id),
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_ids, subject, content)
 
@@ -121,7 +121,7 @@ class Notifier:
         subject = f"(MCD) You were added as a Super Approver for the project {project_name}"
         content = create_notification_msg("add_superapprover", "html",
                                           project_name=project_name,
-                                          project_url=self._create_project_url(project_id),
+                                          project_url=self._create_approval_url(project_id),
                                           admin_email=self.admin_email)
         self.send_email_notification(notified_user_ids, subject, content)
 
@@ -189,3 +189,6 @@ class Notifier:
 
     def _create_project_url(self, project_id: str):
         return f"{self.licco_service_url}/projects/{project_id}"
+    
+    def _create_approval_url(self, project_id: str):
+        return self._create_project_url(project_id) + '/approval/'
