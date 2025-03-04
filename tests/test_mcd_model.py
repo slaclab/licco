@@ -78,7 +78,7 @@ def destroy_db():
         client.close()
 
 
-class TestEmailSender(EmailSenderInterface):
+class _TestEmailSender(EmailSenderInterface):  # NOTE: _ is in front of class name for the coverage to work correctly
     """Testing email sender, so we can verify whether the emails were correctly assigned"""
     def __init__(self):
         self.emails_sent = []
@@ -159,14 +159,79 @@ def test_create_delete_project(db):
     assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
 
 
-@pytest.mark.skip(reason="TODO: implement this test case")
 def test_create_delete_project_admin(db):
     """test project creation and deletion for an admin user
     As opposed to the regular user, the admin user can delete a project and all its device values
     """
-    # TODO: check that project and all its fft fields (such as comments) are properly deleted when admin
-    # deletes the project
-    pass
+    # create project
+    project = mcd_model.create_new_project(db, 'test_create_delete_project_admin', "", "test_user")
+    assert project
+    prjid = project["_id"]
+
+    # add fft to the project
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    assert fft_id, "fft_id should exist"
+    fft_update = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    assert err == ""
+
+    # add discussion comment to the project
+    new_comment = {'_id': fft_id, 'author': 'test_author', 'discussion': 'my comment'}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, new_comment)
+    assert err == ""
+
+    # verify inserted ffts
+    project_ffts = mcd_model.get_project_ffts(db, prjid)
+    assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
+    assert len(project_ffts[fft_id]['discussion']) == 1, "there should be only 1 comment there"
+    comment = project_ffts[fft_id]['discussion'][0]
+    assert comment['author'] == 'test_user'
+    assert comment['comment'] == 'my comment'
+
+    # delete a project and verify that it doesn't exist
+    ok, err = mcd_model.delete_project(db, "admin_user", prjid)
+    assert err == "", "there should be no error when deleting a project"
+    project_after_delete = db["projects"].find_one({"_id": prjid})
+    assert project_after_delete is None, "project should not be found after an admin has deleted it"
+
+    # there should be no ffts for a deleted project
+    out = mcd_model.get_project_ffts(db, prjid)
+    assert len(out) == 0, "there should be no ffts for the deleted project"
+
+
+def test_clone_project(db):
+    project = mcd_model.create_new_project(db, 'test_clone_project', "original_description", "test_user")
+    assert project
+    prjid = project["_id"]
+
+    # add ffts to the project
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    assert fft_id, "fft_id should exist"
+    fft_update = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    assert err == ""
+    # add discussion comment to the project
+    new_comment = {'_id': fft_id, 'author': 'test_author', 'discussion': 'my comment'}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", prjid, new_comment)
+    assert err == ""
+
+    # clone the project and verify that all ffts (including discussion comments) are cloned
+    ok, err, cloned_project = mcd_model.clone_project(db, "test_user", prjid, "test_clone_project_cloned", "cloned_description", ['editor_user'], notifier=NoOpNotifier())
+    assert err == ""
+    assert len(str(cloned_project["_id"])) > 0
+    assert str(project['_id']) != str(cloned_project['_id']), "id should be different"
+    assert project['creation_time'] < cloned_project['creation_time']
+    assert project['description'] != cloned_project['description']
+
+    # in cloned project, there should be 1 fft with the same fields and same discussion comments
+    ffts = mcd_model.get_project_ffts(db, cloned_project["_id"])
+    assert len(ffts) == 1
+    fft = list(ffts.values())[0]
+    assert fft.get('nom_ang_y', None) is None, "nom_ang_y was not set and should be None"
+    assert fft['nom_ang_x'] == 1.23
+    assert fft['comments'] == 'some comment'
+    assert len(fft['discussion']) == 1
+    assert fft['discussion'][0]['comment'] == 'my comment'
 
 
 def test_project_filter_for_owner(db):
@@ -365,7 +430,7 @@ def test_project_approval_workflow(db):
     project = mcd_model.create_new_project(db, "test_approval_workflow", "", "test_user")
     prjid = project["_id"]
 
-    email_sender = TestEmailSender()
+    email_sender = _TestEmailSender()
     notifier = Notifier('', email_sender, 'admin@example.com')
     ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']}, notifier)
     assert err == ""
@@ -419,7 +484,6 @@ def test_project_approval_workflow(db):
     assert project['approvers'] == ["approve_user", "super_approver"]
     assert project.get('approved_by', []) == []
 
-    # TODO: once super_approver branch is merged in approve by super approver
     ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, "super_approver", notifier)
     assert err == ""
     assert ok
@@ -455,7 +519,7 @@ def test_project_rejection(db):
     project = mcd_model.create_new_project(db, "test_project_rejection_workflow", "", "test_user")
     prjid = project["_id"]
 
-    email_sender = TestEmailSender()
+    email_sender = _TestEmailSender()
     notifier = Notifier('', email_sender, 'admin@example.com')
     ok, err = mcd_model.update_project_details(db, "test_user", prjid, {'editors': ['editor_user', 'editor_user_2']},
                                                notifier)
