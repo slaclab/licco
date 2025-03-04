@@ -234,6 +234,47 @@ def test_clone_project(db):
     assert fft['discussion'][0]['comment'] == 'my comment'
 
 
+def test_diff_project(db):
+    """Diff two projects and check if changes are detected"""
+    a = mcd_model.create_new_project(db, "test_diff_project", "", "test_user")
+    b = mcd_model.create_new_project(db, "test_diff_project_2", "", "test_user")
+    assert a
+    assert b
+
+    # update a with some values
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    assert fft_id, "fft_id should exist"
+    fft_update_a = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    _, err, _ = mcd_model.update_fft_in_project(db, "test_user", a["_id"], fft_update_a)
+    assert err == ""
+
+    # update b with different values
+    fft_update_b = {'_id': fft_id, 'comments': 'some comment', 'nom_ang_y': 2.56, 'nom_ang_x': 0.51}
+    _, err, _ = mcd_model.update_fft_in_project(db, "test_user", b["_id"], fft_update_b)
+    assert err == ""
+
+    # check the diff algorithm
+    ok, err, diff = mcd_model.diff_project(db, a["_id"], b["_id"], "test_user")
+    assert err == ""
+    diff_elements = [d for d in diff if d['diff'] is True]
+    assert len(diff_elements) == 2, "there should only be 2 diff elements"
+
+    for el in diff_elements:
+        # key = <fftid>.<field_name>
+        if 'nom_ang_x' in el['key']:
+            a_val = el['my']
+            b_val = el['ot']
+            assert a_val == 1.23
+            assert b_val == 0.51
+        elif 'nom_ang_y' in el['key']:
+            a_val = el['my']
+            b_val = el['ot']
+            assert a_val is None
+            assert b_val == 2.56
+        else:
+            assert False, "unhandled diff element:\n{el}"
+
+
 def test_project_filter_for_owner(db):
     """Checking if the project filtering is correct for a specific non-admin project owner"""
     # create project that should appear in the result
