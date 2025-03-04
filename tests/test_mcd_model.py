@@ -53,10 +53,10 @@ def db():
     assert projects[0]['name'] == "LCLS Machine Configuration Database", "expected a master project"
 
     # roles used in tests
-    admin_users = {"app": "Licco", "name": "Admin", "players": ["uid:admin_user"], "privileges": ["read", "write", "edit", "approve", "admin"]}
-    approvers = {"app": "Licco", "name": "Approver", "players": ["uid:approve_user"], "privileges": ["read", "write", "edit", "approve"]}
-    super_approvers = {"app": "Licco", "name": "Super Approver", "players": ["uid:super_approver"], "privileges": ["read", "write", "edit", "approve", "super_approve"]}
-    editors = {"app": "Licco", "name": "Editor", "players": ["uid:editor_user", "uid:editor_user_2"], "privileges": ["read", "write", "edit"]}
+    admin_users = {"app": "Licco", "name": "admin", "players": ["uid:admin_user"], "privileges": ["read", "write", "edit", "approve", "admin"]}
+    approvers = {"app": "Licco", "name": "approver", "players": ["uid:approve_user"], "privileges": ["read", "write", "edit", "approve"]}
+    super_approvers = {"app": "Licco", "name": "superapprover", "players": ["uid:super_approver"], "privileges": ["read", "write", "edit", "approve", "super_approve"]}
+    editors = {"app": "Licco", "name": "editor", "players": ["uid:editor_user", "uid:editor_user_2"], "privileges": ["read", "write", "edit"]}
     res = db['roles'].insert_many([admin_users, approvers, super_approvers, editors])
     assert len(res.inserted_ids) == 4, "roles should be inserted"
 
@@ -400,15 +400,19 @@ def test_project_approval_workflow(db):
     assert project["submitter"] == "editor_user"
 
     # verify notifications
-    assert len(email_sender.emails_sent) == 2, "wrong number of notification emails sent"
+    assert len(email_sender.emails_sent) == 3, "wrong number of notification emails sent"
     approver_email = email_sender.emails_sent[0]
-    assert approver_email['to'] == ['approve_user', 'super_approver']
+    assert approver_email['to'] == ['approve_user']
     assert approver_email['subject'] == "(MCD) You were selected as an approver for the project test_approval_workflow"
 
     # this project was submitted for the first time, therefore an initial message should be sent to editors
     editor_email = email_sender.emails_sent[1]
     assert editor_email['to'] == ["editor_user", "editor_user_2", "test_user"]
     assert editor_email['subject'] == "(MCD) Project test_approval_workflow was submitted for approval"
+
+    super_approver_email = email_sender.emails_sent[2]
+    assert super_approver_email['to'] == ['super_approver']
+    assert super_approver_email['subject'] == "(MCD) You were added as a Super Approver for the project test_approval_workflow"
     email_sender.clear()
 
     project = mcd_model.get_project(db, prjid)
