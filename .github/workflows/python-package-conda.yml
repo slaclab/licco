@@ -31,4 +31,4 @@ jobs:
     - name: Test with pytest
       run: |
         conda install pytest
-        python3 -m pytest tests
+        conda run python -m pytest tests
