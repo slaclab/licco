@@ -519,7 +519,7 @@ Machine Config Database,,,
 
 FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
 AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
-AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
+AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
     with io.StringIO() as stream:
@@ -542,32 +542,32 @@ AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
         assert len(ffts) == 2, "There should be 2 ffts inserted into a project"
 
         expected_ffts = {
-            'COMBO': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
+            'COMBO': {'fc': 'AT1L0', 'fg':'', 'fg_desc': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
                       'state': 'Conceptual', 'comments': 'TEST',
                       'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
-            'GAS': {'fc': 'AT1L0', 'fg': 'GAS', 'tc_part_no': '3213221',
+            'GAS': {'fc': 'AT2L0', 'fg': '', 'fg_desc': 'GAS', 'tc_part_no': '3213221',
                     'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
                     'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
         }
 
-        # convert received ffts into a format that we can compare (fgs are unique)
+        # convert received ffts into a format that we can compare
         got_ffts = {}
         for _, f in ffts.items():
             fc = f['fft']['fc']
             fg = f['fft']['fg']
             f['fc'] = fc
             f['fg'] = fg
-            got_ffts[fg] = f
+            got_ffts[fc] = f
 
         # assert fft values
         for expected in expected_ffts.values():
-            fg = expected['fg']
-            assert fg in got_ffts, f"{expected['fg']} fg was not found in ffts: fft was not inserted correctly"
-            got = got_ffts[fg]
+            fc = expected['fc']
+            assert fc in got_ffts, f"{expected['fc']} fc was not found in ffts: fft was not inserted correctly"
+            got = got_ffts[fc]
 
             for field in mcd_model.KEYMAP.values():
                 # empty fields are by default set to '' (not None) even if they are numeric fields. Is this okay?
-                assert got.get(field, '') == expected.get(field, ''), f"{fg}: invalid field value '{field}'"
+                assert got.get(field, '') == expected.get(field, ''), f"{fc}: invalid field value '{field}'"
 
         assert len(got_ffts) == len(expected_ffts), "wrong number of fft fetched from db"
 
@@ -583,7 +583,7 @@ def test_export_csv_from_a_project(db):
     import_csv = """
 FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
 AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
-AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
+AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
     with io.StringIO() as stream:
@@ -600,7 +600,7 @@ AT1L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
     expected_export = """
 FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
 AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,1.21,0.21,2.213,1.231,,,,TEST
-AT1L0,GAS,3213221,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
+AT2L0,GAS,3213221,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
 """
 
     csv = csv.replace("\r\n", "\n")

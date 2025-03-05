@@ -201,6 +201,7 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBack
 }
 
 export interface deviceDetailFields {
+    fg_desc: string,
     tc_part_no: string;
     comments: string;
     stand: string,

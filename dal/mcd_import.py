@@ -36,22 +36,24 @@ def create_status_update(prj_name, status: ImportCounter):
 
 def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str, imp_log: Logger) -> Tuple[bool, str, ImportCounter]:
     import_counter = ImportCounter()
+    default_fg_name = ""
+
     with StringIO(csv_content) as fp:
         fp.seek(0)
         # Find the header row
         loc = 0
         req_headers = False
         for line in fp:
-            if 'FC' in line and 'Fungible' in line:
+            if 'FC' in line:
                 if not "," in line:
                     continue
                 req_headers = True
                 break
             loc = fp.tell()
 
-        # Ensure FC and FG (required headers) are present
+        # Ensure FC (required headers) is present
         if not req_headers:
-            error_msg = "Import Rejected: FC and Fungible headers are required in a CSV format for import."
+            error_msg = "Import Rejected: FC header is required in a CSV format for import."
             return False, error_msg, import_counter
 
         # Set reader at beginning of header row
@@ -98,28 +100,31 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
                 else:
                     # Count failed imports - excluding FC & FG
                     import_counter.fail += 1
-                    error_str = f"Import for fft {fc['FC']}-{fc['Fungible']} failed: {errormsg}"
+                    error_str = f"Import for FC {fc['FC']} failed: {errormsg}"
                     imp_log.info(error_str)
             else:
                 current_list.append(fc)
         fcs[nm] = current_list
 
+    """
+    NOTE: old import style-keeping in case we need to have importable FG's as ID's in future work
+
     fg2id = {
         fgs["name"]: fgs["_id"]
         for fgs in mcd_model.get_fgs(licco_db)
     }
-
     for nm, fc_list in fcs.items():
         for fc in fc_list:
             if fc["Fungible"] and fc["Fungible"] not in fg2id:
                 status, errormsg, newfg = mcd_model.create_new_fungible_token(licco_db, name=fc["Fungible"], description="Generated from " + nm)
                 fg2id[fc["Fungible"]] = newfg["_id"]
+    """
 
     ffts = {(fft["fc"]["name"], fft["fg"]["name"]): fft["_id"] for fft in mcd_model.get_ffts(licco_db)}
     for fc_list in fcs.values():
         for fc in fc_list:
-            if (fc["FC"], fc["Fungible"]) not in ffts:
-                status, errormsg, newfft = mcd_model.create_new_fft(licco_db, fc=fc["FC"], fg=fc["Fungible"])
+            if (fc["FC"], default_fg_name) not in ffts:
+                status, errormsg, newfft = mcd_model.create_new_fft(licco_db, fc=fc["FC"], fg=default_fg_name)
                 ffts[(newfft["fc"]["name"], newfft["fg"]["name"]
                 if "fg" in newfft else None)] = newfft["_id"]
 
@@ -127,8 +132,11 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     for nm, fc_list in fcs.items():
         for fc in fc_list:
             fcupload = {}
-            fcupload["_id"] = ffts[(fc["FC"], fc["Fungible"])]
+            fcupload["_id"] = ffts[(fc["FC"], default_fg_name)]
             for k, v in mcd_model.KEYMAP.items():
+                if k == "fg_desc" and "Fungible" in fc:
+                    fcupload[v] = fc["Fungible"]
+                    continue
                 if k not in fc:
                     continue
                 fcupload[v] = fc[k]
@@ -141,8 +149,8 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     if update_status:
         import_counter.add(update_status)
 
-    # number of recognized headers minus the id used for DB reference
-    import_counter.headers = len(fcuploads[0].keys())-1
+    # number of recognized headers minus the id used for DB reference, and the hidden fg
+    import_counter.headers = len(fcuploads[0].keys())-2
     status_str = create_status_update(prj_name, import_counter)
     imp_log.info(status_str)
     return True, "", import_counter
@@ -150,7 +158,9 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
 
 def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
     with StringIO() as stream:
-        writer = csv.DictWriter(stream, fieldnames=mcd_model.KEYMAP.keys())
+        # Write column names for data we provide for users to download
+        download_fields = [key for key in mcd_model.KEYMAP.keys() if key != "FG"]
+        writer = csv.DictWriter(stream, fieldnames=download_fields)
         writer.writeheader()
         prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
 
@@ -158,12 +168,13 @@ def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
             row_dict = {}
             fft_dict = prj_ffts[fft]
             for key in fft_dict:
-                # Check for keys we handle later, or dont want the end user downloading
+                # Check for keys we handle later, or don't want the end user downloading
                 if (key in ["fft", "discussion"]) or (key not in mcd_model.KEYMAP_REVERSE):
                     continue
                 row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict[key]
             for key in fft_dict["fft"]:
-                if key == "_id":
+                # Check for keys we don't want the end user downloading
+                if key in ["_id", "fg"]:
                     continue
                 row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
 

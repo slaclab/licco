@@ -633,7 +633,7 @@ export const SnapshotSelectionDialog: React.FC<{
 
 // sort project value changes according to the order in which device fields appear in the device table
 const sortProjectValueChanges = (changes: Record<string, any>) => {
-  let order: (keyof ProjectDeviceDetails)[] = ['fc', 'fg', 'tc_part_no', 'stand', 'state', 'comments', 'nom_loc_z', 'nom_loc_x', 'nom_loc_y', 'nom_ang_z', 'nom_ang_x', 'nom_ang_y', 'ray_trace'];
+  let order: (keyof ProjectDeviceDetails)[] = ['fc', 'fg', 'fg_desc', 'tc_part_no', 'stand', 'state', 'comments', 'nom_loc_z', 'nom_loc_x', 'nom_loc_y', 'nom_ang_z', 'nom_ang_x', 'nom_ang_y', 'ray_trace'];
   let sortOrder: Record<any, number> = {};
   for (let i = 0; i < order.length; i++) {
     sortOrder[order[i]] = i;
@@ -808,7 +808,7 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
     <Dialog isOpen={isOpen} onClose={onClose} title={`Comments for ${device.fc}-${device.fg}`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
 
-        {isUserAProjectEditor(project, user) || isUserAProjectApprover(project, user) ? 
+        {isUserAProjectEditor(project, user) || isUserAProjectApprover(project, user) ?
           <FormGroup label="Add a comment:">
             <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
 

@@ -29,7 +29,8 @@ McdProject: TypeAlias = Dict[str, any]
 KEYMAP = {
     # Column names defined in confluence
     "FC": "fc",
-    "Fungible": "fg",
+    "FG": "fg",
+    "Fungible": "fg_desc",
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
     "State": "state",
@@ -104,8 +105,8 @@ def initialize_collections(licco_db: MongoDb):
     master_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if not master_project:
         prj = create_new_project(licco_db, MASTER_PROJECT_NAME, "Master Project", '')
-        # initial status is set to development, so we can avoid displaying it on the frontend
-        licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "development"}})
+        # initial status is set to approved
+        licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "approved"}})
 
 
 def is_user_allowed_to_edit_project(userid: str, project: Dict[str, any]) -> bool:
@@ -301,9 +302,7 @@ def get_fgs(licco_db: MongoDb):
     fgs_used = set(licco_db["ffts"].distinct("fg"))
     for fg in fgs:
         fg["is_being_used"] = fg["_id"] in fgs_used
-
     return fgs
-
 
 def delete_fg(licco_db: MongoDb, fgid):
     """
@@ -477,12 +476,8 @@ def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc="Default", fgdesc="Default"
     Create a new functional component + fungible token based on their names
     If the FC or FG don't exist; these are created if the associated descriptions are also passed in.
     """
-    if empty_string_or_none(fc) or empty_string_or_none(fg):
-        err = "can't create a new fft"
-        if empty_string_or_none(fc):
-            err += ": FC can't be empty"
-        if empty_string_or_none(fg):
-            err += ": FG can't be empty"
+    if empty_string_or_none(fc):
+        err = "can't create a new fft: FC can't be empty"
         return False, err, None
 
     logger.info("Creating new fft with %s and %s", fc, fg)
@@ -540,6 +535,14 @@ def str2int(val):
 # We could perhaps use dataclasses here but we're not really storing the document as it is.
 # So, let's try explicit metadata for the fc attrs
 fcattrs = {
+    "fg_desc": {
+        "name": "fg_desc",
+        "type": "text",
+        "fromstr": str,
+        "label": "Fungible",
+        "desc": "Fungible_user",
+        "required": False
+    },
     "tc_part_no": {
         "name": "tc_part_no",
         "type": "text",
@@ -1199,29 +1202,28 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
 
     # send notifications (to the right approvers and project editors)
     old_approvers = prj.get("approvers", [])
-    diff = diff_arrays(old_approvers, approvers)
+    update_diff = diff_arrays(old_approvers, approvers)
+    superapp_diff = diff_arrays(super_approvers, approvers)
 
-    new_approvers = diff.new
-    if new_approvers:
-        # split out superapprovers, we email them later
-        new_regular_approvers = set(new_approvers) - set(super_approvers)
-        if new_regular_approvers:
-            notifier.add_project_approvers(list(new_regular_approvers), project_name, project_id)
-
-    deleted_approvers = diff.removed
+    deleted_approvers = update_diff.removed
     if deleted_approvers:
         notifier.remove_project_approvers(deleted_approvers, project_name, project_id)
 
     if prj["status"] == "development":
         # project was submitted for the first time
         project_editors = list(set([prj["owner"]] + editors))
+        # inform all editors, super approvers, and approvers
         notifier.project_submitted_for_approval(project_editors, project_name, project_id)
-        notifier.add_project_superapprovers(super_approvers, project_name, project_id)
+        notifier.add_project_superapprovers(list(superapp_diff.in_both), project_name, project_id)
+        notifier.add_project_approvers(list(superapp_diff.new), project_name, project_id)
 
     else:
         # project was edited
+        if update_diff.new:
+            # update any new approvers
+            notifier.add_project_approvers(list(update_diff.new), project_name, project_id)
         project_editors = list(set([prj["owner"]] + editors))
-        approvers_have_changed = new_approvers or deleted_approvers
+        approvers_have_changed = update_diff.new or deleted_approvers
         if approvers_have_changed:
             notifier.inform_editors_of_approver_change(project_editors, project_name, project_id, approvers)
 
@@ -1546,31 +1548,34 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     myfcs = get_project_attributes(licco_db, prjid)
     modification_time = created_project["creation_time"]
     all_inserts = []
-    for fftid, attrs in myfcs.items():
-        del attrs["fft"]
-        for attrname, attrval in attrs.items():
-            if attrname == "discussion":
-                # when cloning a project, we also want to clone all the comments
-                # discussion is returned as an array and therefore needs special handling
-                for comment in attrval:
+
+    # Check for valid content, and copy over present data
+    if myfcs.items():
+        for fftid, attrs in myfcs.items():
+            del attrs["fft"]
+            for attrname, attrval in attrs.items():
+                if attrname == "discussion":
+                    # when cloning a project, we also want to clone all the comments
+                    # discussion is returned as an array and therefore needs special handling
+                    for comment in attrval:
+                        all_inserts.append({
+                            "prj": created_project["_id"],
+                            "fft": ObjectId(fftid),
+                            "key": attrname,
+                            "val": comment['comment'],
+                            "user": comment['author'],
+                            "time": modification_time,
+                        })
+                else:
                     all_inserts.append({
                         "prj": created_project["_id"],
                         "fft": ObjectId(fftid),
                         "key": attrname,
-                        "val": comment['comment'],
-                        "user": comment['author'],
-                        "time": modification_time,
+                        "val": attrval,
+                        "user": userid,
+                        "time": modification_time
                     })
-            else:
-                all_inserts.append({
-                    "prj": created_project["_id"],
-                    "fft": ObjectId(fftid),
-                    "key": attrname,
-                    "val": attrval,
-                    "user": userid,
-                    "time": modification_time
-                })
-    licco_db["projects_history"].insert_many(all_inserts)
+        licco_db["projects_history"].insert_many(all_inserts)
 
     if editors:
         status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)

@@ -161,7 +161,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         return data.map(devices => {
             return (<tr key={devices.a.id}>
                 <td>{renderField(devices.a, devices.b, 'fc')}</td>
-                <td>{renderField(devices.a, devices.b, 'fg')}</td>
+                <td>{renderField(devices.a, devices.b, 'fg_desc')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
                 <td>{renderField(devices.a, devices.b, 'stand')}</td>
                 <td>{renderField(devices.a, devices.b, 'state')}</td>
@@ -189,7 +189,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
             return (
                 <tr key={d.id}>
                     <td>{d.fc}</td>
-                    <td>{d.fg}</td>
+                    <td>{d.fg_desc}</td>
                     <td>{d.tc_part_no}</td>
                     <td>{d.stand}</td>
                     <td>{d.state}</td>
