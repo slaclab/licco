@@ -349,7 +349,7 @@ def delete_fft(licco_db: MongoDb, fftid):
     return True, "", None
 
 
-def add_fft_comment(licco_db: MongoDb, user_id, project_id, fftid, comment):
+def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str, comment: str):
     if not comment:
         return False, f"Comment should not be empty", None
 
@@ -363,6 +363,9 @@ def add_fft_comment(licco_db: MongoDb, user_id, project_id, fftid, comment):
 
     if status == "submitted":
         allowed_to_comment |= user_id in project["approvers"]
+
+    if not allowed_to_comment:
+        allowed_to_comment |= user_id in get_users_with_privilege(licco_db, "admin")
 
     if not allowed_to_comment:
         return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
@@ -1068,7 +1071,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     # Make sure the timestamp on this server is monotonically increasing.
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
-        if modification_time < latest_changes[0]["time"]:
+        if modification_time < latest_changes[0]["time"].replace(tzinfo=pytz.utc):
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
 
     current_attrs = get_project_attributes(licco_db, ObjectId(destprjid))
@@ -1439,19 +1442,6 @@ def __flatten__(obj, prefix=""):
                 e, prefix + ".[" + str(c) + "]" if prefix else "[" + str(c) + "]"))
     else:
         ret.append((prefix, obj))
-    return ret
-
-
-def __replace_fc__(fcs):
-    """
-    Replace the object id for the FC with the FC's name for readibility
-    """
-    ret = {}
-    for k, v in fcs.items():
-        if isinstance(v, collections.abc.Mapping):
-            ret[v["name"]] = v
-        else:
-            ret[k] = v
     return ret
 
 
