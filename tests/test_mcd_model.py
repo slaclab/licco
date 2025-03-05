@@ -61,7 +61,7 @@ def db():
     assert len(res.inserted_ids) == 4, "roles should be inserted"
 
     # ffts used in tests
-    ffts = [{"fc": "TESTFC", "fg": "TESTFG"}]
+    ffts = [{"fc": "TESTFC", "fg": "TESTFG"}, {"fc": "TESTFC_2", "fg": "TESTFG_2"}]
     for f in ffts:
         ok, err, fft = mcd_model.create_new_fft(db, f['fc'], f['fg'])
         assert ok, f"fft '{f['fc']}' could not be inserted due to: {err}"
@@ -232,6 +232,81 @@ def test_clone_project(db):
     assert fft['comments'] == 'some comment'
     assert len(fft['discussion']) == 1
     assert fft['discussion'][0]['comment'] == 'my comment'
+
+
+def test_copy_fft_values(db):
+    """Copy ffts values from one project to another: only chosen fields should be copied over"""
+    a = mcd_model.create_new_project(db, "test_copy_fft_values_1", "", "test_user")
+    b = mcd_model.create_new_project(db, "test_copy_fft_values_2", "", "test_user")
+    assert a
+    assert b
+
+    # 'a' insert fft
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    assert fft_id, "fft_id should exist"
+    fft_update_a = {'_id': fft_id, 'comments': 'project_a comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20}
+    _, err, _ = mcd_model.update_fft_in_project(db, "test_user", a["_id"], fft_update_a)
+    assert err == ""
+
+    # 'b' should have no fft
+    b_ffts = mcd_model.get_project_ffts(db, b["_id"])
+    assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
+
+    ok, err, updated_ffts = mcd_model.copy_ffts_from_project(db, a["_id"], b["_id"], fft_id, ['nom_ang_x', 'comments'], "test_user")
+    assert err == ""
+    assert ok
+
+    # after copy there should be fft with the chosen fields within the 'b' project
+    b_ffts = mcd_model.get_project_ffts(db, b["_id"])
+    assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
+    print(b_ffts)
+    fft = list(b_ffts.values())[0]
+    assert fft['comments'] == 'project_a comment'
+    assert fft['nom_ang_x'] == 2.45
+    assert fft.get('nom_ang_y', None) is None, "nom_ang_y should not exist in copied fft, because it wasn't selected for copying"
+
+
+def test_change_of_fft_in_a_project(db):
+    """Change fft device in a project: device should be correctly changed"""
+    prj = mcd_model.create_new_project(db, "test_change_of_fft_in_a_project", "", "test_user")
+    assert prj
+    _, err = mcd_model.update_project_details(db, "test_user", prj["_id"], {"editors": ["editor_user"]}, notifier=NoOpNotifier())
+    assert err == ""
+
+    # create fft device with some data
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    assert fft_id, "fft_id should exist"
+    fft_update = {'_id': fft_id, 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20}
+    _, err, _ = mcd_model.update_fft_in_project(db, "test_user", prj["_id"], fft_update)
+
+    # create a discussion comment for previous fft
+    mcd_model.add_fft_comment(db, "test_user", prj["_id"], fft_id, "Initial discussion comment")
+
+    # change the device fc
+    new_fc = "TESTFC_2"
+    fc = db["fcs"].find_one({"name": new_fc})
+    update = {"_id": fft_id, "fc": str(fc["_id"]), "nom_ang_y": 1.40, "discussion": [{"author": "editor_user", "comment": "Editor comment"}]}
+    _, err, new_fftid = mcd_model.change_of_fft_in_project(db, "editor_user", prj["_id"], update)
+    assert err == ""
+    assert new_fftid != ""
+
+    # verify that changes were applied and 'fc' has changed
+    ffts = mcd_model.get_project_ffts(db, prj["_id"])
+    assert len(ffts) == 1, "there should be only 1 fft stored"
+    fft = list(ffts.values())[0]
+    assert fft["comments"] == "initial comment"
+    assert fft["nom_ang_x"] == 2.45
+    assert fft["nom_ang_y"] == 1.40, "nom_ang_y did not change but it should"
+
+    discussion = fft["discussion"]
+    assert len(discussion) == 2, "invalid number of discussion comments"
+
+    # comments are sorted in descending order
+    assert discussion[0]["author"] == "editor_user"
+    assert discussion[0]["comment"] == "Editor comment"
+
+    assert discussion[1]["author"] == "test_user"
+    assert discussion[1]["comment"] == "Initial discussion comment"
 
 
 def test_diff_project(db):
