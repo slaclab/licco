@@ -218,7 +218,7 @@ def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria = None):
 
     if not sort_criteria:
         # order in descending order
-        sort_criteria = [["start_time", -1]]
+        sort_criteria = [["creation_time", -1]]
 
     all_projects = list(licco_db["projects"].find(filter).sort(sort_criteria))
     return all_projects
@@ -375,7 +375,7 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
         'discussion': [{
         'author': user_id,
         'comment': comment,
-        'time': datetime.datetime.utcnow(),
+        'time': datetime.datetime.now(datetime.UTC),
     }]}
     status, errormsg, results = update_fft_in_project(licco_db, user_id, project_id, new_comment)
     return status, errormsg, results
@@ -416,7 +416,7 @@ def create_new_project(licco_db: MongoDb, name, description, userid):
     """
     newprjid = licco_db["projects"].insert_one({
         "name": name, "description": description, "owner": userid, "editors": [], "approvers": [],
-        "status": "development", "creation_time": datetime.datetime.utcnow()
+        "status": "development", "creation_time": datetime.datetime.now(datetime.UTC)
     }).inserted_id
     prj = licco_db["projects"].find_one({"_id": newprjid})
     return prj
@@ -774,7 +774,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         current_attrs = get_project_attributes(licco_db, ObjectId(prjid)).get(str(fftid), {})
 
     if not modification_time:
-        modification_time = datetime.datetime.now(pytz.utc)
+        modification_time = datetime.datetime.now(datetime.UTC)
     # Make sure the timestamp on this server is monotonically increasing.
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
@@ -1067,7 +1067,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     if not fft:
         return False, f"Cannot find FFT for {fftid}", None
 
-    modification_time = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+    modification_time = datetime.datetime.now(datetime.UTC)
     # Make sure the timestamp on this server is monotonically increasing.
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
@@ -1200,7 +1200,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
     # via usernames (and not emails that the user may provide)
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {
         "status": "submitted", "submitter": userid, "approvers": approver_usernames,
-        "submitted_time": datetime.datetime.utcnow()
+        "submitted_time": datetime.datetime.now(datetime.UTC)
     }})
 
     # send notifications (to the right approvers and project editors)
@@ -1264,6 +1264,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
 
     # user was allowed to approve, store the approvers for this project
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
+    # TODO: how should the switch db work like?
     store_project_approval(licco_db, prjid, prj["submitter"])
 
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
@@ -1280,7 +1281,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     if not master_project:
         return False, False, "Failed to find an approved project: this is a programming bug", {}
     licco_db["projects"].update_one({"_id": master_project["_id"]}, {"$set": {
-        "owner": "", "status": "approved", "approved_time": datetime.datetime.utcnow()
+        "owner": "", "status": "approved", "approved_time": datetime.datetime.now(datetime.UTC)
     }})
 
     # master project should not inherit old discussion comments from a submitted project, hence the removal flag
@@ -1302,7 +1303,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     # once the project is approved and fully merged in, it goes back into the development status
     # we have only 1 approved project at a time, to which the ffts are copied
     updated_project_data["status"] = "development"
-    updated_project_data['approved_time'] = datetime.datetime.utcnow()
+    updated_project_data['approved_time'] = datetime.datetime.now(datetime.UTC)
     # clean the project metadata as if it was freshly created project
     updated_project_data["editors"] = []
     updated_project_data["approvers"] = []
@@ -1338,7 +1339,7 @@ def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, noti
 
     # TODO: notes should probably be stored in a format (user: <username>, date: datetime, content: "")
     # so we can avoid rendering them when they are no longer relevant.
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     licco_datetime = now.strftime("%b/%d/%Y %H:%M:%S")
     formatted_reason = f"{userid} ({licco_datetime}):\n{reason}"
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {
@@ -1361,18 +1362,6 @@ def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, noti
     return True, "", updated_project
 
 
-def get_currently_approved_project_by_switch(licco_db: MongoDb):
-    """
-    Get the current approved project.
-    This is really the most recently approved project
-    """
-    prjs = list(licco_db["switch"].find({}).sort([("switch_time", -1)]).limit(1))
-    if prjs:
-        current_id = prjs[0]["prj"]
-        return licco_db["projects"].find_one({"_id": current_id})
-    return None
-
-
 def get_master_project(licco_db: MongoDb):
     """
     Get the current approved project by status
@@ -1387,7 +1376,7 @@ def store_project_approval(licco_db: MongoDb, prjid: str, project_submitter: str
     licco_db["switch"].insert_one({
         "prj": ObjectId(prjid),
         "requestor_uid": project_submitter,
-        "switch_time": datetime.datetime.utcnow()
+        "switch_time": datetime.datetime.now(datetime.UTC)
     })
 
 
@@ -1458,7 +1447,7 @@ def diff_project(licco_db: MongoDb, prjid, other_prjid, userid, approved=False):
         return False, f"Cannot find project for {other_prjid}", None
 
     # we don't want to diff comments, hence we filter them out by setting the timestamp far into the future
-    no_comment_timestamp = datetime.datetime.now() + datetime.timedelta(days=365 * 100)
+    no_comment_timestamp = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365 * 100)
     myfcs = get_project_attributes(licco_db, prjid, commentAfterTimestamp=no_comment_timestamp)
     thfcs = get_project_attributes(licco_db, other_prjid, commentAfterTimestamp=no_comment_timestamp)
 
@@ -1585,7 +1574,7 @@ def create_empty_project(licco_db: MongoDb, name, description, logged_in_user):
     Empty project with name project name ands description
     """
     prjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": logged_in_user, "editors": [
-    ], "status": "development", "creation_time": datetime.datetime.utcnow()}).inserted_id
+    ], "status": "development", "creation_time": datetime.datetime.now(datetime.UTC)}).inserted_id
     return get_project(licco_db, prjid)
 
 
@@ -1675,7 +1664,7 @@ def delete_project(licco_db: MongoDb, userid, project_id):
 
     allowed_to_delete = user_is_owner or user_is_admin
     if not allowed_to_delete:
-        return False, f"You don't have permission to delete the project {prj['name']}"
+        return False, f"You don't have permissions to delete the project {prj['name']}"
 
     if user_is_admin:
         # deletion for admin role means 'delete'
