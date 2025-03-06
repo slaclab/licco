@@ -259,7 +259,6 @@ def test_copy_fft_values(db):
     # after copy there should be fft with the chosen fields within the 'b' project
     b_ffts = mcd_model.get_project_ffts(db, b["_id"])
     assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
-    print(b_ffts)
     fft = list(b_ffts.values())[0]
     assert fft['comments'] == 'project_a comment'
     assert fft['nom_ang_x'] == 2.45
