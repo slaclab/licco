@@ -199,6 +199,28 @@ def test_create_delete_project_admin(db):
     assert len(out) == 0, "there should be no ffts for the deleted project"
 
 
+def test_delete_project_if_not_owner(db):
+    """Project should only be deleted by the owner or admin, other users should get an error"""
+    prj = mcd_model.create_new_project(db, "test_delete_project_if_not_owner", "", "test_user")
+    assert prj
+    _, err = mcd_model.update_project_details(db, "test_user", prj["_id"], {"editors": ["editor_user"]}, notifier=NoOpNotifier())
+    assert err == ""
+
+    expected_msg = "You don't have permissions to delete the project test_delete_project_if_not_owner"
+    _, err = mcd_model.delete_project(db, "random_user", prj["_id"])
+    assert expected_msg in err
+    verify_prj = mcd_model.get_project(db, prj["_id"])
+    assert verify_prj is not None, "project should exist"
+    assert verify_prj['status'] == 'development'
+
+    _, err = mcd_model.delete_project(db, "editor_user", prj["_id"])
+    assert expected_msg in err
+    assert mcd_model.get_project(db, prj["_id"]) is not None, "project should exist"
+    verify_prj = mcd_model.get_project(db, prj["_id"])
+    assert verify_prj is not None, "project should exist"
+    assert verify_prj['status'] == 'development'
+
+
 def test_clone_project(db):
     project = mcd_model.create_new_project(db, 'test_clone_project', "original_description", "test_user")
     assert project
@@ -357,8 +379,8 @@ def test_project_filter_for_owner(db):
 
     projects = mcd_model.get_all_projects(db, 'test_project_filter_owner')
     assert len(projects) == 2
-    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
-    assert projects[1]['name'] == "test_project_filter_for_owner"
+    assert projects[0]['name'] == "test_project_filter_for_owner"
+    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_editor(db):
@@ -382,8 +404,8 @@ def test_project_filter_for_editor(db):
     # get projects for the user that was chosen as editor
     projects = mcd_model.get_all_projects(db, 'test_project_filter_editor')
     assert len(projects) == 2
-    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
-    assert projects[1]['name'] == 'test_project_filter_for_editor'
+    assert projects[0]['name'] == 'test_project_filter_for_editor'
+    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_approver(db):
@@ -406,8 +428,8 @@ def test_project_filter_for_approver(db):
 
     projects = mcd_model.get_all_projects(db, 'test_project_filter_approver')
     assert len(projects) == 2
-    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
-    assert projects[1]['name'] == 'test_project_filter_for_approver'
+    assert projects[0]['name'] == 'test_project_filter_for_approver'
+    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_user_with_no_projects(db):
@@ -426,7 +448,7 @@ def test_project_filter_for_admins(db):
 
     projects = mcd_model.get_all_projects(db, 'admin_user')
     assert len(projects) >= 2, "there should be at least master project and 'test_project_filter_for_admins' in the db"
-    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[len(projects)-1]['name'] == mcd_model.MASTER_PROJECT_NAME
 
     project_names = [project['name'] for project in projects]
     assert "test_project_filter_for_admins" in project_names, "created file was not found"

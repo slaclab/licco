@@ -218,7 +218,7 @@ def get_all_projects(licco_db: MongoDb, logged_in_user, sort_criteria = None):
 
     if not sort_criteria:
         # order in descending order
-        sort_criteria = [["start_time", -1]]
+        sort_criteria = [["creation_time", -1]]
 
     all_projects = list(licco_db["projects"].find(filter).sort(sort_criteria))
     return all_projects
@@ -1362,18 +1362,6 @@ def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, noti
     return True, "", updated_project
 
 
-def get_currently_approved_project_by_switch(licco_db: MongoDb):
-    """
-    Get the current approved project.
-    This is really the most recently approved project
-    """
-    prjs = list(licco_db["switch"].find({}).sort([("switch_time", -1)]).limit(1))
-    if prjs:
-        current_id = prjs[0]["prj"]
-        return licco_db["projects"].find_one({"_id": current_id})
-    return None
-
-
 def get_master_project(licco_db: MongoDb):
     """
     Get the current approved project by status
@@ -1676,7 +1664,7 @@ def delete_project(licco_db: MongoDb, userid, project_id):
 
     allowed_to_delete = user_is_owner or user_is_admin
     if not allowed_to_delete:
-        return False, f"You don't have permission to delete the project {prj['name']}"
+        return False, f"You don't have permissions to delete the project {prj['name']}"
 
     if user_is_admin:
         # deletion for admin role means 'delete'
