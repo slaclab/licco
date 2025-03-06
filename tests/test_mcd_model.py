@@ -582,18 +582,20 @@ def test_project_approval_workflow(db):
 
     # verify notifications
     assert len(email_sender.emails_sent) == 3, "wrong number of notification emails sent"
-    approver_email = email_sender.emails_sent[0]
-    assert approver_email['to'] == ['approve_user']
-    assert approver_email['subject'] == "(MCD) You were selected as an approver for the project test_approval_workflow"
-
     # this project was submitted for the first time, therefore an initial message should be sent to editors
-    editor_email = email_sender.emails_sent[1]
+    editor_email = email_sender.emails_sent[0]
     assert editor_email['to'] == ["editor_user", "editor_user_2", "test_user"]
     assert editor_email['subject'] == "(MCD) Project test_approval_workflow was submitted for approval"
 
-    super_approver_email = email_sender.emails_sent[2]
+    # verify the super approver and regular notifications sent properly
+    super_approver_email = email_sender.emails_sent[1]
     assert super_approver_email['to'] == ['super_approver']
     assert super_approver_email['subject'] == "(MCD) You were added as a Super Approver for the project test_approval_workflow"
+
+    approver_email = email_sender.emails_sent[2]
+    assert approver_email['to'] == ['approve_user']
+    assert approver_email['subject'] == "(MCD) You were selected as an approver for the project test_approval_workflow"
+
     email_sender.clear()
 
     project = mcd_model.get_project(db, prjid)
