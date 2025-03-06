@@ -1,6 +1,6 @@
 name: Run Licco Tests using Conda
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build-linux:
@@ -33,4 +33,4 @@ jobs:
     - name: Test with pytest
       run: |
         conda install pytest
-        conda run python -m pytest tests
+        pytest tests
