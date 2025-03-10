@@ -58,22 +58,6 @@ def project_writable(wrapped_function):
     return function_interceptor
 
 
-@licco_ws_blueprint.route("/enums/<enumName>", methods=["GET"])
-@context.security.authentication_required
-def svc_get_enum_descriptions(enumName):
-    """
-    Get the labels and descriptions for the specified enum
-
-    TODO: this method is no longer used in the new GUI and could be removed
-    """
-    emumMappings = {
-        "FCState": FCState
-    }
-    descs = emumMappings[enumName].descriptions()
-    data = {k.value: v for k, v in descs.items()}
-    return json_response(data)
-
-
 @licco_ws_blueprint.route("/fcattrs/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_fcattrs():
@@ -465,8 +449,7 @@ def svc_remove_fft_comment(prjid, fftid):
     return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
-@licco_ws_blueprint.route(
-    "/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
 @context.security.authentication_required
 @project_writable
 def svc_sync_fc_from_approved_in_project(prjid, fftid):

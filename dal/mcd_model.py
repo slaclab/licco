@@ -825,7 +825,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
         for attrname, attrmeta in fcattrs.items():
-            if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate[attrname] is None)):
+            if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate.get(attrname, None) is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
     error_str = ""
@@ -874,13 +874,14 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         except ValueError:
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_counter.fail += 1
-            error_str = f"Wrong type - {attrname}, {attrval}"
+            error_str = f"Wrong type - {attrname}, ('{attrval}')"
             break
 
         # Check that values are within bounds
-        if not validate_insert_range(attrname, newval):
+        range_err = validate_insert_range(attrname, newval)
+        if range_err:
             insert_counter.fail += 1
-            error_str = f"Value out of range - {attrname}, {attrval}"
+            error_str = range_err
             break
 
         prevval = current_attrs.get(attrname, None)
@@ -910,32 +911,37 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     return True, error_str, insert_counter
 
 
-def validate_insert_range(attr, val):
+def validate_insert_range(attr, val) -> str:
     """
     Helper function to validate data prior to being saved in DB
+    Returns an error in case of invalid range
     """
     try:
         if attr == "ray_trace":
             if val == '' or val is None:
-                return True
-            return bool(int(val) >= 0)
+                return ""
+            if int(val) < 0:
+                return f"invalid range of ray_trace: expected range [0,1], but got {int(val)}"
+
         # empty strings valid for angles, catch before other verifications
         if "nom" in attr:
             if val == "":
-                return True
+                return ""
             if attr == "nom_loc_z":
-                if float(val) < 0 or float(val) > 2000:
-                    return False
+                v = float(val)
+                if v < 0 or v > 2000:
+                    return f"invalid range for {attr}: expected range [0,2000], but got {v}"
             if "nom_ang_" in attr:
-                if (float(val) > math.pi) or (float(val) < -(math.pi)):
-                    return False
+                v = float(val)
+                if (v < -(math.pi)) or (v > math.pi):
+                    return f"invalid range for {attr}: expected range [-{math.pi:.2f}, {math.pi:.2f}], but got {v}"
     except ValueError:
-        logger.debug(f'Value {val} wrong type for attribute {attr}.')
-        return False
+        return f"value {val} is a wrong type for the attribute {attr}"
     except TypeError:
-        logger.debug(f'Value {val} not verified for attribute {attr}.')
-        return False
-    return True
+        return f"value {val} is not verified for attribute {attr}"
+
+    # there is no error with this range
+    return ""
 
 
 def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:

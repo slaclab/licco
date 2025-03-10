@@ -115,12 +115,12 @@ def test_create_delete_project(db):
     """test project creation and deletion.
     A regular user can't delete a project, but only hide it via a status flag (status == hidden)
     """
-    project = create_test_project(db, "test_user", "test_create_delete_project", "my description", editors=['my_editor@example.com'])
+    project = create_test_project(db, "test_user", "test_create_delete_project", "my description", editors=['my_editor@example.com', 'another_username'])
     assert project, "project should be created"
     assert len(str(project["_id"])) > 0, "Project id should exist"
     assert project["description"] == "my description", "wrong description inserted"
-    assert len(project["editors"]) == 1, "there should be an editor there"
-    assert sorted(project["editors"]) == ["my_editor"]
+    assert len(project["editors"]) == 2, "there should be an editor there"
+    assert sorted(project["editors"]) == ["another_username", "my_editor"]
     assert len(project["approvers"]) == 0, "there should be no approvers"
 
     projects = list(db["projects"].find({"name": "test_create_delete_project"}))
@@ -458,6 +458,37 @@ def test_add_fft_to_project(db):
     inserted_fields = 2
     total_fields = default_fields + inserted_fields
     assert len(inserted_fft.keys()) == total_fields, "there should not be more fields than the one we have inserted"
+
+
+def test_invalid_fft_due_to_missing_attributes(db):
+    """If state is not development, certain attributes are expected. An error should be returned if we don't provide them"""
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_missing_attributes", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'state': 'Installed', 'nom_ang_x': 123}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "FFTs should remain in the Conceptual state while the dimensions are still being determined."
+
+
+def test_invalid_fft_due_to_invalid_value(db):
+    """If an fft value is outside its required range, an error should be returned"""
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_value", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_x': 123}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "invalid range for nom_ang_x: expected range [-3.14, 3.14], but got 123.0"
+    assert update_status.fail == 1
+
+
+def test_invalid_fft_due_to_invalid_type(db):
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_type", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_x': 'this is a string'}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "Wrong type - nom_ang_x, ('this is a string')"
+    assert update_status.fail == 1
 
 
 def test_remove_fft_from_project(db):
