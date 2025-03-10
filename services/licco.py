@@ -138,7 +138,7 @@ def svc_get_projects_for_user():
     Get the projects for a user
     """
     logged_in_user = context.security.get_current_user_id()
-    sort_criteria = json.loads(request.args.get("sort", '[["start_time", -1]]'))
+    sort_criteria = json.loads(request.args.get("sort", '[["creation_time", -1]]'))
     projects = mcd_model.get_all_projects(licco_db, logged_in_user, sort_criteria)
     edits = mcd_model.get_projects_recent_edit_time(licco_db)
     for project in projects:
@@ -182,16 +182,18 @@ def svc_create_project():
     """
     Create an empty project
     """
-    # TODO: I think this endpoint is no longer used in the new GUI. Projects are created via
-    # /clone endpoint (svc_clone_project).
     logged_in_user = context.security.get_current_user_id()
     prjdetails = request.json
     if not prjdetails.get("name", None):
         return json_error("Name cannot be empty")
     if not prjdetails.get("description", None):
         return json_error("Description cannot be empty")
+    # editors are optional
+    editors = prjdetails.get("editors", [])
 
-    prj = mcd_model.create_new_project(licco_db, prjdetails["name"], prjdetails["description"], logged_in_user)
+    err, prj = mcd_model.create_new_project(licco_db, logged_in_user, prjdetails["name"], prjdetails["description"], editors, context.notifier)
+    if err:
+        return json_error(err)
     return json_response(prj)
 
 

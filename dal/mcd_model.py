@@ -15,7 +15,7 @@ from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from pymongo.synchronous.database import Database
 
-from notifications.notifier import Notifier
+from notifications.notifier import Notifier, NoOpNotifier
 from .projdetails import get_project_attributes, get_all_project_changes
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
@@ -104,9 +104,12 @@ def initialize_collections(licco_db: MongoDb):
     # add a master project if it doesn't exist already
     master_project = licco_db["projects"].find_one({"name": MASTER_PROJECT_NAME})
     if not master_project:
-        prj = create_new_project(licco_db, MASTER_PROJECT_NAME, "Master Project", '')
-        # initial status is set to approved
-        licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "approved"}})
+        err, prj = create_new_project(licco_db, '', MASTER_PROJECT_NAME, "Master Project", [], NoOpNotifier())
+        if err:
+            print(f"Failed to create a new master project: {err}")
+        else:
+            # initial status is set to approved
+            licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "approved"}})
 
 
 def is_user_allowed_to_edit_project(userid: str, project: Dict[str, any]) -> bool:
@@ -410,16 +413,52 @@ def delete_fft_comment(licco_db: MongoDb, user_id, comment_id):
     return True, ""
 
 
-def create_new_project(licco_db: MongoDb, name, description, userid):
+def create_new_project(licco_db: MongoDb, userid: str, name: str, description: str, editors: List[str], notifier: Notifier) -> Tuple[str, Dict[str, any]]:
     """
     Create a new project belonging to the specified user.
     """
+    if name == "":
+        return "Project name could not be empty", {}
+
+    if editors:
+        # before creating a project we have to validate editors, so that we don't create a project
+        # but fail in the update step
+        err = validate_editors(licco_db, editors, notifier)
+        if err:
+            return f"Invalid project editors: {err}", {}
+
     newprjid = licco_db["projects"].insert_one({
         "name": name, "description": description, "owner": userid, "editors": [], "approvers": [],
         "status": "development", "creation_time": datetime.datetime.now(datetime.UTC)
     }).inserted_id
-    prj = licco_db["projects"].find_one({"_id": newprjid})
-    return prj
+
+    if editors:
+        ok, err = update_project_details(licco_db, userid, newprjid, {'editors': editors}, notifier)
+        if err:
+            return err, {}
+
+    prj = get_project(licco_db, newprjid)
+    return "", prj
+
+
+def validate_editors(licco_db: MongoDb, editors: List[str], notifier: Notifier) -> str:
+    if not isinstance(editors, list):
+        return f"Editors field should be an array"
+
+    # anyone with a SLAC account could be an editor
+    invalid_editor_emails = []
+    super_approvers = get_users_with_privilege(licco_db, "superapprover")
+    for user in editors:
+        if user in super_approvers:
+            return f"User '{user}' is a super approver and can't be an editor"
+
+        if not notifier.validate_email(user):
+            invalid_editor_emails.append(user)
+
+    if invalid_editor_emails:
+        invalid_users = ", ".join(invalid_editor_emails)
+        return f"Invalid editor emails/accounts: [{invalid_users}]"
+    return ""
 
 
 def create_new_functional_component(licco_db: MongoDb, name, description):
@@ -1497,31 +1536,9 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    create_new_blank_project = prjid == "NewBlankProjectClone"
-    if not create_new_blank_project:
-        # we are copying an existing project, check if this project actually exists before creating a new project
-        prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-        if not prj:
-            return False, f"Cannot find project for {prjid}", None
-
-    created_project = create_new_project(licco_db, name, description, userid)
-    if not created_project:
-        # this should never happen
-        return False, "Failed to create a new project", None
-
-    if create_new_blank_project:
-        if editors:  # update editors if any
-            status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)
-            if not status:
-                logger.error(f"Failed to update editors of a new project {prjid}: {err}")
-                # FUTURE: the project was created but editor update failed; we still have to return success
-                # as the project was created (it's just that the editors were not stored). This issue will
-                # be present until we wrap all our db calls into a transactions
-                #
-                # This code should be refactored in the future.
-                return True, "", created_project
-        created_project = get_project(licco_db, created_project["_id"])
-        return True, "", created_project
+    err, created_project = create_new_project(licco_db, userid, name, description, [], notifier)
+    if err:
+        return False, f"Failed to create a new project: {err}", None
 
     # we are cloning an existing project
     myfcs = get_project_attributes(licco_db, prjid)
@@ -1569,15 +1586,6 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     return True, "", created_project
 
 
-def create_empty_project(licco_db: MongoDb, name, description, logged_in_user):
-    """
-    Empty project with name project name ands description
-    """
-    prjid = licco_db["projects"].insert_one({"name": name, "description": description, "owner": logged_in_user, "editors": [
-    ], "status": "development", "creation_time": datetime.datetime.now(datetime.UTC)}).inserted_id
-    return get_project(licco_db, prjid)
-
-
 def update_project_details(licco_db: MongoDb, userid: str, prjid: str, user_changes: Dict[str, any], notifier: Notifier) -> Tuple[bool, str]:
     """
     Just update the project name ands description
@@ -1603,28 +1611,16 @@ def update_project_details(licco_db: MongoDb, userid: str, prjid: str, user_chan
                 return False, f"Description cannot be empty"
             update["description"] = val
         elif key == "editors":
-            if not isinstance(val, list):
-                return False, f"Editors field should be an array"
-
-            # anyone with a SLAC account could be an editor
-            invalid_editor_emails = []
-            super_approvers = get_users_with_privilege(licco_db, "superapprover")
-            for user in val:
-                if user in super_approvers:
-                    return False, f"User '{user}' is a super approver and can't be an editor"
-
-                if not notifier.validate_email(user):
-                    invalid_editor_emails.append(user)
-
-            if invalid_editor_emails:
-                invalid_users = ", ".join(invalid_editor_emails)
-                return False, f"Invalid editor emails/accounts: [{invalid_users}]"
+            editors = val
+            err = validate_editors(licco_db, editors, notifier)
+            if err:
+                return False, err
 
             # all users are valid (or editor's list is empty)
             # For now we only store the usernames in the editors list, since permission
             # comparison is done by comparing usernames as well. This behavior might change
             # in the future to accomodate any email (even from outside of organization)
-            updated_editors = _emails_to_usernames(val)
+            updated_editors = _emails_to_usernames(editors)
             update["editors"] = updated_editors
         else:
             return False, f"Invalid update field '{key}'"
