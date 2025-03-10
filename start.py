@@ -65,6 +65,8 @@ else:
 
 root = logging.getLogger()
 root.setLevel(logging.getLevelName(os.environ.get("LOG_LEVEL", "INFO")))
+# filter out server heartbeat logs
+logging.getLogger('pymongo.topology').setLevel(level=logging.WARNING)
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
