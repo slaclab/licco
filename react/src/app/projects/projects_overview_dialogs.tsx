@@ -54,7 +54,7 @@ export const CreateNewProjectDialog: React.FC<{ isOpen: boolean, approvedProject
 
         let projectUrl = ""
         if (selectedTemplate == DEFAULT_TEMPLATE) {
-            projectUrl = "/ws/projects/NewBlankProjectClone/clone/";
+            projectUrl = "/ws/projects/";
         } else {
             let selectedProject = approvedProjects.filter(p => p.name === selectedTemplate)[0];
             let projectId = selectedProject._id;

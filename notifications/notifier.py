@@ -1,7 +1,7 @@
 import inspect
 import logging
 from typing import List, Literal, Optional
-from notifications.email_sender import EmailSettings, EmailSender, EmailSenderInterface
+from notifications.email_sender import EmailSettings, EmailSender, EmailSenderInterface, NoOpEmailSender
 
 logger = logging.getLogger(__name__)
 
@@ -192,3 +192,17 @@ class Notifier:
     
     def _create_approval_url(self, project_id: str):
         return self._create_project_url(project_id) + '/approval/'
+
+
+class NoOpNotifier(Notifier):
+    def __init__(self):
+        super().__init__('', NoOpEmailSender(), "admin@example.com")
+        pass
+
+    def validate_email(self, username_or_email: str):
+        return True
+
+    def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
+                                plain_text_msg: str = ""):
+        # do nothing
+        pass

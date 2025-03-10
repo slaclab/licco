@@ -229,3 +229,9 @@ class EmailSender(EmailSenderInterface):
                 # user that something went wrong with notifications. Therefore we can only log
                 # an error and hope that a system administrator notices an issue
                 logger.error(f"Failed to get an email for user {name}: {str(e)}")
+
+
+class NoOpEmailSender(EmailSenderInterface):
+    def __init__(self):
+        pass
+

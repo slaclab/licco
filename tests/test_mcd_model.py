@@ -13,7 +13,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from dal import mcd_model, db_utils, mcd_import
 from dal.mcd_model import initialize_collections
 from notifications.email_sender import EmailSenderInterface
-from notifications.notifier import Notifier
+from notifications.notifier import Notifier, NoOpNotifier
 
 _TEST_DB_NAME = "_licco_test_db_"
 
@@ -97,36 +97,15 @@ class _TestEmailSender(EmailSenderInterface):  # NOTE: _ is in front of class na
         self.emails_sent = []
 
 
-class NoOpEmailSender(EmailSenderInterface):
-    def __init__(self):
-        pass
-
-class NoOpNotifier(Notifier):
-    def __init__(self):
-        super().__init__('', NoOpEmailSender(), "admin@example.com")
-        pass
-
-    def validate_email(self, username_or_email: str):
-        return True
-
-    def send_email_notification(self, receivers: List[str], subject: str, html_msg: str,
-                                plain_text_msg: str = ""):
-        # do nothing
-        pass
-
 # -------- helper functions --------
 
-def create_project(db, project_name, owner, editors: List[str] = None, approvers: List[str] = None) -> Dict[str, any]:
+def create_test_project(db, owner, project_name, description, editors: List[str] = None) -> Dict[str, any]:
     if not editors:
         editors = []
-    if not approvers:
-        approvers = []
 
-    # TODO: create project should probably accept editors and approvers as well, we would have to verify them though
-    project = mcd_model.create_new_project(db, project_name, "", owner)
-    if editors or approvers:
-        mcd_model.update_project_details(db, owner, project['_id'], {'editors': editors, 'approvers': approvers}, NoOpNotifier())
-    assert project, "project should be created but it was not"
+    err, project = mcd_model.create_new_project(db, owner, project_name, description, editors, NoOpNotifier())
+    assert err == ""
+    assert project, f"project {project_name} should be created but it was not"
     return project
 
 
@@ -136,12 +115,13 @@ def test_create_delete_project(db):
     """test project creation and deletion.
     A regular user can't delete a project, but only hide it via a status flag (status == hidden)
     """
-    project = mcd_model.create_new_project(db, "test_create_delete_project", "my description", "test_user")
+    project = create_test_project(db, "test_user", "test_create_delete_project", "my description", editors=['my_editor@example.com', 'another_username'])
     assert project, "project should be created"
     assert len(str(project["_id"])) > 0, "Project id should exist"
     assert project["description"] == "my description", "wrong description inserted"
-    assert len(project["editors"]) == 0, "no editors should be there"
-    assert len(project["approvers"]) == 0, "no approvers should be there"
+    assert len(project["editors"]) == 2, "there should be an editor there"
+    assert sorted(project["editors"]) == ["another_username", "my_editor"]
+    assert len(project["approvers"]) == 0, "there should be no approvers"
 
     projects = list(db["projects"].find({"name": "test_create_delete_project"}))
     assert len(projects) == 1, "Only one such project should be found"
@@ -164,8 +144,7 @@ def test_create_delete_project_admin(db):
     As opposed to the regular user, the admin user can delete a project and all its device values
     """
     # create project
-    project = mcd_model.create_new_project(db, 'test_create_delete_project_admin', "", "test_user")
-    assert project
+    project = create_test_project(db, "test_user", "test_create_delete_project_admin", "", [])
     prjid = project["_id"]
 
     # add fft to the project
@@ -201,8 +180,7 @@ def test_create_delete_project_admin(db):
 
 def test_delete_project_if_not_owner(db):
     """Project should only be deleted by the owner or admin, other users should get an error"""
-    prj = mcd_model.create_new_project(db, "test_delete_project_if_not_owner", "", "test_user")
-    assert prj
+    prj = create_test_project(db, "test_user", "test_delete_project_if_not_owner", "", [])
     _, err = mcd_model.update_project_details(db, "test_user", prj["_id"], {"editors": ["editor_user"]}, notifier=NoOpNotifier())
     assert err == ""
 
@@ -222,8 +200,7 @@ def test_delete_project_if_not_owner(db):
 
 
 def test_clone_project(db):
-    project = mcd_model.create_new_project(db, 'test_clone_project', "original_description", "test_user")
-    assert project
+    project = create_test_project(db, "test_user", 'test_clone_project', "original_description")
     prjid = project["_id"]
 
     # add ffts to the project
@@ -258,8 +235,8 @@ def test_clone_project(db):
 
 def test_copy_fft_values(db):
     """Copy ffts values from one project to another: only chosen fields should be copied over"""
-    a = mcd_model.create_new_project(db, "test_copy_fft_values_1", "", "test_user")
-    b = mcd_model.create_new_project(db, "test_copy_fft_values_2", "", "test_user")
+    a = create_test_project(db, "test_user", "test_copy_fft_values_1", "")
+    b = create_test_project(db, "test_user", "test_copy_fft_values_2", "")
     assert a
     assert b
 
@@ -289,8 +266,7 @@ def test_copy_fft_values(db):
 
 def test_change_of_fft_in_a_project(db):
     """Change fft device in a project: device should be correctly changed"""
-    prj = mcd_model.create_new_project(db, "test_change_of_fft_in_a_project", "", "test_user")
-    assert prj
+    prj = create_test_project(db, "test_user", "test_change_of_fft_in_a_project", "")
     _, err = mcd_model.update_project_details(db, "test_user", prj["_id"], {"editors": ["editor_user"]}, notifier=NoOpNotifier())
     assert err == ""
 
@@ -332,10 +308,8 @@ def test_change_of_fft_in_a_project(db):
 
 def test_diff_project(db):
     """Diff two projects and check if changes are detected"""
-    a = mcd_model.create_new_project(db, "test_diff_project", "", "test_user")
-    b = mcd_model.create_new_project(db, "test_diff_project_2", "", "test_user")
-    assert a
-    assert b
+    a = create_test_project(db, "test_user", "test_diff_project", "")
+    b = create_test_project(db, "test_user", "test_diff_project_2", "")
 
     # update a with some values
     fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
@@ -374,7 +348,7 @@ def test_diff_project(db):
 def test_project_filter_for_owner(db):
     """Checking if the project filtering is correct for a specific non-admin project owner"""
     # create project that should appear in the result
-    project = mcd_model.create_new_project(db, "test_project_filter_for_owner", "", "test_project_filter_owner")
+    project = create_test_project(db, "test_project_filter_owner", "test_project_filter_for_owner", "")
     assert project
 
     projects = mcd_model.get_all_projects(db, 'test_project_filter_owner')
@@ -386,11 +360,12 @@ def test_project_filter_for_owner(db):
 def test_project_filter_for_editor(db):
     """Check if project editor gets back this project"""
     # create irrelevant project that should not appear after applying a filter
-    project = mcd_model.create_new_project(db, "test_project_filter_for_editor_irrelevant_project", "", "test_project_filter_owner_2")
+    project = create_test_project(db, "test_project_filter_owner_2",
+                                           "test_project_filter_for_editor_irrelevant_project", "")
     assert project
 
     # create project that should appear in the result
-    project = mcd_model.create_new_project(db, "test_project_filter_for_editor", "", "test_project_filter_owner_2")
+    project = create_test_project(db, "test_project_filter_owner_2", "test_project_filter_for_editor", "")
     assert project
     ok, err = mcd_model.update_project_details(db, "test_project_filter_owner_2", project["_id"],
                                                {'editors': [
@@ -410,11 +385,11 @@ def test_project_filter_for_editor(db):
 
 def test_project_filter_for_approver(db):
     # create irrelevant project that should not appear after applying a filter
-    project = mcd_model.create_new_project(db, "test_project_filter_for_approver_irrelevant_project", "", "test_project_filter_owner_3")
+    project = create_test_project(db, "test_project_filter_owner_3",
+                                           "test_project_filter_for_approver_irrelevant_project", "")
     assert project
-
     # create project that should appear in result
-    project = mcd_model.create_new_project(db, "test_project_filter_for_approver", "", "test_project_filter_owner_3")
+    project = create_test_project(db, "test_project_filter_owner_3", "test_project_filter_for_approver", "")
     assert project
     result = db['projects'].update_one({'_id': ObjectId(project["_id"])}, {"$set": {
         'editors': [],
@@ -433,7 +408,8 @@ def test_project_filter_for_approver(db):
 
 
 def test_project_filter_for_user_with_no_projects(db):
-    project = mcd_model.create_new_project(db, "test_project_filter_for_user_with_no_projects", "", "test_project_filter_owner_4")
+    project = create_test_project(db, "test_project_filter_owner_4",
+                                           "test_project_filter_for_user_with_no_projects", "")
     assert project
     # user with no projects should find only a master project
     projects = mcd_model.get_all_projects(db, 'test_project_filter_user_with_no_projects')
@@ -443,8 +419,7 @@ def test_project_filter_for_user_with_no_projects(db):
 
 def test_project_filter_for_admins(db):
     # admins should see every project
-    project = mcd_model.create_new_project(db, "test_project_filter_for_admins", "", "test_project_filter_owner")
-    assert project
+    project = create_test_project(db, "test_project_filter_owner", "test_project_filter_for_admins", "")
 
     projects = mcd_model.get_all_projects(db, 'admin_user')
     assert len(projects) >= 2, "there should be at least master project and 'test_project_filter_for_admins' in the db"
@@ -456,7 +431,7 @@ def test_project_filter_for_admins(db):
 
 def test_add_fft_to_project(db):
     # TODO: check what happens if non editor is trying to update fft: we should return an error
-    project = mcd_model.create_new_project(db, "test_add_fft_to_project", "", "test_user")
+    project = create_test_project(db, "test_user", "test_add_fft_to_project", "")
 
     # get ffts for project, there should be none
     project_ffts = mcd_model.get_project_ffts(db, project["_id"])
@@ -485,8 +460,39 @@ def test_add_fft_to_project(db):
     assert len(inserted_fft.keys()) == total_fields, "there should not be more fields than the one we have inserted"
 
 
+def test_invalid_fft_due_to_missing_attributes(db):
+    """If state is not development, certain attributes are expected. An error should be returned if we don't provide them"""
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_missing_attributes", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'state': 'Installed', 'nom_ang_x': 123}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "FFTs should remain in the Conceptual state while the dimensions are still being determined."
+
+
+def test_invalid_fft_due_to_invalid_value(db):
+    """If an fft value is outside its required range, an error should be returned"""
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_value", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_x': 123}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "invalid range for nom_ang_x: expected range [-3.14, 3.14], but got 123.0"
+    assert update_status.fail == 1
+
+
+def test_invalid_fft_due_to_invalid_type(db):
+    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_type", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_x': 'this is a string'}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == "Wrong type - nom_ang_x, ('this is a string')"
+    assert update_status.fail == 1
+
+
 def test_remove_fft_from_project(db):
-    project = mcd_model.create_new_project(db, "test_remove_fft_from_project", "", "test_user")
+    project = create_test_project(db, "test_user", "test_remove_fft_from_project", "")
     prjid = str(project["_id"])
 
     # insert new fft
@@ -511,7 +517,7 @@ def test_remove_fft_from_project(db):
 
 
 def test_get_project_ffts(db):
-    project = mcd_model.create_new_project(db, "test_get_project_ffts", "", "test_user")
+    project = create_test_project(db, "test_user", "test_get_project_ffts", "")
     prjid = str(project["_id"])
 
     # insert new fft
@@ -539,7 +545,7 @@ def test_get_project_ffts(db):
 
 def test_get_project_ffts_after_timestamp(db):
     """Only fetch the ffts inserted after a certain timestamp"""
-    project = mcd_model.create_new_project(db, "test_get_project_ffts_after_timestamp", "", "test_user")
+    project = create_test_project(db, "test_user", "test_get_project_ffts_after_timestamp", "")
     prjid = str(project["_id"])
 
     # insert new fft
@@ -564,7 +570,7 @@ def test_get_project_ffts_after_timestamp(db):
 
 def test_project_approval_workflow(db):
     # testing happy path
-    project = mcd_model.create_new_project(db, "test_approval_workflow", "", "test_user")
+    project = create_test_project(db, "test_user", "test_approval_workflow", "")
     prjid = project["_id"]
 
     email_sender = _TestEmailSender()
@@ -655,7 +661,7 @@ def test_project_approval_workflow(db):
 
 
 def test_project_rejection(db):
-    project = mcd_model.create_new_project(db, "test_project_rejection_workflow", "", "test_user")
+    project = create_test_project(db, "test_user", "test_project_rejection_workflow", "")
     prjid = project["_id"]
 
     email_sender = _TestEmailSender()
@@ -710,7 +716,7 @@ def create_string_logger(stream: io.StringIO) -> logging.Logger:
 
 
 def test_import_csv_into_a_project(db):
-    project = mcd_model.create_new_project(db, "test_import_csv_into_a_project", "", "test_user")
+    project = create_test_project(db, "test_user", "test_import_csv_into_a_project", "")
     prjid = project["_id"]
 
     ffts = mcd_model.get_project_ffts(db, prjid)
@@ -776,7 +782,7 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 
 
 def test_export_csv_from_a_project(db):
-    project = mcd_model.create_new_project(db, "test_export_from_a_project", "", "test_user")
+    project = create_test_project(db, "test_user", "test_export_from_a_project", "")
     prjid = project["_id"]
 
     ffts = mcd_model.get_project_ffts(db, prjid)
