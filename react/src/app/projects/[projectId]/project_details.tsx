@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
@@ -84,6 +84,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
+    const [keymap, setKeymap] = useState(Object);
 
 
     // dialogs open state
@@ -158,17 +159,19 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
 
         const loadInitialData = async () => {
-            const [data, fftData, whoami] = await Promise.all([
+            const [data, fftData, keymapData, whoami] = await Promise.all([
                 fetchProjectInfo(projectId),
                 fetchProjectFfts(projectId, showAllEntries, asOfTimestamp),
+                fetchKeymap(),
                 whoAmI(),
             ])
-            return { data, fftData, whoami };
+            return { data, fftData, keymapData, whoami };
         }
 
         loadInitialData().then(d => {
             setProject(d.data);
             setFftData(d.fftData);
+            setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
         }).catch((e: JsonErrorMsg) => {
             console.error("Failed to load required project data", e);
@@ -481,7 +484,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} project={project} device={device} availableFftStates={availableFftStates}
+                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device} availableFftStates={availableFftStates}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -629,6 +632,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             {project ?
                 <ProjectHistoryDialog
                     currentProject={project}
+                    keymap={keymap}
                     isOpen={isProjectHistoryDialogOpen}
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
                     displayProjectSince={(time) => {
@@ -772,10 +776,11 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
 
 const DeviceDataEditTableRow: React.FC<{
     project?: ProjectInfo,
+    keymap: object,
     device: ProjectDeviceDetails,
     availableFftStates: DeviceState[],
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
-}> = ({ project, device, availableFftStates, onEditDone }) => {
+}> = ({ project, keymap, device, availableFftStates, onEditDone }) => {
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -957,6 +962,7 @@ const DeviceDataEditTableRow: React.FC<{
                 <ProjectEditConfirmDialog
                     isOpen={confirmDialogOpen}
                     valueChanges={valueChanges}
+                    keymap={keymap}
                     project={project}
                     device={device}
                     onClose={() => {

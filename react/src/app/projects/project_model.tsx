@@ -74,6 +74,14 @@ export async function fetchProjectInfo(projectId: string): Promise<ProjectInfo> 
         });
 }
 
+export async function fetchKeymap(): Promise<object> {
+    return Fetch.get<object>(`/ws/backendkeymap/`)
+        .then((response) => {
+            return response;
+        });
+}
+
+
 interface UsersByRole {
     all?: string[];
     editors?: string[];

@@ -356,7 +356,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
   )
 };
 
-export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, currentProject, onClose, displayProjectSince }) => {
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: object, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, keymap, currentProject, onClose, displayProjectSince }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogErr, setDialogErr] = useState('');
   const [data, setData] = useState<ProjectHistoryChange[]>([])
@@ -401,7 +401,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
         <thead>
           <tr>
             <th></th>
-            <th>FFT</th>
+            <th>FC</th>
             <th>Attribute</th>
             <th>Value</th>
             <th className="text-nowrap">Changed By</th>
@@ -421,8 +421,8 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
                     onClick={(e) => displayProjectSince(change.time)}
                   /> : null}
                 </td>
-                <td>{change.fc}-{change.fg}</td>
-                <td>{change.key}</td>
+                <td>{change.fc}</td>
+                <td>{keymap[change.key]}</td>
                 <td>{change.val}</td>
                 <td>{change.user}</td>
                 <td>{formatToLiccoDateTime(change.time)}</td>
@@ -649,7 +649,7 @@ const sortProjectValueChanges = (changes: Record<string, any>) => {
 }
 
 // dialog for confirming the changed values and adding comments to value change
-export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, valueChanges, onClose, onSubmit }) => {
+export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: object, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, keymap, project, device, valueChanges, onClose, onSubmit }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');
@@ -668,7 +668,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
     const d = device as any;
     return (
       <>
-        <b>{device.fc}-{device.fg} Changes:</b>
+        <b>{device.fc} Changes:</b>
         <table className="table table-sm table-bordered table-striped">
           <thead>
             <tr>
@@ -682,7 +682,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
             {values.map((entry) => {
               return (
                 <tr key={entry[0]}>
-                  <td>{entry[0]}</td>
+                  <td>{keymap[entry[0]]}</td>
                   <td>{d[entry[0]]}</td>
                   <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
                   <td>{entry[1]}</td>
@@ -737,7 +737,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, project: Proj
   }, [device.discussion]);
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={`Save Changes for ${device.fc}-${device.fg}?`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Save Changes for ${device.fc}?`} autoFocus={true} style={{ width: "75ch", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
         {projectChangeTable}
 
