@@ -9,7 +9,7 @@ jobs:
       max-parallel: 5
     services:
       mongo:
-        image: "mongo"
+        image: "mongo:8.0.0"
         ports: 
           - 27017:27017
     steps:
