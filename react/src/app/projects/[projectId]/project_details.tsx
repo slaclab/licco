@@ -595,8 +595,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             });
                     }}
                 >
-                    <h5 className="alert-title"><Icon icon="trash" />Delete {currentFFT.fc}-{currentFFT.fg}?</h5>
-                    <p>Do you really want to delete a device <b>{currentFFT.fc}-{currentFFT.fg}</b> from a project <b>{project.name}</b>?</p>
+                    <h5 className="alert-title"><Icon icon="trash" />Delete {currentFFT.fc}?</h5>
+                    <p>Do you really want to delete a device <b>{currentFFT.fc}</b> from a project <b>{project.name}</b>?</p>
                     <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
                 </Alert>
                 : null
