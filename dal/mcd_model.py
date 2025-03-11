@@ -801,6 +801,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", insert_counter
+
     fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", insert_counter
@@ -828,9 +829,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate.get(attrname, None) is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
-    error_str = ""
-    all_inserts = []
-    fft_edits = set()
+    fft_fields_to_insert = []
     for attrname, attrval in fcupdate.items():
         if attrname == "_id":
             continue
@@ -851,7 +850,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 author = comment['author']
                 newval = comment['comment']
                 time = comment.get('time', modification_time)
-                all_inserts.append({
+                fft_fields_to_insert.append({
                     "prj": ObjectId(prjid),
                     "fft": ObjectId(fftid),
                     "key": attrname,
@@ -866,7 +865,9 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         except KeyError:
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
+
         if attrmeta["required"] and not attrval:
+            insert_counter.fail += 1
             return False, f"Parameter {attrname} is a required attribute", insert_counter
 
         try:
@@ -875,18 +876,18 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_counter.fail += 1
             error_str = f"Wrong type - {attrname}, ('{attrval}')"
-            break
+            return False, error_str, insert_counter
 
         # Check that values are within bounds
         range_err = validate_insert_range(attrname, newval)
         if range_err:
             insert_counter.fail += 1
             error_str = range_err
-            break
+            return False, error_str, insert_counter
 
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
-            all_inserts.append({
+            fft_fields_to_insert.append({
                 "prj": ObjectId(prjid),
                 "fft": ObjectId(fftid),
                 "key": attrname,
@@ -894,20 +895,17 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 "user": userid,
                 "time": modification_time
             })
-            fft_edits.add(ObjectId(fftid))
 
-    #If one of the fields is invalid, and we have an error
-    if error_str != "":
-        return False, error_str, insert_counter
-    if all_inserts:
-        logger.debug("Inserting %s documents into the history", len(all_inserts))
+    if fft_fields_to_insert:
+        logger.debug("Inserting %s documents into the history", len(fft_fields_to_insert))
+        licco_db["projects_history"].insert_many(fft_fields_to_insert)
         insert_counter.success += 1
-        licco_db["projects_history"].insert_many(all_inserts)
-    else:
-        insert_counter.ignored += 1
-        logger.debug("In update_fft_in_project, all_inserts is an empty list")
-        error_str = "No changes detected."
-        return True, error_str, insert_counter
+        return True, "", insert_counter
+
+    # nothing to insert
+    insert_counter.ignored += 1
+    logger.debug("In update_fft_in_project, all_inserts is an empty list")
+    error_str = "No changes detected."
     return True, error_str, insert_counter
 
 

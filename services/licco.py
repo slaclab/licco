@@ -18,7 +18,6 @@ from context import licco_db
 from flask import Blueprint, request, Response, send_file
 
 from dal import mcd_model, mcd_import
-from dal.mcd_model import FCState
 from dal.utils import JSONEncoder
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)

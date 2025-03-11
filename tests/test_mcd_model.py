@@ -568,6 +568,44 @@ def test_get_project_ffts_after_timestamp(db):
     assert fft.get('nom_ang_x', None) is None
 
 
+def test_create_delete_comment(db):
+    """Create and delete a fft comment as the project owner"""
+    project = create_test_project(db, "test_user", "test_create_delete_comment", "")
+
+    # NOTE: a comment will never be returned, if there is not at least 1 fft field present therefore we
+    # have to insert 1 field first before verifying a comment insert
+    #
+    # insert and verify a comment insertion
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_y': 1.23}
+    _, err, counter = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == ""
+    assert counter.success == 1
+
+    ok, err, counter = mcd_model.add_fft_comment(db, "test_user", project["_id"], fft_id, "my comment")
+    assert err == ""
+    assert counter.success == 1
+
+    ffts = mcd_model.get_project_ffts(db, project["_id"])
+    assert len(ffts) == 1
+    fft = ffts[fft_id]
+    assert len(fft["discussion"]) == 1
+    comment = fft["discussion"][0]
+    assert comment["comment"] == "my comment"
+    assert comment["author"] == "test_user"
+
+    # delete a comment
+    ok, err = mcd_model.delete_fft_comment(db, "test_user", comment["id"])
+    assert err == ""
+    assert ok
+
+    # verify that comment was deleted
+    ffts = mcd_model.get_project_ffts(db, project["_id"])
+    assert len(ffts) == 1
+    fft = ffts[fft_id]
+    assert len(fft['discussion']) == 0, "fft comment should be deleted"
+
+
 def test_project_approval_workflow(db):
     # testing happy path
     project = create_test_project(db, "test_user", "test_approval_workflow", "")
