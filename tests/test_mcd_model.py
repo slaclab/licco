@@ -459,6 +459,22 @@ def test_add_fft_to_project(db):
     total_fields = default_fields + inserted_fields
     assert len(inserted_fft.keys()) == total_fields, "there should not be more fields than the one we have inserted"
 
+def test_add_unchanged_fft_to_project(db):
+    """Update the fft values with the existing values - there should be no change"""
+    project = create_test_project(db, "test_user", "test_add_unchanged_fft_to_project", "")
+
+    fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
+    fft_update = {'_id': fft_id, 'nom_ang_x': 1.23, 'nom_ang_y': 2.54}
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert err == ""
+    assert ok
+    assert update_status.success == 1
+
+    ok, err, update_status = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    assert update_status.ignored == 1
+    assert ok
+    assert err == ""
+
 
 def test_invalid_fft_due_to_missing_attributes(db):
     """If state is not development, certain attributes are expected. An error should be returned if we don't provide them"""
@@ -739,6 +755,20 @@ def test_project_rejection(db):
     assert email['to'] == ['approve_user', 'approve_user_2', 'editor_user', 'editor_user_2', 'super_approver', 'test_user']
     assert email['subject'] == '(MCD) Project test_project_rejection_workflow was rejected'
     assert 'This is my rejection message' in email['content']
+
+
+def test_update_ffts_invalid(db):
+    project = create_test_project(db, "test_user", "test_update_ffts_invalid", "")
+
+    ok, err, fft = mcd_model.find_or_create_fft(db, "TESTFC", "TESTFG")
+    assert err == ""
+    assert fft["_id"]
+
+    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": 2001, 'nom_ang_x': 1.23}]
+    ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
+    assert updates.fail == 1
+    assert err == 'Missing required header nom_loc_x'
+    assert ok is True  # update_ffts method always return a True, even if some fields are missing
 
 
 def create_string_logger(stream: io.StringIO) -> logging.Logger:
