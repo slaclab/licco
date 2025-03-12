@@ -57,15 +57,6 @@ def project_writable(wrapped_function):
     return function_interceptor
 
 
-@licco_ws_blueprint.route("/fcattrs/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_fcattrs():
-    """
-    Get the metadata for the attributes for the functional components
-    """
-    return json_response(mcd_model.get_fcattrs())
-
-
 @licco_ws_blueprint.route("/users/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_users():
@@ -441,7 +432,7 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     logger.info(reqparams)
     status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-        x["name"] for x in mcd_model.get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
+        x["name"] for x in mcd_model.fcattrs] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
         userid=userid)
     if errormsg:
         return json_error(errormsg)

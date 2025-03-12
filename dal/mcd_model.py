@@ -4,6 +4,7 @@ Most of the code here gets a connection to the database, executes a query and fo
 """
 import logging
 import datetime
+import types
 from collections.abc import Mapping
 from enum import Enum
 import copy
@@ -529,9 +530,8 @@ def str2int(val):
     return int(val)
 
 
-# We could perhaps use dataclasses here but we're not really storing the document as it is.
-# So, let's try explicit metadata for the fc attrs
-fcattrs = {
+# read only attributes and their metadata
+fcattrs = types.MappingProxyType({
     "fg_desc": {
         "name": "fg_desc",
         "type": "text",
@@ -659,20 +659,7 @@ fcattrs = {
         "desc": "User discussion about the device value change",
         "required": False,
     }
-}
-
-
-def get_fcattrs(fromstr=False):
-    """
-    Return the FC attribute metadata.
-    Since functions cannot be serialized into JSON, 
-    we make a copy and delete the fromstr and other function parts
-    """
-    fcattrscopy = copy.deepcopy(fcattrs)
-    if not fromstr:
-        for k, v in fcattrscopy.items():
-            del v["fromstr"]
-    return fcattrscopy
+})
 
 
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
@@ -1016,7 +1003,6 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
     Helper function to pre-validate that all required data is present
     fft: dictionary of field_name:values. '_id': '<fft_id>' is a necessary value
     """
-    attrs = get_fcattrs(fromstr=True)
     fftid = fft.get("_id", None)
     if not fftid:
         return False, "expected '_id' field in the fft values"
@@ -1025,31 +1011,31 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
     if "state" not in fft:
         fft["state"] = db_values["state"]
 
-    for header in attrs:
+    for attr in fcattrs:
         # If header is required for all, or if the FFT is non-conceptual and header is required
-        if attrs[header]["required"] or (fft["state"] != "Conceptual" and attrs[header].get("is_required_dimension", False)):
+        if fcattrs[attr]["required"] or (fft["state"] != "Conceptual" and fcattrs[attr].get("is_required_dimension", False)):
             # If required header not present in upload dataset
-            if header not in fft:
+            if attr not in fft:
                 # Check if in DB already, continue to validate next if so
-                if header not in db_values:
-                    error_str = f"Missing required header {header}"
+                if attr not in db_values:
+                    error_str = f"Missing required header {attr}"
                     logger.debug(error_str)
                     return False, error_str
-                fft[header] = db_values[header]
+                fft[attr] = db_values[attr]
 
             # Header is a required value, but user is trying to null this value
-            if fft[header] == '':
-                error_str = f"Header {header} value required for a Non-Conceptual device"
+            if fft[attr] == '':
+                error_str = f"Header {attr} value required for a Non-Conceptual device"
                 logger.debug(error_str)
                 return False, error_str
 
-        if header not in fft:
+        if attr not in fft:
             continue
 
         try:
-            val = attrs[header]["fromstr"](fft[header])
+            val = fcattrs[attr]["fromstr"](fft[attr])
         except (ValueError, KeyError) as e:
-            error_str = f"Invalid data {fft[header]} for type of {header}."
+            error_str = f"Invalid data {fft[attr]} for type of {attr}."
             return False, error_str
     return True, ""
 
