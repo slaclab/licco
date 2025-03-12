@@ -18,7 +18,6 @@ from context import licco_db
 from flask import Blueprint, request, Response, send_file
 
 from dal import mcd_model, mcd_import
-from dal.mcd_model import FCState
 from dal.utils import JSONEncoder
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
@@ -56,15 +55,6 @@ def project_writable(wrapped_function):
         raise Exception(
             f"Project with id {prjid} is not in development status")
     return function_interceptor
-
-
-@licco_ws_blueprint.route("/fcattrs/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_fcattrs():
-    """
-    Get the metadata for the attributes for the functional components
-    """
-    return json_response(mcd_model.get_fcattrs())
 
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -340,30 +330,6 @@ def svc_delete_fft(fftid):
     return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
-@licco_ws_blueprint.route("/fcs/<fcid>", methods=["DELETE"])
-@context.security.authentication_required
-def svc_delete_fc(fcid):
-    """
-    Delete a FC if it is not being used by an FFT
-    """
-    status, errormsg, _ = mcd_model.delete_fc(licco_db, fcid)
-    if errormsg:
-        return json_error(errormsg)
-    return json_response({}, HTTPStatus.NO_CONTENT)
-
-
-@licco_ws_blueprint.route("/fgs/<fgid>", methods=["DELETE"])
-@context.security.authentication_required
-def svc_delete_fg(fgid):
-    """
-    Delete a FG if it is not being used by an FFT
-    """
-    status, errormsg, _ = mcd_model.delete_fg(licco_db, fgid)
-    if errormsg:
-        return json_error(errormsg)
-    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
-
-
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
 @project_writable
@@ -466,7 +432,7 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     logger.info(reqparams)
     status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-        x["name"] for x in mcd_model.get_fcattrs()] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
+        x["name"] for x in mcd_model.fcattrs] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
         userid=userid)
     if errormsg:
         return json_error(errormsg)

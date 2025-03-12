@@ -84,7 +84,7 @@ def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, a
         timestamp = c["time"]
         val = c["val"]
 
-        device = details[fft_id]
+        device = details.get(fft_id, None)
         if not device:
             # this comment is not relevant since the project no longer has this device
             continue

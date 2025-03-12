@@ -4,7 +4,8 @@ Most of the code here gets a connection to the database, executes a query and fo
 """
 import logging
 import datetime
-import collections
+import types
+from collections.abc import Mapping
 from enum import Enum
 import copy
 import json
@@ -106,20 +107,21 @@ def initialize_collections(licco_db: MongoDb):
     if not master_project:
         err, prj = create_new_project(licco_db, '', MASTER_PROJECT_NAME, "Master Project", [], NoOpNotifier())
         if err:
-            print(f"Failed to create a new master project: {err}")
+            logger.error(f"Failed to create a new master project: {err}")
         else:
             # initial status is set to approved
             licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": {"status": "approved"}})
 
 
-def is_user_allowed_to_edit_project(userid: str, project: Dict[str, any]) -> bool:
+def is_user_allowed_to_edit_project(db: MongoDb, userid: str, project: Dict[str, any]) -> bool:
     if userid == '' or None:
         return False
 
     allowed_to_edit = False
     allowed_to_edit |= userid == project.get('owner', None)
     allowed_to_edit |= userid in project.get('editors', [])
-    # TODO: check if user is admin
+    if not allowed_to_edit:
+        allowed_to_edit |= userid in get_users_with_privilege(db, "admin")
     return allowed_to_edit
 
 
@@ -135,17 +137,6 @@ def get_all_users(licco_db: MongoDb):
             ret.add(ed)
     return list(ret)
 
-def get_fft_name_by_id(licco_db: MongoDb, fftid):
-    """
-    Return string names of both FC and FG components of FFT
-    based off of a provided ID. 
-    :param: fftid - the id of the FFT
-    :return: Tuple of string names FC, FG
-    """
-    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
-    fc = licco_db["fcs"].find_one({"_id": fft["fc"]})
-    fg = licco_db["fgs"].find_one({"_id": fft["fg"]})
-    return fc["name"], fg["name"]
 
 def get_fft_id_by_names(licco_db: MongoDb, fc, fg):
     """
@@ -247,14 +238,6 @@ def get_project(licco_db: MongoDb, id) -> Optional[McdProject]:
     return prj
 
 
-def get_project_by_name(licco_db: MongoDb, name) -> Optional[McdProject]:
-    """
-    Get the details for the project given its name.
-    """
-    prj = licco_db["projects"].find_one({"name": name})
-    return prj
-
-
 def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None, fftid=None):
     """
     Get the FFTs for a project given its id.
@@ -268,9 +251,7 @@ def get_project_changes(licco_db: MongoDb, prjid):
     """
     Get a history of changes to the project.
     """
-    oid = ObjectId(prjid)
-    logger.info("Looking for project details for %s", prjid)
-    return get_all_project_changes(licco_db, oid)
+    return get_all_project_changes(licco_db, prjid)
 
 
 def get_fcs(licco_db: MongoDb):
@@ -284,19 +265,6 @@ def get_fcs(licco_db: MongoDb):
     return fcs
 
 
-def delete_fc(licco_db: MongoDb, fcid):
-    """
-    Delete an FC if it is not currently being used by any FFT.
-    """
-    fcid = ObjectId(fcid)
-    fcs_used = set(licco_db["ffts"].distinct("fc"))
-    if fcid in fcs_used:
-        return False, "This FC is being used by an FFT", None
-    logger.info(f"Deleting FC with id {str(fcid)}")
-    licco_db["fcs"].delete_one({"_id": fcid})
-    return True, "", None
-
-
 def get_fgs(licco_db: MongoDb):
     """
     Get the fungible token objects - typically just the name and description.
@@ -306,18 +274,6 @@ def get_fgs(licco_db: MongoDb):
     for fg in fgs:
         fg["is_being_used"] = fg["_id"] in fgs_used
     return fgs
-
-def delete_fg(licco_db: MongoDb, fgid):
-    """
-    Delete an FG if it is not currently being used by any FFT.
-    """
-    fgid = ObjectId(fgid)
-    fgs_used = set(licco_db["ffts"].distinct("fg"))
-    if fgid in fgs_used:
-        return False, "This FG is being used by an FFT", None
-    logger.info("Deleting FG with id " + str(fgid))
-    licco_db["fgs"].delete_one({"_id": fgid})
-    return True, "", None
 
 
 def get_ffts(licco_db: MongoDb):
@@ -574,9 +530,8 @@ def str2int(val):
     return int(val)
 
 
-# We could perhaps use dataclasses here but we're not really storing the document as it is.
-# So, let's try explicit metadata for the fc attrs
-fcattrs = {
+# read only attributes and their metadata
+fcattrs = types.MappingProxyType({
     "fg_desc": {
         "name": "fg_desc",
         "type": "text",
@@ -704,20 +659,7 @@ fcattrs = {
         "desc": "User discussion about the device value change",
         "required": False,
     }
-}
-
-
-def get_fcattrs(fromstr=False):
-    """
-    Return the FC attribute metadata.
-    Since functions cannot be serialized into JSON, 
-    we make a copy and delete the fromstr and other function parts
-    """
-    fcattrscopy = copy.deepcopy(fcattrs)
-    if not fromstr:
-        for k, v in fcattrscopy.items():
-            del v["fromstr"]
-    return fcattrscopy
+})
 
 
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
@@ -801,6 +743,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", insert_counter
+
     fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find functional+fungible token for {fftid}", insert_counter
@@ -828,9 +771,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate.get(attrname, None) is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
-    error_str = ""
-    all_inserts = []
-    fft_edits = set()
+    fft_fields_to_insert = []
     for attrname, attrval in fcupdate.items():
         if attrname == "_id":
             continue
@@ -851,7 +792,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 author = comment['author']
                 newval = comment['comment']
                 time = comment.get('time', modification_time)
-                all_inserts.append({
+                fft_fields_to_insert.append({
                     "prj": ObjectId(prjid),
                     "fft": ObjectId(fftid),
                     "key": attrname,
@@ -866,7 +807,9 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         except KeyError:
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
+
         if attrmeta["required"] and not attrval:
+            insert_counter.fail += 1
             return False, f"Parameter {attrname} is a required attribute", insert_counter
 
         try:
@@ -875,18 +818,18 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
             insert_counter.fail += 1
             error_str = f"Wrong type - {attrname}, ('{attrval}')"
-            break
+            return False, error_str, insert_counter
 
         # Check that values are within bounds
         range_err = validate_insert_range(attrname, newval)
         if range_err:
             insert_counter.fail += 1
             error_str = range_err
-            break
+            return False, error_str, insert_counter
 
         prevval = current_attrs.get(attrname, None)
         if prevval != newval:
-            all_inserts.append({
+            fft_fields_to_insert.append({
                 "prj": ObjectId(prjid),
                 "fft": ObjectId(fftid),
                 "key": attrname,
@@ -894,21 +837,17 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 "user": userid,
                 "time": modification_time
             })
-            fft_edits.add(ObjectId(fftid))
 
-    #If one of the fields is invalid, and we have an error
-    if error_str != "":
-        return False, error_str, insert_counter
-    if all_inserts:
-        logger.debug("Inserting %s documents into the history", len(all_inserts))
+    if fft_fields_to_insert:
+        logger.debug("Inserting %s documents into the history", len(fft_fields_to_insert))
+        licco_db["projects_history"].insert_many(fft_fields_to_insert)
         insert_counter.success += 1
-        licco_db["projects_history"].insert_many(all_inserts)
-    else:
-        insert_counter.ignored += 1
-        logger.debug("In update_fft_in_project, all_inserts is an empty list")
-        error_str = "No changes detected."
-        return True, error_str, insert_counter
-    return True, error_str, insert_counter
+        return True, "", insert_counter
+
+    # nothing to insert
+    insert_counter.ignored += 1
+    logger.debug("In update_fft_in_project, all_inserts is an empty list")
+    return True, "", insert_counter
 
 
 def validate_insert_range(attr, val) -> str:
@@ -965,7 +904,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
     verify_user_permissions = not ignore_user_permission_check
     if verify_user_permissions:
         # check that only owner/editor/admin are allowed to update this project
-        allowed_to_update = is_user_allowed_to_edit_project(userid, project)
+        allowed_to_update = is_user_allowed_to_edit_project(licco_db, userid, project)
         if not allowed_to_update:
             return False, f"user '{userid}' is not allowed to update a project {project['name']}", ImportCounter()
 
@@ -1000,7 +939,8 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
         fcupdate = {}
         fcupdate.update(fft)
         fcupdate["_id"] = fftid
-        if ("state" not in fcupdate) or (not fcupdate["state"]):
+
+        if empty_string_or_none(fcupdate.get("state", "")):
             if "state" in db_values:
                 fcupdate["state"] = db_values["state"]
             else:
@@ -1012,6 +952,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, ffts, def
             insert_counter.fail += 1
             def_logger.info(create_imp_msg(fft, False, errormsg=errormsg))
             continue
+
         for attr in ["name", "fc", "fg", "fft"]:
             if attr in fcupdate:
                 del fcupdate[attr]
@@ -1062,40 +1003,41 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
     Helper function to pre-validate that all required data is present
     fft: dictionary of field_name:values. '_id': '<fft_id>' is a necessary value
     """
-    attrs = get_fcattrs(fromstr=True)
     fftid = fft.get("_id", None)
     if not fftid:
         return False, "expected '_id' field in the fft values"
 
     db_values = get_fft_values_by_project(licco_db, fftid, prjid)
-    if not "state" in fft:
+    if "state" not in fft:
         fft["state"] = db_values["state"]
-    for header in attrs:
+
+    for attr in fcattrs:
         # If header is required for all, or if the FFT is non-conceptual and header is required
-        if attrs[header]["required"] or ((fft["state"] != "Conceptual") and ("is_required_dimension" in attrs[header] and attrs[header]["is_required_dimension"] == True)):
+        if fcattrs[attr]["required"] or (fft["state"] != "Conceptual" and fcattrs[attr].get("is_required_dimension", False)):
             # If required header not present in upload dataset
-            if not header in fft:
+            if attr not in fft:
                 # Check if in DB already, continue to validate next if so
-                if header not in db_values:
-                    error_str = f"Missing Required Header {header}"
+                if attr not in db_values:
+                    error_str = f"Missing required header {attr}"
                     logger.debug(error_str)
                     return False, error_str
-                fft[header] = db_values[header]
+                fft[attr] = db_values[attr]
+
             # Header is a required value, but user is trying to null this value
-            if fft[header] == '':
-                error_str = f"Header {header} Value Required for a Non-Conceptual Device"
+            if fft[attr] == '':
+                error_str = f"Header {attr} value required for a Non-Conceptual device"
                 logger.debug(error_str)
                 return False, error_str
 
-        # Header not in data
-        if not header in fft:
+        if attr not in fft:
             continue
+
         try:
-            val = attrs[header]["fromstr"](fft[header])
+            val = fcattrs[attr]["fromstr"](fft[attr])
         except (ValueError, KeyError) as e:
-            error_str = f"Invalid Data {fft[header]} For Type of {header}."
+            error_str = f"Invalid data {fft[attr]} for type of {attr}."
             return False, error_str
-    return True, "Success"
+    return True, ""
 
 
 def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrnames, userid):
@@ -1155,7 +1097,7 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, fft_ids: List[str
     if project["status"] != "development":
         return False, f"Project {project['name']} is not in a development state"
 
-    user_is_editor = is_user_allowed_to_edit_project(userid, project)
+    user_is_editor = is_user_allowed_to_edit_project(licco_db, userid, project)
     if not user_is_editor:
         return False, f"You are not an editor and therefore can't remove the project devices"
 
@@ -1189,7 +1131,7 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         return False, f"Project '{project_name}' is not in development or submitted status", None
 
     # check if the user has a permissions for submitting a project
-    user_is_allowed_to_edit = is_user_allowed_to_edit_project(userid, prj)
+    user_is_allowed_to_edit = is_user_allowed_to_edit_project(licco_db, userid, prj)
     if not user_is_allowed_to_edit:
         return False, f"User {userid} is not allowed to submit a project '{project_name}'", None
 
@@ -1309,8 +1251,6 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
 
     # user was allowed to approve, store the approvers for this project
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
-    # TODO: how should the switch db work like?
-    store_project_approval(licco_db, prjid, prj["submitter"])
 
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     still_waiting_for_approval = not all_assigned_approvers_approved
@@ -1338,6 +1278,8 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     if not status:
         # failed to insert changed fft data into master project
         return False, False, errormsg, {}
+
+    store_project_approval(licco_db, prjid, prj["submitter"])
 
     # successfully inserted project ffts into a master project
     # send notifications that the project was approved
@@ -1467,7 +1409,7 @@ def __flatten__(obj, prefix=""):
     Flatten a dict into a list of key value pairs using dot notation.
     """
     ret = []
-    if isinstance(obj, collections.abc.Mapping):
+    if isinstance(obj, Mapping):
         for k, v in obj.items():
             ret.extend(__flatten__(v, prefix + "." + k if prefix else k))
     elif isinstance(obj, list):

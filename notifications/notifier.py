@@ -1,7 +1,7 @@
 import inspect
 import logging
-from typing import List, Literal, Optional
-from notifications.email_sender import EmailSettings, EmailSender, EmailSenderInterface, NoOpEmailSender
+from typing import List, Literal
+from notifications.email_sender import EmailSenderInterface, NoOpEmailSender
 
 logger = logging.getLogger(__name__)
 
