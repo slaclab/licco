@@ -1025,7 +1025,7 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
 
             # Header is a required value, but user is trying to null this value
             if fft[attr] == '':
-                error_str = f"Header {attr} value required for a Non-Conceptual device"
+                error_str = f"'{attr}' value is required for a Non-Conceptual device"
                 logger.debug(error_str)
                 return False, error_str
 
@@ -1035,7 +1035,7 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
         try:
             val = fcattrs[attr]["fromstr"](fft[attr])
         except (ValueError, KeyError) as e:
-            error_str = f"Invalid data {fft[attr]} for type of {attr}."
+            error_str = f"Invalid data type for '{attr}': '{fft[attr]}'"
             return False, error_str
     return True, ""
 
