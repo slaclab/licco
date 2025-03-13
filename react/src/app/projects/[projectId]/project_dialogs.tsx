@@ -356,7 +356,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
   )
 };
 
-export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: object, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, keymap, currentProject, onClose, displayProjectSince }) => {
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: string, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, keymap, currentProject, onClose, displayProjectSince }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogErr, setDialogErr] = useState('');
   const [data, setData] = useState<ProjectHistoryChange[]>([])
@@ -649,7 +649,7 @@ const sortProjectValueChanges = (changes: Record<string, any>) => {
 }
 
 // dialog for confirming the changed values and adding comments to value change
-export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: object, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, keymap, project, device, valueChanges, onClose, onSubmit }) => {
+export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: string, project: ProjectInfo, device: ProjectDeviceDetails, valueChanges: Record<string, any>, onClose: () => void, onSubmit: (device: ProjectDeviceDetails) => void }> = ({ isOpen, keymap, project, device, valueChanges, onClose, onSubmit }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');

@@ -84,7 +84,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
-    const [keymap, setKeymap] = useState(Object);
+    const [keymap, setKeymap] = useState(String);
 
 
     // dialogs open state

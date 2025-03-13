@@ -71,10 +71,13 @@ def svc_get_fcattrs():
 def svc_get_keymap():
     """
     Returns the keymap responsible for mapping backend names to human readable ones
-    (For frontend/react needs)
+    (For frontend/react needs, adds in additional frontend attributes)
     Ex: nom_loc_x -> LCLS_X_loc or fg_desc -> Fungible
     """
-    return json_response(mcd_model.KEYMAP_REVERSE)
+    return json_response(dict(
+        discussion="Discussion",
+        **mcd_model.KEYMAP_REVERSE,
+    ))
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
 @context.security.authentication_required
