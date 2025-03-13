@@ -771,6 +771,27 @@ def test_update_ffts_invalid(db):
     assert ok is True  # update_ffts method always return a True, even if some fields are missing
 
 
+def test_update_ffts_invalid_empty_value(db):
+    project = create_test_project(db, "test_user", "test_update_ffts_invalid_empty_value", "")
+
+    ok, err, fft = mcd_model.find_or_create_fft(db, "TESTFC", "TESTFG")
+    assert err == ""
+    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": ""}]
+    ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
+    assert updates.fail == 1
+    assert err == "'nom_loc_z' value is required for a Non-Conceptual device"
+
+def test_update_ffts_wrong_type(db):
+    project = create_test_project(db, "test_user", "test_update_wrong_type", "")
+
+    ok, err, fft = mcd_model.find_or_create_fft(db, "TESTFC", "TESTFG")
+    assert err == ""
+    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": "aaa"}]
+    ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
+    assert updates.fail == 1
+    assert err == "Invalid data type for 'nom_loc_z': 'aaa'"
+
+
 def create_string_logger(stream: io.StringIO) -> logging.Logger:
     logger = logging.getLogger('str_logger')
     logger.setLevel(logging.DEBUG)
