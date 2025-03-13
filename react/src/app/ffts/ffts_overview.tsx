@@ -52,7 +52,7 @@ export const FFTOverviewTable: React.FC = () => {
                     <tr>
                         <th scope="col" className="text-nowrap">
                             <ButtonGroup>
-                                <Button icon="add" title="Add a new FFT" small={true} minimal={true}
+                                <Button icon="add" title="Add a new FC" small={true} minimal={true}
                                     onClick={e => setIsFftDialogOpen(true)}
                                 />
                                 {isLoading ? <Button loading={isLoading} minimal={true} /> : null}
@@ -217,7 +217,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
     }
 
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Add a new FFT" autoFocus={true} style={{ width: "70ch" }}>
+        <Dialog isOpen={isOpen} onClose={onClose} title="Add a New FC" autoFocus={true} style={{ width: "70ch" }}>
             <DialogBody useOverflowScrollContainer>
                 <p>Please choose/enter a functional component name.
                     You can choose one of the existing entities or you can type in a brand new functional component name.

@@ -56,6 +56,18 @@ def project_writable(wrapped_function):
             f"Project with id {prjid} is not in development status")
     return function_interceptor
 
+@licco_ws_blueprint.route("/backendkeymap/", methods=["GET"])
+@context.security.authentication_required
+def svc_get_keymap():
+    """
+    Returns the keymap responsible for mapping backend names to human readable ones
+    (For frontend/react needs, adds in additional frontend attributes)
+    Ex: nom_loc_x -> LCLS_X_loc or fg_desc -> Fungible
+    """
+    return json_response(dict(
+        discussion="Discussion",
+        **mcd_model.KEYMAP_REVERSE,
+    ))
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
 @context.security.authentication_required
