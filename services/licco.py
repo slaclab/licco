@@ -128,7 +128,7 @@ def svc_get_projects_for_user():
     projects = mcd_model.get_all_projects(licco_db, logged_in_user, sort_criteria)
     edits = mcd_model.get_all_projects_last_edit_time(licco_db)
     for project in projects:
-        project["edit_time"] = edits[(project["_id"])]["time"]
+        project["edit_time"] = edits[str(project["_id"])]["time"]
     if sort_criteria[0][0] == "edit_time":
         reverse = (sort_criteria[0][1] == -1)
         min_date = datetime.datetime.min.replace(tzinfo=pytz.UTC)
