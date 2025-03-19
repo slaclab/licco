@@ -126,7 +126,7 @@ def svc_get_projects_for_user():
     logged_in_user = context.security.get_current_user_id()
     sort_criteria = json.loads(request.args.get("sort", '[["creation_time", -1]]'))
     projects = mcd_model.get_all_projects(licco_db, logged_in_user, sort_criteria)
-    edits = mcd_model.get_projects_recent_edit_time(licco_db)
+    edits = mcd_model.get_all_projects_last_edit_time(licco_db)
     for project in projects:
         project["edit_time"] = edits[(project["_id"])]["time"]
     if sort_criteria[0][0] == "edit_time":
