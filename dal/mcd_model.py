@@ -235,6 +235,10 @@ def get_project(licco_db: MongoDb, id) -> Optional[McdProject]:
     """
     oid = ObjectId(id)
     prj = licco_db["projects"].find_one({"_id": oid})
+    if prj:
+        latest_edit = licco_db["projects_history"].find_one({"prj":ObjectId(prj["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )])
+        if latest_edit:
+            prj["edit_time"] = latest_edit["time"]
     return prj
 
 
