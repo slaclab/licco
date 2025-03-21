@@ -515,11 +515,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             </div>
 
             {!isLoading && !fftDataLoadingError && !isFilterApplied && fftDataDisplay.length == 0 ?
-                <NonIdealState icon="search" title="No FFTs Found" description={<>Project {project?.name} does not have any FFTs</>} />
+                <NonIdealState icon="search" title="No FCs Found" description={<>Project {project?.name} does not have any FCs</>} />
                 : null}
 
             {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
-                <NonIdealState icon="filter" title="No FFTs Found" description="Try changing your filters"></NonIdealState>
+                <NonIdealState icon="filter" title="No FCs Found" description="Try changing your filters"></NonIdealState>
                 : null
             }
 
@@ -728,7 +728,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                     <td>
                         {isUserAProjectEditor(project, currentUser) ?
                             <>
-                                <Button icon="edit" minimal={true} small={true} title="Edit this FFT"
+                                <Button icon="edit" minimal={true} small={true} title="Edit this device"
                                     onClick={(e) => onEdit(device)}
                                 />
                                 <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from another project"}

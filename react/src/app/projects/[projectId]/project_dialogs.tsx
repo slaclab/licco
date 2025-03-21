@@ -1,7 +1,7 @@
 import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea } from "@blueprintjs/core";
+import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
 import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
@@ -45,6 +45,7 @@ export const FilterFFTDialog: React.FC<{
       autoFocus={true}
     >
       <DialogBody useOverflowScrollContainer>
+        <Text>Note: You can filter on a partial match with the wildcard character * {"\n"}For example, you can filter FCs with AT*, or *L0</Text>
         <FormGroup label="FC:" labelFor="fc-filter">
           <InputGroup
             id="fc-filter"
