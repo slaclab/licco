@@ -235,6 +235,10 @@ def get_project(licco_db: MongoDb, id) -> Optional[McdProject]:
     """
     oid = ObjectId(id)
     prj = licco_db["projects"].find_one({"_id": oid})
+    if prj:
+        latest_edit = get_project_last_edit_time(licco_db, prj["_id"])
+        if latest_edit:
+            prj["edit_time"] = latest_edit
     return prj
 
 
@@ -1389,19 +1393,28 @@ def get_projects_approval_history(licco_db: MongoDb, limit: int = 100):
     return hist
 
 
-def get_projects_recent_edit_time(licco_db: MongoDb):
+def get_all_projects_last_edit_time(licco_db: MongoDb) -> Dict[str, Dict[str, datetime.datetime | str]]:
     """
     Gets the most recent time of edit for all projects in development status
     """
     edit_list = {}
     projects = licco_db["projects"].find()
     for project in projects:
-        most_recent = licco_db["projects_history"].find_one(
-            {"prj":ObjectId(project["_id"])}, {"time": 1 }, sort=[("time", DESCENDING )])
-        if not most_recent:
-            most_recent = {"_id": "", "time": ""}
-        edit_list[project["_id"]] = most_recent
+        prjid = str(project["_id"])
+        last_edit_time = get_project_last_edit_time(licco_db, prjid)
+        if last_edit_time:
+            edit_list[prjid] = {"_id": prjid, "time": last_edit_time}
+        else:
+            edit_list[prjid] = {"_id": "", "time": ""}
     return edit_list
+
+
+def get_project_last_edit_time(licco_db: MongoDb, project_id: str) -> Optional[datetime.datetime]:
+    most_recent = licco_db["projects_history"].find_one(
+        {"prj": ObjectId(project_id)}, {"time": 1}, sort=[("time", DESCENDING)])
+    if most_recent:
+        return most_recent["time"]
+    return None
 
 
 def __flatten__(obj, prefix=""):
