@@ -80,7 +80,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
             return False, err, import_counter
 
     if import_counter.fail > 0:
-        imp_log.debug(f"FAIL: {import_counter.fail} FFTS malformed. (FC values likely missing)")
+        imp_log.debug(f"FAIL: {import_counter.fail} FCs malformed. (FC values likely missing)")
 
     fc2id = {
         value["name"]: value["_id"]
@@ -92,11 +92,11 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
         for fc in fc_list:
             if fc["FC"] not in fc2id:
                 status, errormsg, newfc = mcd_model.create_new_functional_component(licco_db, name=fc["FC"], description="Generated from " + nm)
-                # FFT creation successful, add to data to import list
+                # FC creation successful, add to data to import list
                 if status:
                     fc2id[fc["FC"]] = newfc["_id"]
                     current_list.append(fc)
-                # Tried to create a new FFT and failed - don't include in dataset
+                # Tried to create a new FC and failed - don't include in dataset
                 else:
                     # Count failed imports - excluding FC & FG
                     import_counter.fail += 1
