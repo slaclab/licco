@@ -251,7 +251,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
             <DialogFooter actions={
                 <>
                     <Button onClick={(e) => onClose()}>Cancel</Button>
-                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={disableSubmit}>Create FFT</Button>
+                    <Button onClick={(e) => submit()} intent="primary" loading={isSubmitting} disabled={disableSubmit}>Create FC</Button>
                 </>
             }>
                 {dialogError ? <p className="error">ERROR: {dialogError}</p> : null}

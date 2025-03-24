@@ -223,12 +223,12 @@ class EmailSender(EmailSenderInterface):
                         emails.append(email)
                     else:
                         logger.error(f"User '{name}' does not have a valid email account: '{email}'")
-                    return emails
             except Exception as e:
                 # Since this is running in a background notification thread, we can't inform the
                 # user that something went wrong with notifications. Therefore we can only log
                 # an error and hope that a system administrator notices an issue
                 logger.error(f"Failed to get an email for user {name}: {str(e)}")
+        return emails
 
 
 class NoOpEmailSender(EmailSenderInterface):
