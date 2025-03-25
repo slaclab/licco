@@ -134,9 +134,12 @@ def test_create_delete_project(db):
     assert ok
 
     # regular user can't delete a project, only hide it
-    found_after_delete = list(db["projects"].find({"name": "test_create_delete_project"}))
+    found_after_delete = list(db['projects'].find({'_id': prj['_id']}))
     assert len(found_after_delete) == 1, "project should not be deleted"
     assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
+    # verify name of project is changed to reflect hidden status
+    hidden_name = 'hidden' + '_' + prj['name'] + '_' + datetime.date.today().strftime('%m/%d/%Y')
+    assert hidden_name == found_after_delete[0]['name']
 
 
 def test_create_delete_project_admin(db):
