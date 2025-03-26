@@ -7,7 +7,7 @@ import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
+import { ProjectInfo, fetchAllProjectsInfo, UserRoles, fetchUsers, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
 import { CloneProjectDialog, CreateNewProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
@@ -17,6 +17,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [projectDataLoading, setProjectDataLoading] = useState(true);
     const [err, setError] = useState("");
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
+    const [admins, setAdmins] = useState<string[]>([])
 
     // dialogs
     const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
@@ -34,17 +35,19 @@ export const ProjectsOverview: React.FC = ({ }) => {
     const [sortByColumn, setSortByColumn] = useState<SortState<sortColumnField>>(new SortState('created'));
 
     const fetchProjectData = async () => {
-        const [projects, whoami] = await Promise.all([
+        const [projects, admins, whoami] = await Promise.all([
             fetchAllProjectsInfo(),
+            fetchUsers(UserRoles.Admins),
             whoAmI(),
         ]);
-        return { projects, whoami };
+        return { projects, admins, whoami };
     }
 
     useEffect(() => {
         setProjectDataLoading(true);
         fetchProjectData()
             .then(d => {
+                setAdmins(d.admins.admins!)
                 setProjectData(d.projects);
                 setCurrentlyLoggedInUser(d.whoami);
             }).catch((e: JsonErrorMsg) => {
@@ -223,7 +226,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                 }}
                                             />
 
-                                            {project.owner === currentlyLoggedInUser ?
+                                            {(project.owner === currentlyLoggedInUser) || (admins.includes(currentlyLoggedInUser)) ?
                                                 <Button icon="trash" title="Delete this project"
                                                     minimal={true} small={true}
                                                     onClick={(e) => {

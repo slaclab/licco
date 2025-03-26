@@ -1630,8 +1630,9 @@ def delete_project(licco_db: MongoDb, userid, project_id):
         licco_db["tags"].delete_many({'prj': ObjectId(project_id)})
         return True, ""
 
+    new_project_name = 'hidden' + '_' + prj['name'] + '_'+ datetime.date.today().strftime('%m/%d/%Y')
     # user is just the owner, delete in this case means 'hide the project'
-    licco_db["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden'}})
+    licco_db["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden', 'name': new_project_name}})
     return True, ""
 
 
