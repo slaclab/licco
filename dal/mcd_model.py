@@ -7,7 +7,6 @@ import datetime
 import types
 from collections.abc import Mapping
 from enum import Enum
-import copy
 import json
 import math
 from typing import Dict, Tuple, List, Optional, TypeAlias
@@ -75,7 +74,6 @@ class FCState(Enum):
             FCState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
             FCState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
         }
-
 
 
 def initialize_collections(licco_db: MongoDb):
