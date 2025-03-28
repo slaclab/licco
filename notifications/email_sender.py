@@ -136,7 +136,7 @@ class EmailSender(EmailSenderInterface):
             emails_to_send.append(email)
         errors = self._send_emails(emails_to_send)
         if errors:
-            logger.error("Failed to send emails:", errors)
+            logger.error("Failed to send emails: %s", errors)
 
     def _create_email(self, from_user: str, to_users: List[str],
                       subject: str, html_content: str, plain_text_content: str = ""):
