@@ -81,24 +81,21 @@ class FCState(Enum):
 def initialize_collections(licco_db: MongoDb):
     if 'name_1' not in licco_db["projects"].index_information().keys():
         licco_db["projects"].create_index([("name", ASCENDING)], unique=True, name="name_1")
+    # when listing all projects, we need to list projects for which the user is owner or editor (hence the index for both)
     if 'owner_1' not in licco_db["projects"].index_information().keys():
         licco_db["projects"].create_index([("owner", ASCENDING)], name="owner_1")
     if 'editors_1' not in licco_db["projects"].index_information().keys():
         licco_db["projects"].create_index([("editors", ASCENDING)], name="editors_1")
-    if 'name_1' not in licco_db["fcs"].index_information().keys():
-        licco_db["fcs"].create_index([("name", ASCENDING)], unique=True, name="name_1")
-    if 'name_1' not in licco_db["fgs"].index_information().keys():
-        licco_db["fgs"].create_index([("name", ASCENDING)], unique=True, name="name_1")
-    if 'fc_fg_1' not in licco_db["ffts"].index_information().keys():
-        licco_db["ffts"].create_index([("fc", ASCENDING), ("fg", ASCENDING)], unique=True, name="fc_fg_1")
-    if 'prj_time_1' not in licco_db["projects_history"].index_information().keys():
-        licco_db["projects_history"].create_index([("prj", ASCENDING), ("time", DESCENDING)], name="prj_time_1")
-    if 'prj_fc_time_1' not in licco_db["projects_history"].index_information().keys():
-        licco_db["projects_history"].create_index([("prj", ASCENDING), ("fft", ASCENDING), ("time", DESCENDING)], name="prj_fft_time_1")
+
+    if 'project_history_id_1' not in licco_db["project_history"].index_information().keys():
+        licco_db["project_history"].create_index([("project_id", ASCENDING), ("snapshot_timestamp", DESCENDING)], name="project_history_id_1")
+
     if 'sw_time_1' not in licco_db["switch"].index_information().keys():
         licco_db["switch"].create_index([("switch_time", DESCENDING)], unique=True, name="sw_time_1")
+
     if 'name_prj_1' not in licco_db["tags"].index_information().keys():
         licco_db["tags"].create_index([("name", ASCENDING), ("prj", ASCENDING)], unique=True, name="name_prj_1")
+
     if 'app_1_name_1' not in licco_db["roles"].index_information().keys():
         licco_db["roles"].create_index([("app", ASCENDING), ("name", ASCENDING)], unique=True, name="app_1_name_1")
 
