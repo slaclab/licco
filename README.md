@@ -19,7 +19,7 @@ see: https://confluence.slac.stanford.edu/display/PCDS/Validated+Machine+Configu
 - Start front end REACT development server 
     - `npm run dev`
 - Run backend in debug mode with gunicorn server in another terminal/session
-    - `python3 -m gunicorn start:app --config config.ini`
+    - `python3 -m gunicorn --env LICCO_CONFIG="./config.ini" start:app`
 
 
 ## Configuration

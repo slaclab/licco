@@ -1,4 +1,6 @@
 import argparse
+import os
+
 import app_config
 import logging
 import sys
@@ -9,12 +11,16 @@ from flask_cors import CORS
 import context
 
 # parse cli args
-parser = argparse.ArgumentParser(description="Licco CLI Options")
-parser.add_argument("-c", "--config", default="", help="Path to a Licco config file")
-args = parser.parse_args()
+gunicorn_config = os.environ.get("LICCO_CONFIG", None)
+if gunicorn_config:
+    conf = app_config.load_config(gunicorn_config)
+else:
+    parser = argparse.ArgumentParser(description="Licco CLI Options")
+    parser.add_argument("-c", "--config", default="", help="Path to a Licco config file")
+    args = parser.parse_args()
+    conf = app_config.load_config(args.config)
 
 # load configuration
-conf = app_config.load_config(args.config)
 print("=== APP CONFIG ===")
 print(conf)
 print("")
