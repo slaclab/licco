@@ -16,7 +16,7 @@ import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
 
-type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
+type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
 /**
  * Helper function for sorting device details based on the clicked table column header
@@ -241,25 +241,27 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const addNewFft = (newFft: FFTInfo) => {
         if (!project) {
             // this should never happen
-            setErrorAlertMsg("Can't add a new fft to a project without knowing the projec details; this is a programming bug");
+            setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
             return;
         }
+        console.log("in project", fftData);
 
         // check if desired fft combination already exist within the project 
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
-            if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
+            console.log("wtf")
+            console.log(fft);
+            if (fft.fc === newFft.fc.name) {
                 setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: "{project.name}".</>);
                 return
             }
         }
+        console.log(newFft);
 
-        let fft: ProjectFFT = {
-            _id: newFft._id,
-            fc: newFft.fc._id,
-            fg: newFft.fg._id,
-        }
-        return addFftsToProject(project._id, [fft])
+        /*         let fft: ProjectDevice = {
+                    fc: newFft,
+                } */
+        return addFftsToProject(project._id, newFft)
             .then(data => {
                 // TODO: when we try to add an fft that is already there, the backend doesn't complain
                 // it just returns success: true, erromsg: no changes detected.
@@ -463,27 +465,29 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         {fftDataDisplay.map(device => {
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
+                            console.log('fft display device ', device)
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.id}
+                                return <DeviceDataTableRow key={device._id}
                                     project={project} device={device} currentUser={currentlyLoggedInUser}
                                     disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
                                         setIsCopyFFTDialogOpen(true);
                                     }}
                                     onDeleteFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
                                         setIsDeleteDialogOpen(true);
                                     }}
                                     onUserComment={(device) => {
+                                        console.log("this is comment device ", device)
                                         setCommentDevice(device);
                                         setIsFftCommentViewerOpen(true);
                                     }}
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device} availableFftStates={availableFftStates}
+                            return <DeviceDataEditTableRow key={device._id} keymap={keymap} project={project} device={device} availableFftStates={availableFftStates}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -497,7 +501,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     let updatedDevices = [...fftData];
                                     for (let i = 0; i < updatedDevices.length; i++) {
                                         const device = updatedDevices[i];
-                                        if (device.id === oldDevice.id) {
+                                        if (device._id === oldDevice._id) {
                                             // found the device index that has to be replaced
                                             updatedDevices[i] = updatedDeviceData;
                                             break;
@@ -526,6 +530,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             {project ?
                 <AddFftDialog
                     dialogType="addToProject"
+                    currentProject={project._id}
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
                     onSubmit={(newFft) => addNewFft(newFft)}
@@ -557,7 +562,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // find current fft and update device details
                         let updatedData = [];
                         for (let d of fftData) {
-                            if (d.id != newDeviceDetails.id) {
+                            if (d._id != newDeviceDetails._id) {
                                 updatedData.push(d);
                                 continue;
                             }
@@ -586,7 +591,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 setIsDeleteDialogOpen(false);
 
                                 // update data 
-                                let updatedFftData = fftData.filter(d => d.id != fft._id);
+                                let updatedFftData = fftData.filter(d => d._id != fft._id);
                                 setFftData(updatedFftData);
                             }).catch((e: JsonErrorMsg) => {
                                 let msg = `Failed to delete a device ${currentFFT.fc}-${currentFFT.fg}: ${e.error}`;
@@ -615,12 +620,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
                         for (let fft of fftData) {
-                            if (fft.id != updatedDevice.id) {
+                            console.log("comparing ", fft, "\nand", updatedDevice);
+                            if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }
                             updatedFftData.push(updatedDevice);
                         }
+                        console.log("comparing2 ", updatedFftData, "\nand ", updatedDevice);
                         setFftData(updatedFftData);
                         setCommentDevice(updatedDevice);
                     }
@@ -721,6 +728,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    console.log("creating row", device)
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>

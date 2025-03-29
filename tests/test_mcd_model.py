@@ -707,7 +707,7 @@ def test_project_approval_workflow(db):
 
     # the changed fft data should reflect in the master project
     master_project = mcd_model.get_master_project(db)
-    ffts = mcd_model.get_fft_values_by_project(db, fftid, master_project['_id'])
+    ffts = mcd_model.get_project_attributes(db, fftid, master_project['_id'])
     assert ffts['tc_part_no'] == "PART 123"
 
     assert len(email_sender.emails_sent) == 1, "only one set of messages should be sent"

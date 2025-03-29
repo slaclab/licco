@@ -121,7 +121,7 @@ export const FFTOverviewTable: React.FC = () => {
 
 
 
-export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, ffts, dialogType, onClose, onSubmit }) => {
+export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, ffts, currentProject, dialogType, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
     const [fgName, setFgName] = useState('');
     const [allFfts, setAllFfts] = useState<FFTInfo[]>([]);
@@ -198,22 +198,27 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], dialogT
             // a new one.
         }
 
+        console.log("in ffts ");
+        console.log(fcName, currentProject);
+
         let data: any = {
-            fc: fc,
-            fg: fg,
+            fc: fcName,
+            prjid: currentProject
         }
 
+        console.log(data);
         setIsSubmitting(true);
-        Fetch.post<FFTInfo>("/ws/ffts/", { body: JSON.stringify(data) })
-            .then((resp) => {
-                onSubmit(resp);
-            }).catch((e: JsonErrorMsg) => {
-                let msg = "Failed to create new fft: " + e.error;
-                setDialogError(msg)
-                console.error(msg, e);
-            }).finally(() => {
-                setIsSubmitting(false);
-            })
+        onSubmit(data);
+        /*         Fetch.post<FFTInfo>("/ws/ffts/", { body: JSON.stringify(data) })
+                    .then((resp) => {
+                        onSubmit(resp);
+                    }).catch((e: JsonErrorMsg) => {
+                        let msg = "Failed to create new fft: " + e.error;
+                        setDialogError(msg)
+                        console.error(msg, e);
+                    }).finally(() => {
+                        setIsSubmitting(false);
+                    }) */
     }
 
     return (

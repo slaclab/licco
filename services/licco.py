@@ -218,7 +218,7 @@ def svc_get_project_ffts(prjid):
     """
     Get the project's FFT's given a project id.
     """
-    logged_in_user = context.security.get_current_user_id()
+    print("Fetching all FFTs")
     showallentries = json.loads(request.args.get("showallentries", "true"))
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
@@ -226,25 +226,6 @@ def svc_get_project_ffts(prjid):
     else:
         asoftimestamp = None
     project_fcs = mcd_model.get_project_ffts(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
-
-    def __filter__(f, d):
-        """ Apply f onto d as a filter """
-        r = {}
-        for k, v in d.items():
-            if f(k, v):
-                r[k] = v
-        return r
-    filt2fn = {
-        "fc": lambda _, v: fnmatch.fnmatch(v.get("fft", {}).get("fc", ""), request.args["fc"]),
-        "fg": lambda _, v: fnmatch.fnmatch(v.get("fft", {}).get("fg", ""), request.args["fg"]),
-        "state": lambda _, v: v["state"] == request.args["state"]
-    }
-    for attrname, lmda in filt2fn.items():
-        if request.args.get(attrname, None):
-            logger.info("Applying filter for " + attrname +
-                        " " + request.args.get(attrname, ""))
-            project_fcs = __filter__(lmda, project_fcs)
-
     return json_response(project_fcs)
 
 
@@ -254,29 +235,8 @@ def svc_get_project_changes(prjid):
     """
     Get the functional component objects
     """
-    changes = mcd_model.get_project_changes(licco_db, prjid)
+    changes = mcd_model.get_all_project_changes(licco_db, prjid)
     return json_response(changes)
-
-
-@licco_ws_blueprint.route("/fcs/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_fcs():
-    """
-    Get the functional component objects
-    """
-    fcs = mcd_model.get_fcs(licco_db)
-    return json_response(fcs)
-
-
-@licco_ws_blueprint.route("/fgs/", methods=["GET"])
-@context.security.authentication_required
-def svc_get_fgs():
-    """
-    Get the fungible tokens
-    """
-    fgs = mcd_model.get_fgs(licco_db)
-    return json_response(fgs)
-
 
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
 @context.security.authentication_required
@@ -287,35 +247,6 @@ def svc_get_ffts():
     ffts = mcd_model.get_ffts(licco_db)
     return json_response(ffts)
 
-
-@licco_ws_blueprint.route("/fcs/", methods=["POST"])
-@context.security.authentication_required
-def svc_create_fc():
-    """
-    Create a functional component
-    """
-    newfc = request.json
-    status, errormsg, fc = mcd_model.create_new_functional_component(licco_db,
-        name=newfc.get("name", ""), description=newfc.get("description", ""))
-    if errormsg:
-        return json_error(errormsg)
-    return json_response(fc)
-
-
-@licco_ws_blueprint.route("/fgs/", methods=["POST"])
-@context.security.authentication_required
-def svc_create_fg():
-    """
-    Create a fungible token
-    """
-    newfg = request.json
-    status, errormsg, fg = mcd_model.create_new_fungible_token(licco_db,
-        name=newfg.get("name", ""), description=newfg.get("description", ""))
-    if errormsg:
-        return json_error(errormsg)
-    return json_response(fg)
-
-
 @licco_ws_blueprint.route("/ffts/", methods=["POST"])
 @context.security.authentication_required
 def svc_create_fft():
@@ -324,22 +255,12 @@ def svc_create_fft():
     For now, we expect the ID's of the functional component and the fungible token ( and not the names )
     """
     newfft = request.json
-    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], fg=newfft["fg"])
+    print("svc create fft ", newfft)
+    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], prjid=newfft["prjid"])
     if errormsg:
         return json_error(errormsg)
     return json_response(fft)
 
-
-@licco_ws_blueprint.route("/ffts/<fftid>", methods=["DELETE"])
-@context.security.authentication_required
-def svc_delete_fft(fftid):
-    """
-    Delete a FFT if it is not being used in any project
-    """
-    status, errormsg, _ = mcd_model.delete_fft(licco_db, fftid)
-    if errormsg:
-        return json_error(errormsg)
-    return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
@@ -350,11 +271,13 @@ def svc_update_fc_in_project(prjid, fftid):
     Update the values of a functional component in a project
     """
     fcupdate = request.json
+    print("__"*15)
+    print("updating fc ", fcupdate)
     fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
-    status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
-    if not status:
-        return json_error(msg)
+    #status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
+    #if not status:
+    #    return json_error(msg)
 
     discussion = fcupdate.get('discussion', '')
     if discussion:
@@ -364,18 +287,10 @@ def svc_update_fc_in_project(prjid, fftid):
             'comment': discussion
         }]
 
-    change_of_device = 'fc' in fcupdate or 'fg' in fcupdate
-    if change_of_device:
-        status, errormsg, new_fft_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
-        if not status:
-            return json_error(errormsg)
-        fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=new_fft_id)[new_fft_id]
-        return json_response(fc)
-
-    status, errormsg, results = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
-    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)[fftid]
-    if errormsg:
+    status, errormsg, device_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
+    if not status:
         return json_error(errormsg)
+    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=device_id)
     return json_response(fc)
 
 
@@ -395,13 +310,12 @@ def svc_add_fft_comment(prjid, fftid):
         return json_error("Comment should not be empty")
 
     userid = context.security.get_current_user_id()
-    status, errormsg, results = mcd_model.add_fft_comment(licco_db, userid, prjid, fftid, comment)
-    if errormsg:
+    status, errormsg = mcd_model.add_fft_comment(licco_db, userid, prjid, fftid, comment)
+    if not status:
         return json_error(errormsg)
 
-    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)
-    val = fc[fftid]
-    return json_response(val)
+    data = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)
+    return json_response(data)
 
 
 
@@ -456,13 +370,14 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
 @context.security.authentication_required
 def svc_update_ffts_in_project(prjid):
     """
-    Insert multiple FFTs into a project
+    Insert one, or multiple devices into a project
     """
     ffts = request.json
     if isinstance(ffts, dict):
         ffts = [ffts]
 
     userid = context.security.get_current_user_id()
+    print("ADDING ", ffts)
     status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
     fft = mcd_model.get_project_ffts(licco_db, prjid)
     if errormsg:
@@ -587,6 +502,8 @@ def svc_submit_for_approval(prjid):
             return json_error("At least 1 approver is expected")
         editors = request.json.get("editors", [])
 
+    print("APPROVERS ", approvers)
+
     userid = context.security.get_current_user_id()
     status, err, prj = mcd_model.submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
     if err:
@@ -661,7 +578,7 @@ def svc_clone_project(prjid):
         return json_error("Please specify a project name and description")
 
     status, err, newprj = mcd_model.clone_project(licco_db, userid, prjid, project_name, project_description, project_editors, context.notifier)
-    if err:
+    if not status:
         return json_error(err)
     return json_response(newprj)
 
@@ -691,7 +608,7 @@ def svc_add_project_tag(prjid):
         return json_error("Please specify the tag_name")
 
     if not asoftimestamp:
-        changes = mcd_model.get_project_changes(licco_db, prjid)
+        changes = mcd_model.get_all_project_changes(licco_db, prjid)
         if not changes:
             return json_error("Cannot tag a project without a change")
         logger.info("Latest change is at " + str(changes[0]["time"]))
