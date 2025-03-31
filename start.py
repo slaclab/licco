@@ -10,19 +10,23 @@ from flask_cors import CORS
 
 import context
 
-# parse cli args
-gunicorn_config = os.environ.get("LICCO_CONFIG", None)
-if gunicorn_config:
-    conf = app_config.load_config(gunicorn_config)
-else:
-    parser = argparse.ArgumentParser(description="Licco CLI Options")
-    parser.add_argument("-c", "--config", default="", help="Path to a Licco config file")
-    args = parser.parse_args()
-    conf = app_config.load_config(args.config)
-
 # load configuration
-print("=== APP CONFIG ===")
+licco_config = os.environ.get("LICCO_CONFIG", None)
+is_gunicorn_running = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
+if is_gunicorn_running:
+    conf = app_config.load_config(licco_config)
+else:
+    if licco_config:
+        conf = app_config.load_config(licco_config)
+    else:
+        parser = argparse.ArgumentParser(description="Licco CLI Options")
+        parser.add_argument("-c", "--config", default="", help="Path to a Licco config file")
+        args = parser.parse_args()
+        conf = app_config.load_config(args.config)
+
+print("================================= APP CONFIG ===================================")
 print(conf)
+print("================================================================================")
 print("")
 
 # setup a global logger
