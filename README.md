@@ -19,25 +19,9 @@ see: https://confluence.slac.stanford.edu/display/PCDS/Validated+Machine+Configu
 - Start front end REACT development server 
     - `npm run dev`
 - Run backend in debug mode with gunicorn server in another terminal/session
-    - `LOG_LEVEL=DEBUG MONGODB_URL=127.0.0.1 python3 -m gunicorn start:app`
+    - `python3 -m gunicorn --env LICCO_CONFIG="./config.ini" start:app`
 
 
 ## Configuration
 
-### Credentials
-
-In order for notification module to work, you have to create a `credentials.ini`
-file in the main directory, e.g.:
-
-```ini
-# example credentials.ini file
-[email]
-service_url = https://localhost:3000
-url = smtp.example.com
-port = 587
-email_auth = False
-user = user.name@example.com
-password = password
-admin_email = admin@admin.com
-username_to_email_service = http://www.example.com/ws/
-```
+See `config.ini` file for available options.
