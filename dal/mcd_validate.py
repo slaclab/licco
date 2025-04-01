@@ -224,7 +224,16 @@ _mirror_motion_range_fields = build_validator_fields([
     FieldValidator(name="motion_max_yaw", label="Motion Max Yaw", data_type=FieldType.FLOAT, fromstr=str2float),
 ])
 
-validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | build_validator_fields([
+_mirror_tolerance_fields = build_validator_fields([
+    FieldValidator(name="tolerance_x", label="Tolerance X", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="tolerance_y", label="Tolerance Y", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="tolerance_z", label="Tolerance Z", data_type=FieldType.FLOAT, fromstr=str2float),
+])
+
+validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | _mirror_tolerance_fields | build_validator_fields([
+]))
+
+validator_kb_mirror = Validator("KB Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | _mirror_tolerance_fields | build_validator_fields([
     FieldValidator(name="focus_min_p", label="Focus Min P", data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name="focus_max_p", label="Focus Max P", data_type=FieldType.FLOAT, fromstr=str2float),
 
@@ -243,6 +252,7 @@ type_validator: Dict[int, Validator] = {
     DeviceType.Unknown.value: validator_noop,
     DeviceType.Mcd.value: validator_mcd,
     DeviceType.FlatMirror.value: validator_flat_mirror,
+    DeviceType.KbMirror.value: validator_kb_mirror,
     DeviceType.Aperture.value: validator_aperture,
 }
 
