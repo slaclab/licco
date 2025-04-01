@@ -6,7 +6,7 @@ from typing import Dict, Callable, Optional, List
 
 import pytz
 
-from dal import mcd_model
+from .mcd_model import FCState
 
 # the purpose of this file is to provide you with a common validators for MCD database
 
@@ -68,7 +68,7 @@ class FieldValidator:
 
             if self.allowed_values:
                 if val not in self.allowed_values:
-                    return f"invalid '{self.name}' value: expected values are {self.allowed_values}, but got: '{val}'"
+                    return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
 
             # no error
             return ""
@@ -160,6 +160,8 @@ def str2date(val: str):
 # --------------------- validators of known types ----------------------
 
 def build_validator_fields(field_validators: List[FieldValidator]) -> Dict[str, FieldValidator]:
+    # if the validator fields are shared with another device, that's not a problem
+    # since validators should be immutable and stateless.
     d = {}
     for v in field_validators:
         d[v.name] = v
@@ -182,7 +184,7 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='fc', label="FC", data_type=FieldType.TEXT, fromstr=str),
     FieldValidator(name='fg', label="FG", data_type=FieldType.TEXT, fromstr=str, required=False),
     FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.TEXT, fromstr=str, required=False),
-    FieldValidator(name='state', label="State", data_type=FieldType.TEXT, fromstr=str, allowed_values=[v.value for v in mcd_model.FCState]),
+    FieldValidator(name='state', label="State", data_type=FieldType.TEXT, fromstr=str, allowed_values=[v.value for v in FCState]),
     FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.TEXT, fromstr=str, required=False),
     FieldValidator(name='comment', label="Comment", data_type=FieldType.TEXT, fromstr=str, required=False),
 
@@ -190,28 +192,50 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='nom_loc_y', label='Nom Loc X', data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name='nom_loc_z', label='Nom Loc Z', data_type=FieldType.FLOAT, fromstr=str2float, range=[0, 2000]),
 
-    FieldValidator(name='nom_ang_x', label='Nom Ang X', data_type=FieldType.FLOAT, fromstr=str2float,
-                   range=[-math.pi, math.pi]),
-    FieldValidator(name='nom_ang_y', label='Nom Ang Y', data_type=FieldType.FLOAT, fromstr=str2float,
-                   range=[-math.pi, math.pi]),
-    FieldValidator(name='nom_ang_z', label='Nom Ang Z', data_type=FieldType.FLOAT, fromstr=str2float,
-                   range=[-math.pi, math.pi]),
+    FieldValidator(name='nom_ang_x', label='Nom Ang X', data_type=FieldType.FLOAT, fromstr=str2float, range=[-math.pi, math.pi]),
+    FieldValidator(name='nom_ang_y', label='Nom Ang Y', data_type=FieldType.FLOAT, fromstr=str2float, range=[-math.pi, math.pi]),
+    FieldValidator(name='nom_ang_z', label='Nom Ang Z', data_type=FieldType.FLOAT, fromstr=str2float, range=[-math.pi, math.pi]),
 
     FieldValidator(name='ray_trace', label='Ray Trace', data_type=FieldType.INT, fromstr=str2int, range=[0, 1]),
 ]))
 
-validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | build_validator_fields([
+_mirror_geometry_fields = build_validator_fields([
     FieldValidator(name="geom_len", label="Geometry Length", data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name="geom_width", label="Geometry Width", data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name="thickness", label="Thickness", data_type=FieldType.FLOAT, fromstr=str2float),
-
     FieldValidator(name="geom_center_x", label="Geometry Center X", data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name="geom_center_y", label="Geometry Center Y", data_type=FieldType.FLOAT, fromstr=str2float),
     FieldValidator(name="geom_center_z", label="Geometry Center Z", data_type=FieldType.FLOAT, fromstr=str2float),
+])
+
+_mirror_motion_range_fields = build_validator_fields([
+    FieldValidator(name="motion_min_x", label="Motion Min X", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_x", label="Motion Max X", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_min_y", label="Motion Min Y", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_y", label="Motion Max Y", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_min_z", label="Motion Min Z", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_z", label="Motion Max Z", data_type=FieldType.FLOAT, fromstr=str2float),
+
+    FieldValidator(name="motion_min_pitch", label="Motion Min Pitch", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_pitch", label="Motion Max Pitch", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_min_roll", label="Motion Min Roll", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_roll", label="Motion Max Roll", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_min_yaw", label="Motion Min Yaw", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="motion_max_yaw", label="Motion Max Yaw", data_type=FieldType.FLOAT, fromstr=str2float),
+])
+
+validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | build_validator_fields([
+    FieldValidator(name="focus_min_p", label="Focus Min P", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="focus_max_p", label="Focus Max P", data_type=FieldType.FLOAT, fromstr=str2float),
+
+    FieldValidator(name="focus_min_q", label="Focus Min Q", data_type=FieldType.FLOAT, fromstr=str2float),
+    FieldValidator(name="focus_max_q", label="Focus Max Q", data_type=FieldType.FLOAT, fromstr=str2float),
+
+    FieldValidator(name="focus_theta", label="Focus Theta", data_type=FieldType.FLOAT, fromstr=str2float),
 ]))
 
-validator_aperture = Validator("Aperture", fields=validator_mcd.fields | build_validator_fields([
-    FieldValidator(name="geom_loc_y", label="Geometry Location Y", data_type=FieldType.FLOAT, fromstr=str2float),
+# TODO: do the same for all other devices...
+validator_aperture = Validator("Aperture", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | build_validator_fields([
 ]))
 
 type_validator: Dict[int, Validator] = {
@@ -222,15 +246,26 @@ type_validator: Dict[int, Validator] = {
     DeviceType.Aperture.value: validator_aperture,
 }
 
-def validate_device(component: Dict[str, any]) -> str:
-    device_type = component.get("device_type", None)
+def validate_device(device: Dict[str, any]) -> str:
+    device_type = device.get("device_type", None)
     if device_type is None:
         return "provided device does not have a required 'device_type' field"
 
     # or just display a giant switch here
     validator = type_validator.get(device_type, None)
     if validator is None:
-        return "can't validate provided device: unknown device_type value {device_type}"
+        return f"can't validate provided device: device_type value '{device_type}' does not have an implemented validator"
 
-    err = validator.validate_component(component)
+    err = validator.validate_component(device)
     return err
+
+
+def validate_project_devices(devices: List[Dict[str, any]]):
+    # TODO: we have to support two modes
+    # 1) User submits a project (reject if there is any error)
+    # 2) User imports a project (and rejected devices are simply not imported)
+    #    In this case we need to know if there are any failed devices
+    #
+    # TODO: edge case: if the user tries to merge a device from existing data, it's possible that
+    # existing data is no longer valid under the new term.
+    raise Exception("Not implemented")

@@ -15,7 +15,7 @@ def test_validate_field__outside_range():
 
 def test_validate_field__unknown_value():
     err = validator_mcd.validate_field("state", "XXXX")
-    assert err == "invalid 'state' value: expected values are ['Conceptual', 'Planned', 'Commissioned', 'ReadyForInstallation', 'Installed', 'Operational', 'NonOperational', 'Decommissioned', 'Removed'], but got: 'XXXX'"
+    assert err == "invalid 'state' value 'XXXX': expected values are ['Conceptual', 'Planned', 'Commissioned', 'ReadyForInstallation', 'Installed', 'Operational', 'NonOperational', 'Decommissioned', 'Removed']"
 
 def test_validate_device():
     now = datetime.datetime.now()
