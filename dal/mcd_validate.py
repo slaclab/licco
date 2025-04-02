@@ -101,7 +101,7 @@ class Validator:
     name: str  # mcd, aperture, mirror, etc...
     fields: Dict[str, FieldValidator]
 
-    def validate_component(self, component_fields: Dict[str, any]):
+    def validate_device(self, device_fields: Device):
         """Validate all fields of a component (e.g., a flat mirror)."""
         # TODO: when a component is in a certain state, we could set that field as required.
         required_fields = set([v.name for v in self.fields.values() if v.required])
@@ -111,7 +111,7 @@ class Validator:
         # 2) Validate provided values of component
         # 3) Validate that we didn't miss any of the required fields
         errors = []
-        for field_name, field_val in component_fields.items():
+        for field_name, field_val in device_fields.items():
             # remove field from required fields, so we know whether all required fields were present
             required_fields.discard(field_name)
 
@@ -141,7 +141,7 @@ class Validator:
 class NoOpValidator(Validator):
     """Validator that accepts every change"""
 
-    def validate_component(self, component_fields: Dict[str, any]):
+    def validate_device(self, component_fields: Dict[str, any]):
         return ""
 
     def validate_field(self, field: str, val: any) -> str:
@@ -151,7 +151,7 @@ class UnsetDeviceValidator(Validator):
     """This validator will always reject validation. If it's used, this usually means we have a programming bug
     and somebody forgot to set a device type."""
 
-    def validate_component(self, component_fields: Dict[str, any]):
+    def validate_device(self, component_fields: Dict[str, any]):
         return f"invalid device type {DeviceType.UNSET} (unset device): you have probably forgot to set a valid device type"
 
     def validate_field(self, field: str, val: any) -> str:
@@ -281,7 +281,7 @@ def validate_device(device: Device) -> str:
     if validator is None:
         return f"can't validate provided device: device_type value '{device_type}' does not have an implemented validator"
 
-    err = validator.validate_component(device)
+    err = validator.validate_device(device)
     return err
 
 @dataclass
