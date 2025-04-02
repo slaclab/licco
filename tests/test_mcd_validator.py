@@ -19,12 +19,12 @@ def test_validate_field__unknown_value():
 
 def test_validate_device():
     now = datetime.datetime.now()
-    partial_device_data = {'fc': 'AA10', 'created': now, 'device_type': DeviceType.Mcd.value, 'nom_ang_x': 1.23}
+    partial_device_data = {'fc': 'AA10', 'created': now, 'device_type': DeviceType.MCD.value, 'nom_ang_x': 1.23}
     err = mcd_validate.validate_device(partial_device_data)
     assert err == "invalid device data: missing required fields: ['nom_ang_y', 'nom_ang_z', 'nom_loc_x', 'nom_loc_y', 'nom_loc_z', 'ray_trace', 'state']"
 
 def test_validate_device__invalid():
     now = datetime.datetime.now()
-    partial_device_data = {'fc': 'AA10', 'created': now, 'device_type': DeviceType.Unknown.value, 'nom_ang_x': 1.23}
+    partial_device_data = {'fc': 'AA10', 'created': now, 'device_type': DeviceType.UNKNOWN.value, 'nom_ang_x': 1.23}
     err = mcd_validate.validate_device(partial_device_data)
     assert err == "", "validator should not report an error on an unknown device data"
