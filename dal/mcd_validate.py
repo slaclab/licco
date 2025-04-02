@@ -2,13 +2,15 @@ import datetime
 import enum
 import math
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional, List
+from typing import Dict, Callable, Optional, List, TypeAlias
 
 import pytz
 
 from .mcd_model import FCState
 
 # the purpose of this file is to provide you with a common validators for MCD database
+
+Device: TypeAlias = Dict[str, any]
 
 class FieldType(enum.Enum):
     FLOAT = 1
@@ -94,6 +96,8 @@ class FieldValidator:
 
 @dataclass
 class Validator:
+    """Base device validator for validating device fields"""
+
     name: str  # mcd, aperture, mirror, etc...
     fields: Dict[str, FieldValidator]
 
@@ -115,6 +119,7 @@ class Validator:
             if err:
                 errors.append(err)
 
+        # validation done
         if len(required_fields) != 0:
             missing_required_fields = sorted(list(required_fields))
             err = f"invalid device data: missing required fields: {missing_required_fields}"
@@ -156,15 +161,6 @@ class UnsetDeviceValidator(Validator):
 
 def no_transform(val: str):
     return val
-
-
-def str2float(val: str):
-    return float(val)
-
-
-def str2int(val: str):
-    return int(val)
-
 
 def str2date(val: str):
     if isinstance(val, datetime.datetime):
@@ -212,7 +208,7 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='nom_ang_y', label='Nom Ang Y', data_type=FieldType.FLOAT, range=[-math.pi, math.pi]),
     FieldValidator(name='nom_ang_z', label='Nom Ang Z', data_type=FieldType.FLOAT, range=[-math.pi, math.pi]),
 
-    FieldValidator(name='ray_trace', label='Ray Trace', data_type=FieldType.INT, fromstr=str2int, range=[0, 1]),
+    FieldValidator(name='ray_trace', label='Ray Trace', data_type=FieldType.INT, range=[0, 1]),
 ]))
 
 _mirror_geometry_fields = build_validator_fields([
@@ -275,7 +271,7 @@ type_validator: Dict[int, Validator] = {
     DeviceType.APERTURE.value: validator_aperture,
 }
 
-def validate_device(device: Dict[str, any]) -> str:
+def validate_device(device: Device) -> str:
     device_type = device.get("device_type", None)
     if device_type is None:
         return "provided device does not have a required 'device_type' field"
@@ -288,13 +284,24 @@ def validate_device(device: Dict[str, any]) -> str:
     err = validator.validate_component(device)
     return err
 
+@dataclass
+class DeviceValidationError:
+    device: Device
+    error: str
 
-def validate_project_devices(devices: List[Dict[str, any]]):
-    # TODO: we have to support two modes
-    # 1) User submits a project (reject if there is any error)
-    # 2) User imports a project (and rejected devices are simply not imported)
-    #    In this case we need to know if there are any failed devices
-    #
-    # TODO: edge case: if the user tries to merge a device from existing data, it's possible that
-    # existing data is no longer valid under the new term.
-    raise Exception("Not implemented")
+@dataclass
+class ValidationResult:
+    ok: List[Device]
+    errors: List[DeviceValidationError]
+
+
+def validate_project_devices(devices: List[Device]) -> ValidationResult:
+    """General method for validating project devices (on project import or when submitting the project for approval)"""
+    results = ValidationResult([], [])
+    for device in devices:
+        validation_err = validate_device(device)
+        if validation_err:
+            results.errors.append(DeviceValidationError(device, validation_err))
+            continue
+        results.ok.append(device)
+    return results
