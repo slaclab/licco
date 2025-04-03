@@ -20,6 +20,14 @@ class FieldType(enum.Enum):
     ISO_DATE = 5
 
 
+class Required(enum.Flag):
+    """Determines if a field is optional or required in a certain device state"""
+    OPTIONAL = 0                    # field is optional
+    ALWAYS = 1 << 0                 # field is always required
+    DEVICE_DEPLOYED = 1 << 1        # required when device is in a non-conceptual state
+    OPTICAL_DATA_SELECTED = 1 << 2  # ray_tracing is selected and optical data should be there
+
+
 class DeviceType(enum.Enum):
     """Defines what kind of device we are dealing with, so we can use the right validator for checking data before
        inserting it into db.
@@ -51,7 +59,7 @@ class FieldValidator:
     name: str
     label: str
     data_type: FieldType
-    required: bool = True
+    required: Required = Required.OPTIONAL
     fromstr: Optional[Callable[[str], any]] = None
     range: Optional[List[float]] = None
     allowed_values: Optional[List[str] | List[int]] = None
@@ -97,14 +105,31 @@ class FieldValidator:
 @dataclass
 class Validator:
     """Base device validator for validating device fields"""
-
     name: str  # mcd, aperture, mirror, etc...
     fields: Dict[str, FieldValidator]
 
+    def _find_required_fields(self, device_fields: Device):
+        required_fields = set()
+        device_state = device_fields.get("state", None)
+
+        for name, validator in self.fields.items():
+            if validator.required & Required.ALWAYS:
+                required_fields.add(name)
+                continue
+
+            # NOTE: if device state does not exist (is None), an error will be raised
+            # anyway for missing "state" since it's an ALWAYS required field
+            if device_state and validator.required & Required.DEVICE_DEPLOYED:
+                if device_state != FCState.Conceptual:
+                    required_fields.add(name)
+                    continue
+
+            # TODO: other validation edge cases (e.g., for optics data)
+        return required_fields
+
     def validate_device(self, device_fields: Device):
         """Validate all fields of a component (e.g., a flat mirror)."""
-        # TODO: when a component is in a certain state, we could set that field as required.
-        required_fields = set([v.name for v in self.fields.values() if v.required])
+        required_fields = self._find_required_fields(device_fields)
 
         # validating entire component
         # 1) Validate that all provided keys are valid
@@ -132,7 +157,7 @@ class Validator:
     def validate_field(self, field: str, val: any) -> str:
         validator = self.fields.get(field, None)
         if validator is None:
-            return f"{self.name} component does not contain field '{field}'"
+            return f"{self.name} device does not contain field '{field}'"
 
         err = validator.validate(val)
         return err
@@ -184,29 +209,30 @@ validator_unset = UnsetDeviceValidator("Unset", fields=build_validator_fields([]
 validator_noop = NoOpValidator("Unknown", fields=build_validator_fields([]))
 
 common_component_fields = build_validator_fields([
+    FieldValidator(name="device_id", label="Device ID", data_type=FieldType.TEXT, required=Required.ALWAYS),
     # marks device type (mcd, mirror, aperture, ...)
-    FieldValidator(name="device_type", label="Device Type", data_type=FieldType.INT, allowed_values=[t.value for t in DeviceType], required=True),
+    FieldValidator(name="device_type", label="Device Type", data_type=FieldType.INT, allowed_values=[t.value for t in DeviceType], required=Required.ALWAYS),
     # timestamp when change was introduced
-    FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=True),
+    FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
     # discussion thread that every device should support
-    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.COMMENT_THREAD, fromstr=no_transform, required=False),
+    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.COMMENT_THREAD, fromstr=no_transform),
 ])
 
 validator_mcd = Validator("MCD", fields=common_component_fields | build_validator_fields([
-    FieldValidator(name='fc', label="FC", data_type=FieldType.TEXT),
-    FieldValidator(name='fg', label="FG", data_type=FieldType.TEXT, required=False),
-    FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.TEXT, required=False),
-    FieldValidator(name='state', label="State", data_type=FieldType.TEXT, fromstr=str, allowed_values=[v.value for v in FCState]),
-    FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.TEXT, required=False),
-    FieldValidator(name='comment', label="Comment", data_type=FieldType.TEXT, required=False),
+    FieldValidator(name='fc', label="FC", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name='fg', label="FG", data_type=FieldType.TEXT),
+    FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.TEXT),
+    FieldValidator(name='state', label="State", data_type=FieldType.TEXT, fromstr=str, allowed_values=[v.value for v in FCState], required=Required.ALWAYS),
+    FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.TEXT),
+    FieldValidator(name='comment', label="Comment", data_type=FieldType.TEXT),
 
-    FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT),
-    FieldValidator(name='nom_loc_y', label='Nom Loc Y', data_type=FieldType.FLOAT),
-    FieldValidator(name='nom_loc_z', label='Nom Loc Z', data_type=FieldType.FLOAT, range=[0, 2000]),
+    FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
+    FieldValidator(name='nom_loc_y', label='Nom Loc Y', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
+    FieldValidator(name='nom_loc_z', label='Nom Loc Z', data_type=FieldType.FLOAT, range=[0, 2000], required=Required.DEVICE_DEPLOYED),
 
-    FieldValidator(name='nom_ang_x', label='Nom Ang X', data_type=FieldType.FLOAT, range=[-math.pi, math.pi]),
-    FieldValidator(name='nom_ang_y', label='Nom Ang Y', data_type=FieldType.FLOAT, range=[-math.pi, math.pi]),
-    FieldValidator(name='nom_ang_z', label='Nom Ang Z', data_type=FieldType.FLOAT, range=[-math.pi, math.pi]),
+    FieldValidator(name='nom_ang_x', label='Nom Ang X', data_type=FieldType.FLOAT, range=[-math.pi, math.pi], required=Required.DEVICE_DEPLOYED),
+    FieldValidator(name='nom_ang_y', label='Nom Ang Y', data_type=FieldType.FLOAT, range=[-math.pi, math.pi], required=Required.DEVICE_DEPLOYED),
+    FieldValidator(name='nom_ang_z', label='Nom Ang Z', data_type=FieldType.FLOAT, range=[-math.pi, math.pi], required=Required.DEVICE_DEPLOYED),
 
     FieldValidator(name='ray_trace', label='Ray Trace', data_type=FieldType.INT, range=[0, 1]),
 ]))
