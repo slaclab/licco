@@ -23,6 +23,13 @@ def test_validate_device__missing_always_required_fields():
     err = mcd_validate.validate_device(partial_device_data)
     assert err == "invalid device data: missing required fields: ['device_id', 'state']"
 
+def test_validate_device__optional_fields_in_draft_project():
+    # coordinates could be missing in conceptual stage
+    now = datetime.datetime.now()
+    device_data = {'fc': 'AA10', 'device_id': '123', 'created': now, 'state': 'Conceptual', 'device_type': DeviceType.MCD.value, 'discussion': [{'id': '123', 'author': "aaa", 'created': now, 'comment': "my comment"}]}
+    err = mcd_validate.validate_device(device_data)
+    assert err == "", "there should be no device coordinate errors in device with 'Conceptual' state"
+
 def test_validate_device__missing_coordinate_fields():
     # checking if coordinates that should be present in a non-conceptual state are detected as required fields
     now = datetime.datetime.now()
@@ -35,3 +42,9 @@ def test_validate_device__invalid():
     partial_device_data = {'fc': 'AA10', 'created': now, 'device_type': DeviceType.UNKNOWN.value, 'nom_ang_x': 1.23, 'non-existing-field': 'aaa'}
     err = mcd_validate.validate_device(partial_device_data)
     assert err == "", "validator should not report an error on an unknown device data"
+
+def test_validate_device__discussion_thread():
+    now = datetime.datetime.now()
+    device_data = {'fc': 'AA10', 'device_id': '123', 'created': now, 'state': 'Conceptual', 'device_type': DeviceType.MCD.value, 'discussion': [{'author': "aaa", 'comment': "my comment"}]}
+    err = mcd_validate.validate_device(device_data)
+    err = "failed to validate device 'discussion' field: failed to validate a comment: invalid device data: missing required fields: ['created', 'id']: Original data: {'author': 'aaa', 'comment': 'my comment'}"

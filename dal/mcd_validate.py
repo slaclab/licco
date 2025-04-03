@@ -63,6 +63,7 @@ class FieldValidator:
     fromstr: Optional[Callable[[str], any]] = None
     range: Optional[List[float]] = None
     allowed_values: Optional[List[str] | List[int]] = None
+    validator: Optional[Callable[[any], str]] = None  # custom validator if necessary
 
     @staticmethod
     def default_fromstr(field_type: FieldType, value: any):
@@ -78,9 +79,9 @@ class FieldValidator:
 
     def validate(self, value: any) -> str:
         try:
-            if self.data_type == FieldType.COMMENT_THREAD:
-                # TODO: how do we validate a comment thread?
-                return ""
+            if self.validator:
+                err = self.validator(value)
+                return err
 
             if self.fromstr:
                 val = self.fromstr(value)
@@ -101,7 +102,6 @@ class FieldValidator:
         except Exception as e:
             return f"invalid '{self.name}' value: {str(e)}"
 
-
 @dataclass
 class Validator:
     """Base device validator for validating device fields"""
@@ -120,7 +120,7 @@ class Validator:
             # NOTE: if device state does not exist (is None), an error will be raised
             # anyway for missing "state" since it's an ALWAYS required field
             if device_state and validator.required & Required.DEVICE_DEPLOYED:
-                if device_state != FCState.Conceptual:
+                if device_state != FCState.Conceptual.value:
                     required_fields.add(name)
                     continue
 
@@ -129,6 +129,9 @@ class Validator:
 
     def validate_device(self, device_fields: Device):
         """Validate all fields of a component (e.g., a flat mirror)."""
+        if not isinstance(device_fields, dict):
+            return f"invalid device data: expected a dictionary data type, but got {type(device_fields)}"
+
         required_fields = self._find_required_fields(device_fields)
 
         # validating entire component
@@ -208,6 +211,34 @@ def build_validator_fields(field_validators: List[FieldValidator]) -> Dict[str, 
 validator_unset = UnsetDeviceValidator("Unset", fields=build_validator_fields([]))
 validator_noop = NoOpValidator("Unknown", fields=build_validator_fields([]))
 
+discussion_thread_validator = Validator("Discussion", build_validator_fields([
+    FieldValidator(name="id", label="id", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name="author", label="Author", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
+    FieldValidator(name="comment", label="Comment", data_type=FieldType.TEXT, required=Required.ALWAYS),
+]))
+
+def validate_discussion_thread(input: any) -> str:
+    if not isinstance(input, list):
+        return f"invalid 'discussion' thread type: expected a list of discussions, but got {type(input)})"
+
+    # check if discussion is a dictionary
+    errors = []
+    for discussion in input:
+        if not isinstance(discussion, dict):
+            errors.append(f"invalid comment type: expected a dictionary, but got ({discussion})")
+            continue
+        err = discussion_thread_validator.validate_device(discussion)
+        if err:
+            errors.append(f"failed to validate a comment: {err}: Original data: {discussion}")
+            continue
+
+    if errors:
+        e = "\n".join(errors)
+        return f"failed to validate device 'discussion' field: {e}"
+    return ""
+
+
 common_component_fields = build_validator_fields([
     FieldValidator(name="device_id", label="Device ID", data_type=FieldType.TEXT, required=Required.ALWAYS),
     # marks device type (mcd, mirror, aperture, ...)
@@ -215,7 +246,7 @@ common_component_fields = build_validator_fields([
     # timestamp when change was introduced
     FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
     # discussion thread that every device should support
-    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.COMMENT_THREAD, fromstr=no_transform),
+    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.COMMENT_THREAD, validator=validate_discussion_thread),
 ])
 
 validator_mcd = Validator("MCD", fields=common_component_fields | build_validator_fields([
