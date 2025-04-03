@@ -47,4 +47,4 @@ def test_validate_device__discussion_thread():
     now = datetime.datetime.now()
     device_data = {'fc': 'AA10', 'device_id': '123', 'created': now, 'state': 'Conceptual', 'device_type': DeviceType.MCD.value, 'discussion': [{'author': "aaa", 'comment': "my comment"}]}
     err = mcd_validate.validate_device(device_data)
-    err = "failed to validate device 'discussion' field: failed to validate a comment: invalid device data: missing required fields: ['created', 'id']: Original data: {'author': 'aaa', 'comment': 'my comment'}"
+    assert err == "failed to validate device 'discussion' field: failed to validate a comment: invalid device data: missing required fields: ['created', 'id']: Original data: {'author': 'aaa', 'comment': 'my comment'}"

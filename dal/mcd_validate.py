@@ -97,6 +97,10 @@ class FieldValidator:
                 if val not in self.allowed_values:
                     return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
 
+            if self.data_type == FieldType.TEXT and self.required & Required.ALWAYS:
+                if not val:
+                    return f"invalid '{self.name}' value: value can't be empty"
+
             # no error
             return ""
         except Exception as e:
@@ -224,7 +228,7 @@ def validate_discussion_thread(input: any) -> str:
 
     # check if discussion is a dictionary
     errors = []
-    for discussion in input:
+    for i, discussion in enumerate(input):
         if not isinstance(discussion, dict):
             errors.append(f"invalid comment type: expected a dictionary, but got ({discussion})")
             continue
