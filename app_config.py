@@ -51,6 +51,8 @@ class AppConfig:
     app_secret_key: str = "A secret key for licco"
     app_debug: bool = False
     app_log_level: str = "INFO"
+    # this is for development only, to let you authenticate as any user
+    app_logged_in_as_user: str = ""
 
     # database config
     mongo_url: str = ""
@@ -64,6 +66,7 @@ class AppConfig:
         self.app_secret_key = c.get("app", "secret_key", fallback="A secret key for licco")
         self.app_debug = c.get("app", "debug", fallback=False)
         self.app_log_level = c.get("app", "log_level", fallback="INFO")
+        self.app_logged_in_as_user = c.get("app", "logged_in_as_user", fallback="")
 
         mongo_backup = os.environ.get("MONGODB_URL", "")
         self.mongo_url = c.get("db", "mongo_url", fallback=mongo_backup)

@@ -55,6 +55,8 @@ def init_context(config: AppConfig):
 
     notifier = create_notifier(config.email_config)
 
+    logged_in_as_user = config.app_logged_in_as_user
+
     class LiccoAuthnz(FlaskAuthnz):
         def __init__(self, roles_dal, application_name):
             super().__init__(roles_dal, application_name)
@@ -62,15 +64,20 @@ def init_context(config: AppConfig):
         def check_privilege_for_project(self, priv_name, prjid=None):
             if priv_name in ["read"]:
                 return True
-            if super().check_privilege_for_experiment(priv_name, None, None):
+            if self.check_privilege_for_experiment(priv_name, None, None):
                 return True
             if prjid and priv_name in ["write", "edit"]:
-                logged_in_user = super().get_current_user_id()
+                logged_in_user = self.get_current_user_id()
                 oid = ObjectId(prjid)
                 prj = licco_db["projects"].find_one({"_id": oid})
                 if prj and (prj["owner"] == logged_in_user) or logged_in_user in prj.get("editors", []):
                     return True
             return False
+
+        def get_current_user_id(self):
+            if logged_in_as_user:
+                return logged_in_as_user
+            return super().get_current_user_id()
 
         def authorization_required(self, *params):
             '''
