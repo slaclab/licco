@@ -1,5 +1,6 @@
 import datetime
 import enum
+from enum import auto
 import math
 from dataclasses import dataclass
 from typing import Dict, Callable, Optional, List, TypeAlias
@@ -13,11 +14,11 @@ from .mcd_model import FCState
 Device: TypeAlias = Dict[str, any]
 
 class FieldType(enum.Enum):
-    FLOAT = 1
-    INT = 2
-    TEXT = 3
-    COMMENT_THREAD = 4
-    ISO_DATE = 5
+    FLOAT = auto()
+    INT = auto()
+    TEXT = auto()
+    ISO_DATE = auto()
+    CUSTOM_VALIDATOR = auto()
 
 
 class Required(enum.Flag):
@@ -79,6 +80,9 @@ class FieldValidator:
 
     def validate(self, value: any) -> str:
         try:
+            if self.data_type == FieldType.CUSTOM_VALIDATOR and not self.validator:
+                return f"field {self.name} demands a custom validator, but found none: this is a programming bug"
+
             if self.validator:
                 err = self.validator(value)
                 return err
@@ -189,6 +193,7 @@ class UnsetDeviceValidator(Validator):
     def validate_field(self, field: str, val: any) -> str:
         return f"invalid device type {DeviceType.UNSET} (unset device): you have probably forgot to set a valid device type"
 
+
 # --------------------------  converters --------------------------------
 
 def no_transform(val: str):
@@ -215,33 +220,41 @@ def build_validator_fields(field_validators: List[FieldValidator]) -> Dict[str, 
 validator_unset = UnsetDeviceValidator("Unset", fields=build_validator_fields([]))
 validator_noop = NoOpValidator("Unknown", fields=build_validator_fields([]))
 
+def validate_array_of_elements(field: str, input: any, validator: Validator) -> str:
+    if not isinstance(input, list):
+        return f"invalid '{field}' field: expected a list, but got {type(input)})"
+
+    errors = []
+    for i, element in enumerate(input):
+        if not isinstance(element, dict):
+            errors.append(f"invalid element[{i}] type: expected a dictionary, but got ({element})")
+            continue
+
+        err = validator.validate_device(element)
+        if err:
+            errors.append(f"failed to validate an element[{i}]: {err}: Original data: {element}")
+            continue
+
+    if errors:
+        e = "\n".join(errors)
+        return f"failed to validate '{field}' field: {e}"
+    return ""
+
+def validate_discussion_thread(input: any) -> str:
+    err = validate_array_of_elements('discussion', input, discussion_thread_validator)
+    return err
+
+def validate_subdevices(input: any) -> str:
+    err = validate_array_of_elements('subdevices', input, DEVICE_VALIDATOR)
+    return err
+
+
 discussion_thread_validator = Validator("Discussion", build_validator_fields([
     FieldValidator(name="id", label="id", data_type=FieldType.TEXT, required=Required.ALWAYS),
     FieldValidator(name="author", label="Author", data_type=FieldType.TEXT, required=Required.ALWAYS),
     FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
     FieldValidator(name="comment", label="Comment", data_type=FieldType.TEXT, required=Required.ALWAYS),
 ]))
-
-def validate_discussion_thread(input: any) -> str:
-    if not isinstance(input, list):
-        return f"invalid 'discussion' thread type: expected a list of discussions, but got {type(input)})"
-
-    # check if discussion is a dictionary
-    errors = []
-    for i, discussion in enumerate(input):
-        if not isinstance(discussion, dict):
-            errors.append(f"invalid comment type: expected a dictionary, but got ({discussion})")
-            continue
-        err = discussion_thread_validator.validate_device(discussion)
-        if err:
-            errors.append(f"failed to validate a comment: {err}: Original data: {discussion}")
-            continue
-
-    if errors:
-        e = "\n".join(errors)
-        return f"failed to validate device 'discussion' field: {e}"
-    return ""
-
 
 common_component_fields = build_validator_fields([
     FieldValidator(name="device_id", label="Device ID", data_type=FieldType.TEXT, required=Required.ALWAYS),
@@ -250,7 +263,9 @@ common_component_fields = build_validator_fields([
     # timestamp when change was introduced
     FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
     # discussion thread that every device should support
-    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.COMMENT_THREAD, validator=validate_discussion_thread),
+    FieldValidator(name='discussion', label="Discussion", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_discussion_thread),
+    # optional array of subdevices that could be present on any device
+    FieldValidator(name='subdevices', label="Subdevices", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_subdevices)
 ])
 
 validator_mcd = Validator("MCD", fields=common_component_fields | build_validator_fields([
@@ -320,30 +335,42 @@ validator_kb_mirror = Validator("KB Mirror", fields=validator_mcd.fields | _mirr
 validator_aperture = Validator("Aperture", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | build_validator_fields([
 ]))
 
+
+class DeviceValidator(Validator):
+    """This is a container for all validator types"""
+    devices = {
+        DeviceType.UNSET.value: validator_unset,
+        DeviceType.UNKNOWN.value: validator_noop,
+        DeviceType.MCD.value: validator_mcd,
+        DeviceType.FLAT_MIRROR.value: validator_flat_mirror,
+        DeviceType.KB_MIRROR.value: validator_kb_mirror,
+        DeviceType.APERTURE.value: validator_aperture,
+    }
+
+    def __init__(self):
+        self.name = "Device Validator"
+        self.fields = {}
+
+    def validate_field(self, field: str, val: any) -> str:
+        raise Exception("this method should never be called on device validator: this is a programming bug")
+
+    def validate_device(self, device: Device):
+        device_type = device.get("device_type", None)
+        if device_type is None:
+            return "provided device does not have a required 'device_type' field"
+
+        # or just display a giant switch here
+        validator = DeviceValidator.devices.get(device_type, None)
+        if validator is None:
+            return f"can't validate provided device: device_type value '{device_type}' does not have an implemented validator"
+        err = validator.validate_device(device)
+        return err
+
+
 # ------------------------------------- end of validator types --------------------------------
 
 
-type_validator: Dict[int, Validator] = {
-    DeviceType.UNSET.value: validator_unset,
-    DeviceType.UNKNOWN.value: validator_noop,
-    DeviceType.MCD.value: validator_mcd,
-    DeviceType.FLAT_MIRROR.value: validator_flat_mirror,
-    DeviceType.KB_MIRROR.value: validator_kb_mirror,
-    DeviceType.APERTURE.value: validator_aperture,
-}
-
-def validate_device(device: Device) -> str:
-    device_type = device.get("device_type", None)
-    if device_type is None:
-        return "provided device does not have a required 'device_type' field"
-
-    # or just display a giant switch here
-    validator = type_validator.get(device_type, None)
-    if validator is None:
-        return f"can't validate provided device: device_type value '{device_type}' does not have an implemented validator"
-
-    err = validator.validate_device(device)
-    return err
+DEVICE_VALIDATOR = DeviceValidator()
 
 @dataclass
 class DeviceValidationError:
@@ -355,6 +382,8 @@ class ValidationResult:
     ok: List[Device]
     errors: List[DeviceValidationError]
 
+def validate_device(device: Device) -> str:
+    return DEVICE_VALIDATOR.validate_device(device)
 
 def validate_project_devices(devices: List[Device]) -> ValidationResult:
     """General method for validating project devices (on project import or when submitting the project for approval)"""
@@ -366,3 +395,5 @@ def validate_project_devices(devices: List[Device]) -> ValidationResult:
             continue
         results.ok.append(device)
     return results
+
+
