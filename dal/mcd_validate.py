@@ -16,7 +16,8 @@ Device: TypeAlias = Dict[str, any]
 class FieldType(enum.Enum):
     FLOAT = auto()
     INT = auto()
-    TEXT = auto()
+    STRING = auto()
+    BOOL = auto()
     ISO_DATE = auto()
     CUSTOM_VALIDATOR = auto()
 
@@ -53,6 +54,7 @@ class DeviceType(enum.Enum):
     CRL = 8
     CRYSTAL = 9
     GRATING = 10
+    GROUP = 11
 
 
 @dataclass(frozen=True)
@@ -72,10 +74,12 @@ class FieldValidator:
             return float(value)
         if field_type == FieldType.INT:
             return int(value)
-        if field_type == FieldType.TEXT:
+        if field_type == FieldType.STRING:
             return str(value)
         if field_type == FieldType.ISO_DATE:
             return str2date(value)
+        if field_type == FieldType.BOOL:
+            return bool(value)
         raise Exception(f"Unhandled field type {field_type.name} value from_str converter")
 
     def validate(self, value: any) -> str:
@@ -101,7 +105,7 @@ class FieldValidator:
                 if val not in self.allowed_values:
                     return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
 
-            if self.data_type == FieldType.TEXT and self.required & Required.ALWAYS:
+            if self.data_type == FieldType.STRING and self.required & Required.ALWAYS:
                 if not val:
                     return f"invalid '{self.name}' value: value can't be empty"
 
@@ -133,6 +137,8 @@ class Validator:
                     continue
 
             # TODO: other validation edge cases (e.g., for optics data)
+            # @FUTURE: certain validators expect different fields depending on the type of a device (circular, rectangular)
+            # Such validators should override the validation method and add additional fields...
         return required_fields
 
     def validate_device(self, device_fields: Device):
@@ -158,17 +164,35 @@ class Validator:
         # validation done
         if len(required_fields) != 0:
             missing_required_fields = sorted(list(required_fields))
-            err = f"invalid device data: missing required fields: {missing_required_fields}"
+            err = f"missing required fields: {missing_required_fields}"
             errors.append(err)
 
-        if errors:  # report all errors at once
-            return "\n".join(errors)
+        if errors:
+            # NOTE: the given device_fields could contain anything really, so we can't expect
+            # any of the fields to be present in the given dictionary.
+            #
+            # - If we are validating a device, they will usually have an 'fc' field which we report
+            #   to produce a better / more specific error message of what went wrong.
+            #
+            # - We could also be validating an array of 'device' components in which case the 'fc'
+            #   field will not be present. In such case we only report the validator name and
+            #   relevant errors
+            err = "\n".join(errors)
+
+            fc = device_fields.get('fc', '')
+            if fc:
+                return f"validation failed for a device {self.name} (fc: {fc}):\n{err}"
+            else:
+                return f"validation failed for a {self.name}:\n{err}"
+
+        # successful device validation
         return ""
+
 
     def validate_field(self, field: str, val: any) -> str:
         validator = self.fields.get(field, None)
         if validator is None:
-            return f"{self.name} device does not contain field '{field}'"
+            return f"unexpected field '{field}'"
 
         err = validator.validate(val)
         return err
@@ -244,37 +268,35 @@ def validate_discussion_thread(input: any) -> str:
     err = validate_array_of_elements('discussion', input, discussion_thread_validator)
     return err
 
-def validate_subdevices(input: any) -> str:
-    err = validate_array_of_elements('subdevices', input, DEVICE_VALIDATOR)
-    return err
-
-
 discussion_thread_validator = Validator("Discussion", build_validator_fields([
-    FieldValidator(name="id", label="id", data_type=FieldType.TEXT, required=Required.ALWAYS),
-    FieldValidator(name="author", label="Author", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name="id", label="id", data_type=FieldType.STRING, required=Required.ALWAYS),
+    FieldValidator(name="author", label="Author", data_type=FieldType.STRING, required=Required.ALWAYS),
     FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
-    FieldValidator(name="comment", label="Comment", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name="comment", label="Comment", data_type=FieldType.STRING, required=Required.ALWAYS),
 ]))
 
 common_component_fields = build_validator_fields([
-    FieldValidator(name="device_id", label="Device ID", data_type=FieldType.TEXT, required=Required.ALWAYS),
+    FieldValidator(name="device_id", label="Device ID", data_type=FieldType.STRING, required=Required.ALWAYS),
     # marks device type (mcd, mirror, aperture, ...)
     FieldValidator(name="device_type", label="Device Type", data_type=FieldType.INT, allowed_values=[t.value for t in DeviceType], required=Required.ALWAYS),
     # timestamp when change was introduced
     FieldValidator(name="created", label="Created", data_type=FieldType.ISO_DATE, required=Required.ALWAYS),
     # discussion thread that every device should support
     FieldValidator(name='discussion', label="Discussion", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_discussion_thread),
-    # optional array of subdevices that could be present on any device
-    FieldValidator(name='subdevices', label="Subdevices", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_subdevices)
 ])
 
+_mcd_locations = ["EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]
+_mcd_beamlines = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]
+
 validator_mcd = Validator("MCD", fields=common_component_fields | build_validator_fields([
-    FieldValidator(name='fc', label="FC", data_type=FieldType.TEXT, required=Required.ALWAYS),
-    FieldValidator(name='fg', label="FG", data_type=FieldType.TEXT),
-    FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.TEXT),
-    FieldValidator(name='state', label="State", data_type=FieldType.TEXT, fromstr=str, allowed_values=[v.value for v in FCState], required=Required.ALWAYS),
-    FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.TEXT),
-    FieldValidator(name='comment', label="Comment", data_type=FieldType.TEXT),
+    FieldValidator(name='fc', label="FC", data_type=FieldType.STRING, required=Required.ALWAYS),
+    FieldValidator(name='fg', label="FG", data_type=FieldType.STRING),
+    FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.STRING),
+    FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in FCState], required=Required.ALWAYS),
+    FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.STRING),
+    FieldValidator(name='comment', label="Comment", data_type=FieldType.STRING),
+    FieldValidator(name='location', label="Location", data_type=FieldType.STRING, allowed_values=_mcd_locations),
+    FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING, allowed_values=_mcd_beamlines),
 
     FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
     FieldValidator(name='nom_loc_y', label='Nom Loc Y', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
@@ -287,16 +309,19 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='ray_trace', label='Ray Trace', data_type=FieldType.INT, range=[0, 1]),
 ]))
 
-_mirror_geometry_fields = build_validator_fields([
-    FieldValidator(name="geom_len", label="Geometry Length", data_type=FieldType.FLOAT),
-    FieldValidator(name="geom_width", label="Geometry Width", data_type=FieldType.FLOAT),
-    FieldValidator(name="thickness", label="Thickness", data_type=FieldType.FLOAT),
+_geometry_center_fields = build_validator_fields([
     FieldValidator(name="geom_center_x", label="Geometry Center X", data_type=FieldType.FLOAT),
     FieldValidator(name="geom_center_y", label="Geometry Center Y", data_type=FieldType.FLOAT),
     FieldValidator(name="geom_center_z", label="Geometry Center Z", data_type=FieldType.FLOAT),
 ])
 
-_mirror_motion_range_fields = build_validator_fields([
+_mirror_geometry_fields = _geometry_center_fields | build_validator_fields([
+    FieldValidator(name="geom_len", label="Geometry Length", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_width", label="Geometry Width", data_type=FieldType.FLOAT),
+    FieldValidator(name="thickness", label="Thickness", data_type=FieldType.FLOAT),
+])
+
+_motion_range_fields = build_validator_fields([
     FieldValidator(name="motion_min_x", label="Motion Min X", data_type=FieldType.FLOAT),
     FieldValidator(name="motion_max_x", label="Motion Max X", data_type=FieldType.FLOAT),
     FieldValidator(name="motion_min_y", label="Motion Min Y", data_type=FieldType.FLOAT),
@@ -304,24 +329,71 @@ _mirror_motion_range_fields = build_validator_fields([
     FieldValidator(name="motion_min_z", label="Motion Min Z", data_type=FieldType.FLOAT),
     FieldValidator(name="motion_max_z", label="Motion Max Z", data_type=FieldType.FLOAT),
 
-    FieldValidator(name="motion_min_pitch", label="Motion Min Pitch", data_type=FieldType.FLOAT),
-    FieldValidator(name="motion_max_pitch", label="Motion Max Pitch", data_type=FieldType.FLOAT),
-    FieldValidator(name="motion_min_roll", label="Motion Min Roll", data_type=FieldType.FLOAT),
-    FieldValidator(name="motion_max_roll", label="Motion Max Roll", data_type=FieldType.FLOAT),
-    FieldValidator(name="motion_min_yaw", label="Motion Min Yaw", data_type=FieldType.FLOAT),
-    FieldValidator(name="motion_max_yaw", label="Motion Max Yaw", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_min_rx", label="Motion Min Rx", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_max_rx", label="Motion Max Rx", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_min_ry", label="Motion Min Ry", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_max_ry", label="Motion Max Ry", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_min_rz", label="Motion Min Rz", data_type=FieldType.FLOAT),
+    FieldValidator(name="motion_max_rz", label="Motion Max Rz", data_type=FieldType.FLOAT),
 ])
 
-_mirror_tolerance_fields = build_validator_fields([
+_tolerance_fields = build_validator_fields([
     FieldValidator(name="tolerance_x", label="Tolerance X", data_type=FieldType.FLOAT),
     FieldValidator(name="tolerance_y", label="Tolerance Y", data_type=FieldType.FLOAT),
     FieldValidator(name="tolerance_z", label="Tolerance Z", data_type=FieldType.FLOAT),
+
+    FieldValidator(name="tolerance_rx", label="Tolerance Rx", data_type=FieldType.FLOAT),
+    FieldValidator(name="tolerance_ry", label="Tolerance Ry", data_type=FieldType.FLOAT),
+    FieldValidator(name="tolerance_rz", label="Tolerance Rz", data_type=FieldType.FLOAT),
 ])
 
-validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | _mirror_tolerance_fields | build_validator_fields([
+validator_source = Validator("Source", fields=validator_mcd.fields | build_validator_fields([
+    FieldValidator(name="geom_len_z", label="Geometry Length Z", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_width_x", label="Geometry Width X", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_thickness_y", label="Geometry Thickness Y", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_divergence_angle", label="Geometry Divergence Angle", data_type=FieldType.FLOAT),
+
+    FieldValidator(name="tolerance_x", label="Tolerance X", data_type=FieldType.FLOAT),
+    FieldValidator(name="tolerance_y", label="Tolerance Y", data_type=FieldType.FLOAT),
+    FieldValidator(name="tolerance_z", label="Tolerance Z", data_type=FieldType.FLOAT),
 ]))
 
-validator_kb_mirror = Validator("KB Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | _mirror_tolerance_fields | build_validator_fields([
+validator_blank = Validator("Blank", fields=validator_mcd.fields | _geometry_center_fields | _tolerance_fields | build_validator_fields([
+    FieldValidator(name="geom_type", label="Geometry Type", data_type=FieldType.STRING, allowed_values=["CIRCULAR", "RECTANGULAR"]),
+
+    # circular fields only
+    FieldValidator(name="geom_od", label="Geometry OD", data_type=FieldType.FLOAT),
+
+    # rectangular fields only
+    FieldValidator(name="geom_length", label="Geometry Length", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_width", label="Geometry Width", data_type=FieldType.FLOAT),
+
+    # all fields
+    FieldValidator(name="geom_thickness", label="Geometry Thickness", data_type=FieldType.FLOAT),
+]))
+
+validator_aperture = Validator("Aperture", fields=validator_mcd.fields | _geometry_center_fields | _tolerance_fields | build_validator_fields([
+    FieldValidator(name="geom_type", label="Geometry Type", data_type=FieldType.STRING, allowed_values=["CIRCULAR", "RECTANGULAR"]),
+    # NOTE: geometry type could be either circular or rectangular in which case different fields are required
+    # Right now, it's not exactly clear how to model and verify such a configuration state, so we make all geometry
+    # fields optional
+
+    # circular fields only
+    FieldValidator(name="geom_id", label="Geometry ID", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_od", label="Geometry OD", data_type=FieldType.FLOAT),
+
+    # rectangular fields only
+    FieldValidator(name="geom_length", label="Geometry Length", data_type=FieldType.FLOAT),
+    FieldValidator(name="geom_width", label="Geometry Width", data_type=FieldType.FLOAT),
+
+    # all fields
+    FieldValidator(name="geom_thickness", label="Geometry Thickness", data_type=FieldType.FLOAT),
+]))
+
+validator_flat_mirror = Validator("Flat Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _motion_range_fields | _tolerance_fields | build_validator_fields([
+]))
+
+validator_kb_mirror = Validator("KB Mirror", fields=validator_mcd.fields | _mirror_geometry_fields | _motion_range_fields | _tolerance_fields | build_validator_fields([
     FieldValidator(name="focus_min_p", label="Focus Min P", data_type=FieldType.FLOAT),
     FieldValidator(name="focus_max_p", label="Focus Max P", data_type=FieldType.FLOAT),
 
@@ -331,8 +403,31 @@ validator_kb_mirror = Validator("KB Mirror", fields=validator_mcd.fields | _mirr
     FieldValidator(name="focus_theta", label="Focus Theta", data_type=FieldType.FLOAT),
 ]))
 
-# TODO: do the same for all other devices...
-validator_aperture = Validator("Aperture", fields=validator_mcd.fields | _mirror_geometry_fields | _mirror_motion_range_fields | build_validator_fields([
+validator_crl = Validator("CRL", fields=validator_mcd.fields | _motion_range_fields | _tolerance_fields | _geometry_center_fields | build_validator_fields([
+    FieldValidator("geom_enable", label="Geometry Enable", data_type=FieldType.BOOL),
+    FieldValidator("geom_od", label="Geometry OD", data_type=FieldType.FLOAT),
+    FieldValidator("geom_thickness", label="Geometry Thickness", data_type=FieldType.FLOAT),
+
+    FieldValidator("focus_min_p", label="Focus Min P", data_type=FieldType.FLOAT),
+    FieldValidator("focus_max_p", label="Focus Max P", data_type=FieldType.FLOAT),
+    FieldValidator("focus_min_q", label="Focus Min Q", data_type=FieldType.FLOAT),
+    FieldValidator("focus_max_q", label="Focus Max Q", data_type=FieldType.FLOAT),
+]))
+
+validator_crystal = Validator("Crystal", fields=validator_mcd.fields | _mirror_geometry_fields | _motion_range_fields | _tolerance_fields | build_validator_fields([
+]))
+
+validator_grating = Validator("Grating", fields=validator_mcd.fields | _mirror_geometry_fields | _motion_range_fields | _tolerance_fields | build_validator_fields([
+]))
+
+def validate_subdevices(input: any) -> str:
+    err = validate_array_of_elements('subdevices', input, DEVICE_VALIDATOR)
+    return err
+
+validator_group = Validator("Group", fields=validator_mcd.fields | build_validator_fields([
+    # group is a collection of subdevices (mirrors, apertures, crystals, etc...).
+    # A group could also contain another group (nested groups of devices)
+    FieldValidator(name='subdevices', label="Subdevices", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_subdevices)
 ]))
 
 
@@ -342,9 +437,15 @@ class DeviceValidator(Validator):
         DeviceType.UNSET.value: validator_unset,
         DeviceType.UNKNOWN.value: validator_noop,
         DeviceType.MCD.value: validator_mcd,
+        DeviceType.SOURCE.value: validator_source,
+        DeviceType.BLANK.value: validator_blank,
+        DeviceType.APERTURE.value: validator_aperture,
         DeviceType.FLAT_MIRROR.value: validator_flat_mirror,
         DeviceType.KB_MIRROR.value: validator_kb_mirror,
-        DeviceType.APERTURE.value: validator_aperture,
+        DeviceType.CRL.value: validator_crl,
+        DeviceType.CRYSTAL.value: validator_crystal,
+        DeviceType.GRATING.value: validator_grating,
+        DeviceType.GROUP.value: validator_group,
     }
 
     def __init__(self):
@@ -362,7 +463,7 @@ class DeviceValidator(Validator):
         # or just display a giant switch here
         validator = DeviceValidator.devices.get(device_type, None)
         if validator is None:
-            return f"can't validate provided device: device_type value '{device_type}' does not have an implemented validator"
+            return f"can't validate provided device: invalid device type '{device_type}'"
         err = validator.validate_device(device)
         return err
 
