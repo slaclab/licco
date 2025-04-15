@@ -38,4 +38,13 @@ jobs:
       run: |
         conda install pytest
         conda run python -m pytest tests
-
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+    - name: Install Frontend dependencies
+      working-directory: './react'
+      run: npm install
+    - name: Run Frontend Tests
+      working-directory: './react'
+      run: npm run test
