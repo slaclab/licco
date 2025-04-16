@@ -33,6 +33,8 @@ KEYMAP = {
     "Fungible": "fg_desc",
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
+    "Location": "location",
+    "Beamline": "beamline",
     "State": "state",
     "LCLS_Z_loc": "nom_loc_z",
     "LCLS_X_loc": "nom_loc_x",
