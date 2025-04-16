@@ -4,79 +4,19 @@ Most of the code here gets a connection to the database, executes a query and fo
 """
 import logging
 import datetime
-import types
 from collections.abc import Mapping
-from enum import Enum
-import json
 import math
-from typing import Dict, Tuple, List, Optional, TypeAlias
+from typing import Dict, Tuple, List, Optional
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
-from pymongo.synchronous.database import Database
 
 from notifications.notifier import Notifier, NoOpNotifier
+from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS
 from .projdetails import get_project_attributes, get_all_project_changes
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
-
-MASTER_PROJECT_NAME = 'LCLS Machine Configuration Database'
-
-MongoDb: TypeAlias = Database[Dict[str, any]]
-McdProject: TypeAlias = Dict[str, any]
-
-KEYMAP = {
-    # Column names defined in confluence
-    "FC": "fc",
-    "FG": "fg",
-    "Fungible": "fg_desc",
-    "TC_part_no": "tc_part_no",
-    "Stand": "stand",
-    "Location": "location",
-    "Beamline": "beamline",
-    "State": "state",
-    "LCLS_Z_loc": "nom_loc_z",
-    "LCLS_X_loc": "nom_loc_x",
-    "LCLS_Y_loc": "nom_loc_y",
-    "LCLS_Z_roll": "nom_ang_z",
-    "LCLS_X_pitch": "nom_ang_x",
-    "LCLS_Y_yaw": "nom_ang_y",
-    "Must_Ray_Trace": "ray_trace",
-    "Comments": "comments"
-}
-KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
-
-
-class FCState(Enum):
-    Conceptual = "Conceptual"
-    Planned = "Planned"
-    Commissioned = "Commissioned"
-    ReadyForInstallation = "ReadyForInstallation"
-    Installed = "Installed"
-    Operational = "Operational"
-    NonOperational = "NonOperational"
-    Decommissioned = "Decommissioned"
-    Removed = "Removed"
-
-    def describe(self):
-        d = self.descriptions()
-        return d[self]
-
-    @classmethod
-    def descriptions(cls):
-        return {
-            FCState.Conceptual: {"sortorder": 0, "label": "Conceptual", "description": "There are no firm plans to proceed with applying this configuration, it is still under heavy development. Configuration changes are frequent."},
-            FCState.Planned: {"sortorder": 1, "label": "Planned", "description": "A planned configuration, installation planning is underway. Configuration changes are less frequent."},
-            FCState.ReadyForInstallation: {"sortorder": 2, "label": "Ready for installation", "description": "Configuration is designated as ready for installation. Installation is imminent. Installation effort is planned and components may be fully assembled and bench-tested."},
-            FCState.Installed: {"sortorder": 3, "label": "Installed", "description": "Component is physically installed but not fully operational"},
-            FCState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
-            FCState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
-            FCState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
-            FCState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
-            FCState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
-        }
-
 
 def initialize_collections(licco_db: MongoDb):
     if 'name_1' not in licco_db["projects"].index_information().keys():
@@ -510,159 +450,6 @@ def create_new_fft(licco_db: MongoDb, fc, fg, fcdesc="Default", fgdesc="Default"
         return False, str(e), None
 
 
-def default_wrapper(func, default):
-    def wrapped_func(val):
-        if val == '':
-            return default
-        else:
-            return func(val)
-    return wrapped_func
-
-
-def str2bool(val):
-    return json.loads(str(val).lower())
-
-
-def str2float(val):
-    return float(val)
-
-
-def str2int(val):
-    return int(val)
-
-
-# read only attributes and their metadata
-fcattrs = types.MappingProxyType({
-    "fg_desc": {
-        "name": "fg_desc",
-        "type": "text",
-        "fromstr": str,
-        "label": "Fungible",
-        "desc": "Fungible_user",
-        "required": False
-    },
-    "tc_part_no": {
-        "name": "tc_part_no",
-        "type": "text",
-        "fromstr": str,
-        "label": "TC Part No.",
-        "desc": "TC_part_no",
-        "required": False
-    },
-    "state": {
-        "name": "state",
-        "type": "enum",
-        "fromstr": lambda x: FCState[x].value,
-        "enumvals": [name for (name, _) in FCState.__members__.items()],
-        "label": "State",
-        "desc": "The current state of the functional component",
-        "required": True,
-        "default": "Conceptual"
-    },
-    "stand": {
-        "name": "stand",
-        "type": "text",
-        "fromstr": str,
-        "label": "Stand/Nearest Stand",
-        "desc": "Stand/Nearest Stand",
-        "required": False,
-    },
-    "comments": {
-        "name": "comments",
-        "type": "text",
-        "fromstr": str,
-        "label": "Comments",
-        "desc": "Comments",
-        "required": False
-    },
-    "nom_loc_z": {
-        "name": "nom_loc_z",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Z",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)", "span": 3},
-        "desc": "Nominal Location Z",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_loc_x": {
-        "name": "nom_loc_x",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "X",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
-        "desc": "Nominal Location X",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_loc_y": {
-        "name": "nom_loc_y",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Y",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
-        "desc": "Nominal Location Y",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_z": {
-        "name": "nom_ang_z",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Z",
-        "category": {"label": "Nominal Angle (radians)", "span": 3},
-        "desc": "Nominal Angle Z",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_x": {
-        "name": "nom_ang_x",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "X",
-        "category": {"label": "Nominal Angle (radians)"},
-        "desc": "Nominal Angle X",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_y": {
-        "name": "nom_ang_y",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Y",
-        "category": {"label": "Nominal Angle (radians)"},
-        "desc": "Nominal Angle Y",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "ray_trace": {
-        "name": "ray_trace",
-        "type": "text",
-        "fromstr": default_wrapper(str2int, None),
-        "label": "Must Ray Trace",
-        "desc": "Must Ray Trace",
-        "required": False
-    },
-    "discussion": {
-        # NOTE: everytime the user changes a device value, a discussion comment is added to the database
-        # as a separate document. On load, however, we have to parse all the comments into a structured
-        # array of all comments for that specific device.
-        "name": "discussion",
-        "type": "text",
-        "fromstr": str,
-        "label": "Discussion",
-        "desc": "User discussion about the device value change",
-        "required": False,
-    }
-})
-
-
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
     fftid = fcupdate["_id"]
     if empty_string_or_none(fftid):
@@ -768,7 +555,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", insert_counter
 
     if "state" in fcupdate and fcupdate["state"] != "Conceptual":
-        for attrname, attrmeta in fcattrs.items():
+        for attrname, attrmeta in FC_ATTRS.items():
             if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate.get(attrname, None) is None)):
                 return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
@@ -804,7 +591,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             continue
 
         try:
-            attrmeta = fcattrs[attrname]
+            attrmeta = FC_ATTRS[attrname]
         except KeyError:
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
@@ -1012,9 +799,9 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
     if "state" not in fft:
         fft["state"] = db_values["state"]
 
-    for attr in fcattrs:
+    for attr in FC_ATTRS:
         # If header is required for all, or if the FFT is non-conceptual and header is required
-        if fcattrs[attr]["required"] or (fft["state"] != "Conceptual" and fcattrs[attr].get("is_required_dimension", False)):
+        if FC_ATTRS[attr]["required"] or (fft["state"] != "Conceptual" and FC_ATTRS[attr].get("is_required_dimension", False)):
             # If required header not present in upload dataset
             if attr not in fft:
                 # Check if in DB already, continue to validate next if so
@@ -1034,7 +821,7 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
             continue
 
         try:
-            val = fcattrs[attr]["fromstr"](fft[attr])
+            val = FC_ATTRS[attr]["fromstr"](fft[attr])
         except (ValueError, KeyError) as e:
             error_str = f"Invalid data type for '{attr}': '{fft[attr]}'"
             return False, error_str
@@ -1071,7 +858,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     for attrname, cnvattrval in oattrs.items():
         if not attrname in attrnames:
             continue
-        attrmeta = fcattrs[attrname]
+        attrmeta = FC_ATTRS[attrname]
         if attrmeta["required"] and not cnvattrval:
             return False, f"Parameter {attrname} is a required attribute", None
         cnvattrval = attrmeta["fromstr"](cnvattrval)

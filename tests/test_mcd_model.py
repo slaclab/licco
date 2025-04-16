@@ -10,7 +10,7 @@ from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-from dal import mcd_model, db_utils, mcd_import
+from dal import mcd_model, db_utils, mcd_import, mcd_datatypes
 from dal.mcd_model import initialize_collections
 from notifications.email_sender import EmailSenderInterface
 from notifications.notifier import Notifier, NoOpNotifier
@@ -357,7 +357,7 @@ def test_project_filter_for_owner(db):
     projects = mcd_model.get_all_projects(db, 'test_project_filter_owner')
     assert len(projects) == 2
     assert projects[0]['name'] == "test_project_filter_for_owner"
-    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == mcd_datatypes.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_editor(db):
@@ -383,7 +383,7 @@ def test_project_filter_for_editor(db):
     projects = mcd_model.get_all_projects(db, 'test_project_filter_editor')
     assert len(projects) == 2
     assert projects[0]['name'] == 'test_project_filter_for_editor'
-    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == mcd_datatypes.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_approver(db):
@@ -407,7 +407,7 @@ def test_project_filter_for_approver(db):
     projects = mcd_model.get_all_projects(db, 'test_project_filter_approver')
     assert len(projects) == 2
     assert projects[0]['name'] == 'test_project_filter_for_approver'
-    assert projects[1]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[1]['name'] == mcd_datatypes.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_user_with_no_projects(db):
@@ -417,7 +417,7 @@ def test_project_filter_for_user_with_no_projects(db):
     # user with no projects should find only a master project
     projects = mcd_model.get_all_projects(db, 'test_project_filter_user_with_no_projects')
     assert len(projects) == 1
-    assert projects[0]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[0]['name'] == mcd_datatypes.MASTER_PROJECT_NAME
 
 
 def test_project_filter_for_admins(db):
@@ -426,7 +426,7 @@ def test_project_filter_for_admins(db):
 
     projects = mcd_model.get_all_projects(db, 'admin_user')
     assert len(projects) >= 2, "there should be at least master project and 'test_project_filter_for_admins' in the db"
-    assert projects[len(projects)-1]['name'] == mcd_model.MASTER_PROJECT_NAME
+    assert projects[len(projects)-1]['name'] == mcd_datatypes.MASTER_PROJECT_NAME
 
     project_names = [project['name'] for project in projects]
     assert "test_project_filter_for_admins" in project_names, "created file was not found"
@@ -767,7 +767,7 @@ def test_update_ffts_invalid(db):
     assert err == ""
     assert fft["_id"]
 
-    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": 2001, 'nom_ang_x': 1.23}]
+    ffts = [{"_id": fft["_id"], 'state': mcd_datatypes.FCState.Installed.value, "nom_loc_z": 2001, 'nom_ang_x': 1.23}]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
     assert updates.fail == 1
     assert err == 'Missing required header nom_loc_x'
@@ -779,7 +779,7 @@ def test_update_ffts_invalid_empty_value(db):
 
     ok, err, fft = mcd_model.find_or_create_fft(db, "TESTFC", "TESTFG")
     assert err == ""
-    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": ""}]
+    ffts = [{"_id": fft["_id"], 'state': mcd_datatypes.FCState.Installed.value, "nom_loc_z": ""}]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
     assert updates.fail == 1
     assert err == "'nom_loc_z' value is required for a Non-Conceptual device"
@@ -789,7 +789,7 @@ def test_update_ffts_wrong_type(db):
 
     ok, err, fft = mcd_model.find_or_create_fft(db, "TESTFC", "TESTFG")
     assert err == ""
-    ffts = [{"_id": fft["_id"], 'state': mcd_model.FCState.Installed.value, "nom_loc_z": "aaa"}]
+    ffts = [{"_id": fft["_id"], 'state': mcd_datatypes.FCState.Installed.value, "nom_loc_z": "aaa"}]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
     assert updates.fail == 1
     assert err == "Invalid data type for 'nom_loc_z': 'aaa'"
@@ -866,7 +866,7 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
             assert fc in got_ffts, f"{expected['fc']} fc was not found in ffts: fft was not inserted correctly"
             got = got_ffts[fc]
 
-            for field in mcd_model.KEYMAP.values():
+            for field in mcd_datatypes.KEYMAP.values():
                 # empty fields are by default set to '' (not None) even if they are numeric fields. Is this okay?
                 assert got.get(field, '') == expected.get(field, ''), f"{fc}: invalid field value '{field}'"
 
@@ -882,9 +882,9 @@ def test_export_csv_from_a_project(db):
 
     # import via csv endpoint (import should be possible in any order of columns)
     import_csv = """
-FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
-AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
-AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
+FC,Fungible,TC_part_no,Stand,Location,Beamline,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
+AT1L0,COMBO,12324,SOME_TEST_STAND,,,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
+AT2L0,GAS,3213221,,,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
     with io.StringIO() as stream:
@@ -899,9 +899,9 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
     assert err == ""
     # by default the csv writer ends the lines with \r\n, so this assert would fail without our replace
     expected_export = """
-FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
-AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,1.21,0.21,2.213,1.231,,,,TEST
-AT2L0,GAS,3213221,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
+FC,Fungible,TC_part_no,Stand,Location,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
+AT1L0,COMBO,12324,SOME_TEST_STAND,,,Conceptual,1.21,0.21,2.213,1.231,,,,TEST
+AT2L0,GAS,3213221,,,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
 """
 
     csv = csv.replace("\r\n", "\n")
