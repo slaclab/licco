@@ -448,9 +448,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
                             <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
-                            <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('stand')}</th>
-                            <th onClick={e => changeSortOrder('location')}>Location {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('location')}</th>
-                            <th onClick={e => changeSortOrder('beamline')}>Beamline {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('beamline')}</th>
+                            <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displaySortOrderIconInColumn('stand')}</th>
+                            <th onClick={e => changeSortOrder('location')}>Location {displaySortOrderIconInColumn('location')}</th>
+                            <th onClick={e => changeSortOrder('beamline')}>Beamline {displaySortOrderIconInColumn('beamline')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
 
                             <th onClick={e => changeSortOrder('nom_loc_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_loc_z')}</th>
