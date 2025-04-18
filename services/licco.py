@@ -247,22 +247,6 @@ def svc_get_ffts():
     ffts = mcd_model.get_ffts(licco_db)
     return json_response(ffts)
 
-@licco_ws_blueprint.route("/ffts/", methods=["POST"])
-@context.security.authentication_required
-def svc_create_fft():
-    """
-    Create a new functional fungible token.
-    For now, we expect the ID's of the functional component and the fungible token ( and not the names )
-    """
-    newfft = request.json
-    print("svc create fft ", newfft)
-    status, errormsg, fft = mcd_model.create_new_fft(licco_db, fc=newfft["fc"], prjid=newfft["prjid"])
-    if errormsg:
-        return json_error(errormsg)
-    return json_response(fft)
-
-
-
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
 @project_writable
@@ -301,6 +285,7 @@ def svc_add_fft_comment(prjid, fftid):
     Endpoint for adding a comment into a device fft, despite the project not being in a development mode
     (approval comments and discussions should always be available, regardless of the project status)
     """
+    print("ADDING COMMENT ENDPOINT", "_"*20)
     update = request.json
     comment = update.get('comment')
     if comment is None:

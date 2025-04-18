@@ -134,20 +134,6 @@ def get_all_users(licco_db: MongoDb):
             ret.add(ed)
     return list(ret)
 
-
-def get_fft_id_by_names(licco_db: MongoDb, fc, fg):
-    """
-    TODO: Remove? will we need this function anymore? if we have device and project lookups that may be all we need...
-    Return ID of FFT
-    based off of a provided string FC and FG names. 
-    :param: fft - dict of {fc, fg} with string names of fc, fg
-    :return: Tuple of ids FC, FG
-    """
-    fc_obj = licco_db["fcs"].find_one({"name": fc})
-    fg_obj = licco_db["fgs"].find_one({"name": fg})
-    fft = licco_db["ffts"].find_one({"fc": ObjectId(fc_obj["_id"]), "fg": ObjectId(fg_obj["_id"])})
-    return fft["_id"]
-
 def get_device_id_from_name(licco_db: MongoDb, prjid, fc):
     """
     Look up a device by its fc name and the project its affiliated with
@@ -282,6 +268,7 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     if not comment:
         return False, f"Comment should not be empty", None
 
+    print('comment parameters. Device: ', fftid, "project: ", project_id, "comment: ", comment)
     project = get_project(licco_db, project_id)
     project_name = project["name"]
     status = project["status"]
@@ -322,7 +309,7 @@ def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, commen
 
     try:
         licco_db["device_history"].update_one(
-            {"_id":ObjectId(device_id), "project_id": ObjectId(project_id)},
+            {"_id":ObjectId(device_id), "prjid": ObjectId(project_id)},
             { "$push": { "discussion": comment } })
     except PyMongoError as e:
         print("couldint insert")
@@ -651,7 +638,7 @@ def create_new_device(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict
     pprint.pprint(fcupdate)
     print("\n")
     if "prjid" not in fcupdate:
-        fcupdate["prjid"] = prjid
+        fcupdate["prjid"] = ObjectId(prjid)
     if "discussion" not in fcupdate:
         fcupdate["discussion"] = []
     if "state" not in fcupdate:
@@ -740,11 +727,11 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         if attrname == "discussion" and isinstance(attrval, list):
             old_comments = current_attrs.get(attrname, [])
             new_comments = old_comments
-            old_comment_ids = [x['id'] for x in old_comments]
+            old_comments = [x['comment'] for x in old_comments]
 
             for comment in attrval:
-                comment_id = comment.get("id", "")
-                if comment_id and comment_id in old_comment_ids:
+                comment_text = comment.get("comment", "")
+                if comment_text and comment_text in old_comments:
                     # this comment already exists, hence we don't copy it
                     continue
 
@@ -752,10 +739,11 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 newval = comment['comment']
                 time = comment.get('time', modification_time)
                 new_comments.append({
-                    "fc": fftid,
-                    "key": attrname,
-                    "val": newval,
-                    "user": author,
+                    #"_id": fftid,
+                    #"key": attrname,
+                    #"val": newval,
+                    "comment": newval,
+                    "author": author,
                     "time": time,
                 })
             fft_fields_to_insert['discussion']=new_comments
@@ -820,7 +808,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     if fft_fields_to_insert:
         #logger.debug(f"Changing {len(changelog)} attributes in device {fftid}")
         print(f"Changing {len(changelog)} attributes in device {fftid}")
-        current_attrs = {key: value for key, value in current_attrs.items() if key not in ["_id", "created", "projectid"]}
+        current_attrs = {key: value for key, value in current_attrs.items() if key not in ["_id", "created", "projectid", "prjid"]}
         current_attrs.update(fft_fields_to_insert)
         ok, err, new_device = create_new_device(licco_db, userid, prjid, fcupdate=current_attrs, modification_time=modification_time)
         return True, "", changelog, new_device
