@@ -3,15 +3,14 @@ import enum
 from enum import auto
 import math
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional, List, TypeAlias
+from typing import Dict, Callable, Optional, List
 
 import pytz
 
-from .mcd_model import FCState
+from .mcd_datatypes import FCState, McdDevice, MCD_LOCATIONS, MCD_BEAMLINES
+
 
 # the purpose of this file is to provide you with a common validators for MCD database
-
-Device: TypeAlias = Dict[str, any]
 
 class FieldType(enum.Enum):
     FLOAT = auto()
@@ -120,7 +119,7 @@ class Validator:
     name: str  # mcd, aperture, mirror, etc...
     fields: Dict[str, FieldValidator]
 
-    def _find_required_fields(self, device_fields: Device):
+    def _find_required_fields(self, device_fields: McdDevice):
         required_fields = set()
         device_state = device_fields.get("state", None)
 
@@ -141,7 +140,7 @@ class Validator:
             # Such validators should override the validation method and add additional fields...
         return required_fields
 
-    def validate_device(self, device_fields: Device):
+    def validate_device(self, device_fields: McdDevice):
         """Validate all fields of a component (e.g., a flat mirror)."""
         if not isinstance(device_fields, dict):
             return f"invalid device data: expected a dictionary data type, but got {type(device_fields)}"
@@ -285,9 +284,6 @@ common_component_fields = build_validator_fields([
     FieldValidator(name='discussion', label="Discussion", data_type=FieldType.CUSTOM_VALIDATOR, validator=validate_discussion_thread),
 ])
 
-_mcd_locations = ["EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]
-_mcd_beamlines = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]
-
 validator_mcd = Validator("MCD", fields=common_component_fields | build_validator_fields([
     FieldValidator(name='fc', label="FC", data_type=FieldType.STRING, required=Required.ALWAYS),
     FieldValidator(name='fg', label="FG", data_type=FieldType.STRING),
@@ -295,8 +291,8 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in FCState], required=Required.ALWAYS),
     FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.STRING),
     FieldValidator(name='comment', label="Comment", data_type=FieldType.STRING),
-    FieldValidator(name='location', label="Location", data_type=FieldType.STRING, allowed_values=_mcd_locations),
-    FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING, allowed_values=_mcd_beamlines),
+    FieldValidator(name='location', label="Location", data_type=FieldType.STRING, allowed_values=MCD_LOCATIONS),
+    FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING, allowed_values=MCD_BEAMLINES),
 
     FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
     FieldValidator(name='nom_loc_y', label='Nom Loc Y', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
@@ -455,7 +451,7 @@ class DeviceValidator(Validator):
     def validate_field(self, field: str, val: any) -> str:
         raise Exception("this method should never be called on device validator: this is a programming bug")
 
-    def validate_device(self, device: Device):
+    def validate_device(self, device: McdDevice):
         device_type = device.get("device_type", None)
         if device_type is None:
             return "provided device does not have a required 'device_type' field"
@@ -475,18 +471,18 @@ DEVICE_VALIDATOR = DeviceValidator()
 
 @dataclass
 class DeviceValidationError:
-    device: Device
+    device: McdDevice
     error: str
 
 @dataclass
 class ValidationResult:
-    ok: List[Device]
+    ok: List[McdDevice]
     errors: List[DeviceValidationError]
 
-def validate_device(device: Device) -> str:
+def validate_device(device: McdDevice) -> str:
     return DEVICE_VALIDATOR.validate_device(device)
 
-def validate_project_devices(devices: List[Device]) -> ValidationResult:
+def validate_project_devices(devices: List[McdDevice]) -> ValidationResult:
     """General method for validating project devices (on project import or when submitting the project for approval)"""
     results = ValidationResult([], [])
     for device in devices:

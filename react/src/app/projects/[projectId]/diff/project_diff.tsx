@@ -53,7 +53,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
         <thead>
             {title ? <tr><th colSpan={17}><h5>{title}</h5></th></tr> : null}
             <tr>
-                <th colSpan={5}></th>
+                <th colSpan={7}></th>
 
                 <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
                 <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
@@ -66,6 +66,8 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th>Fungible</th>
                 <th>TC Part No.</th>
                 <th>Stand/Nearest Stand</th>
+                <th>Location</th>
+                <th>Beamline</th>
                 <th>State</th>
 
                 <th className="text-center">Z</th>
@@ -164,6 +166,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 <td>{renderField(devices.a, devices.b, 'fg_desc')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
                 <td>{renderField(devices.a, devices.b, 'stand')}</td>
+                <td>{renderField(devices.a, devices.b, 'location')}</td>
+                <td>{renderField(devices.a, devices.b, 'beamline')}</td>
                 <td>{renderField(devices.a, devices.b, 'state')}</td>
 
                 <td>{renderField(devices.a, devices.b, 'nom_loc_z')}</td>
@@ -192,6 +196,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                     <td>{d.fg_desc}</td>
                     <td>{d.tc_part_no}</td>
                     <td>{d.stand}</td>
+                    <td>{d.location}</td>
+                    <td>{d.beamline}</td>
                     <td>{d.state}</td>
 
                     <td>{formatDevicePositionNumber(d.nom_loc_z)}</td>

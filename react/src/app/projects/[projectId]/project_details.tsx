@@ -86,6 +86,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
     const [keymap, setKeymap] = useState<Record<string, string>>({});
+    /* @FUTURE: these two fields may come from backend in the future */
+    const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
+    const [beamlineLocations, setBeamlineLocations] = useState(["", "TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -321,7 +324,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
                     <thead>
                         <tr>
-                            <th colSpan={isProjectInDevelopment ? 6 : 5}>
+                            <th colSpan={isProjectInDevelopment ? 8 : 7}>
                                 {!project ? <></> :
                                     <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
@@ -445,7 +448,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
                             <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
-                            <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('stand')}</th>
+                            <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displaySortOrderIconInColumn('stand')}</th>
+                            <th onClick={e => changeSortOrder('location')}>Location {displaySortOrderIconInColumn('location')}</th>
+                            <th onClick={e => changeSortOrder('beamline')}>Beamline {displaySortOrderIconInColumn('beamline')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
 
                             <th onClick={e => changeSortOrder('nom_loc_z')} className="text-center">Z {displaySortOrderIconInColumn('nom_loc_z')}</th>
@@ -484,7 +489,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device} availableFftStates={availableFftStates}
+                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device}
+                                availableFftStates={availableFftStates}
+                                availableLocations={deviceLocations}
+                                availableBeamlines={beamlineLocations}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -719,6 +727,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
     return value.toFixed(7);
 }
 
+
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
@@ -753,6 +762,8 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.fg_desc}</td>
                 <td>{device.tc_part_no}</td>
                 <td>{device.stand}</td>
+                <td>{device.location}</td>
+                <td>{device.beamline}</td>
                 <td>{device.state}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
@@ -779,8 +790,10 @@ const DeviceDataEditTableRow: React.FC<{
     keymap: Record<string, string>,
     device: ProjectDeviceDetails,
     availableFftStates: DeviceState[],
+    availableLocations: string[],
+    availableBeamlines: string[],
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
-}> = ({ project, keymap, device, availableFftStates, onEditDone }) => {
+}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, onEditDone }) => {
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -806,6 +819,8 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'fg_desc', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'location', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
+        { key: 'beamline', type: "select", valueOptions: availableBeamlines, value: useState<string>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
 
         { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },

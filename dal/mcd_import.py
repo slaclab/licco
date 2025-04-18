@@ -5,8 +5,8 @@ from logging import Logger
 from typing import Tuple
 import re
 
-from dal import mcd_model
-from dal.mcd_model import MongoDb
+from dal import mcd_model, mcd_datatypes
+from dal.mcd_datatypes import MongoDb
 from dal.utils import ImportCounter
 
 @dataclass
@@ -133,7 +133,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
         for fc in fc_list:
             fcupload = {}
             fcupload["_id"] = ffts[(fc["FC"], default_fg_name)]
-            for k, v in mcd_model.KEYMAP.items():
+            for k, v in mcd_datatypes.KEYMAP.items():
                 if k == "fg_desc" and "Fungible" in fc:
                     fcupload[v] = fc["Fungible"]
                     continue
@@ -159,7 +159,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
 def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
     with StringIO() as stream:
         # Write column names for data we provide for users to download
-        download_fields = [key for key in mcd_model.KEYMAP.keys() if key != "FG"]
+        download_fields = [key for key in mcd_datatypes.KEYMAP.keys() if key != "FG"]
         writer = csv.DictWriter(stream, fieldnames=download_fields)
         writer.writeheader()
         prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
@@ -169,14 +169,14 @@ def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
             fft_dict = prj_ffts[fft]
             for key in fft_dict:
                 # Check for keys we handle later, or don't want the end user downloading
-                if (key in ["fft", "discussion"]) or (key not in mcd_model.KEYMAP_REVERSE):
+                if (key in ["fft", "discussion"]) or (key not in mcd_datatypes.KEYMAP_REVERSE):
                     continue
-                row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict[key]
+                row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = fft_dict[key]
             for key in fft_dict["fft"]:
                 # Check for keys we don't want the end user downloading
                 if key in ["_id", "fg"]:
                     continue
-                row_dict[mcd_model.KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
+                row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = fft_dict["fft"][key]
 
             # Download file will have column order of KEYMAP var
             writer.writerow(row_dict)
