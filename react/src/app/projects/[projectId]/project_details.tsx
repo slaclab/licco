@@ -12,6 +12,7 @@ import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, Projec
 import { LoadingSpinner } from "@/app/components/loading";
 import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
+import { numberOrDefault } from "@/app/utils/num_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
@@ -837,21 +838,6 @@ const DeviceDataEditTableRow: React.FC<{
         }
     }, [device])
 
-    const numberOrDefault = (value: string | undefined, defaultVal: number | undefined): number | undefined => {
-        if (value == "" || value == undefined) {
-            return undefined;
-        }
-
-        let num = Number.parseFloat(value);
-        if (isNaN(num)) {
-            // this should never happen since we verify the fields before the user 
-            // is able to submit them. 
-            return defaultVal;
-        }
-        return num;
-    }
-
-
     let errStates = editableDeviceFields.map(f => f.err[0]);
     const allFieldsAreValid = useMemo(() => {
         for (let f of editableDeviceFields) {
@@ -865,9 +851,9 @@ const DeviceDataEditTableRow: React.FC<{
     }, [...errStates])
 
 
-    const createDeviceWithChanges = (): ProjectDeviceDetails => {
+    const createDeviceWithChanges = (device: ProjectDeviceDetails, fields: EditField[]): ProjectDeviceDetails => {
         let copyDevice = structuredClone(device);
-        for (let editField of editableDeviceFields) {
+        for (let editField of fields) {
             let field = editField.key;
             let device = copyDevice as any;
             if (editField.type == "number") {
@@ -879,8 +865,8 @@ const DeviceDataEditTableRow: React.FC<{
         return copyDevice;
     }
 
-    const getValueChanges = (device: ProjectDeviceDetails): Record<string, any> => {
-        let deviceWithChanges = createDeviceWithChanges();
+    const getValueChanges = (device: Readonly<ProjectDeviceDetails>): Record<string, any> => {
+        let deviceWithChanges = createDeviceWithChanges(device, editableDeviceFields);
 
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
@@ -942,7 +928,7 @@ const DeviceDataEditTableRow: React.FC<{
                 />
 
                 <Button icon="cross" minimal={true} small={true} title="Discard your edits"
-                    onClick={(e) => onEditDone(createDeviceWithChanges(), "cancel")}
+                    onClick={(e) => onEditDone(createDeviceWithChanges(device, editableDeviceFields), "cancel")}
                 />
             </td>
 

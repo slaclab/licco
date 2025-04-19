@@ -3,12 +3,12 @@ import { DeviceState, ProjectDeviceDetails, ProjectInfo } from '@/app/projects/p
 import { expect, test } from '@jest/globals';
 
 const createMockProjectInfo = (name: string) => {
-    let p: ProjectInfo = { _id: name, name: name, creation_time: new Date(), owner: name, editors: [], description: "", status: "approved" }
+    let p: ProjectInfo = { _id: name, name: name, creation_time: new Date(), owner: name, editors: [], description: "", status: "approved", notes: [] }
     return p;
 }
 
 const createMockDeviceDetails = (fc: string, fg: string) => {
-    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, state: DeviceState.Conceptual.name, tc_part_no: "", comments: "" }
+    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, state: DeviceState.Conceptual.name, tc_part_no: "", comments: "", fg_desc: '', stand: '', discussion: [] }
     return d;
 }
 

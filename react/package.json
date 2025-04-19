@@ -13,7 +13,7 @@
   "dependencies": {
     "@blueprintjs/core": "^5.13.0",
     "@blueprintjs/icons": "^5.13.0",
-    "@blueprintjs/select": "^5.3.8",    
+    "@blueprintjs/select": "^5.3.8",
     "bootstrap": "^5.3.3",
     "next": "14.2.21",
     "react": "^18",
@@ -33,6 +33,6 @@
     "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5.6"
   }
 }
