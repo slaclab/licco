@@ -15,7 +15,7 @@ def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, a
     print(projectid, fftid, skipClonedEntries, asoftimestamp, commentAfterTimestamp)
 
     # find most recent project snapshot
-    status, snapshot = get_recent_snapshot(db, ObjectId(projectid))
+    status, snapshot = get_recent_snapshot(db, projectid)
     if not status:
         logger.debug(f"No recent snapshot found for project {projectid}")
         return {}

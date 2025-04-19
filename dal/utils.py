@@ -39,7 +39,7 @@ def replaceInfNan(d):
 
 
 def empty_string_or_none(val: str) -> bool:
-    is_empty = not val or val.strip() == ""
+    is_empty = not val or (isinstance(val, str) and val.strip() == "")
     return is_empty
 
 

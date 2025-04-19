@@ -341,6 +341,8 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     reqparams = request.json
     logger.info(reqparams)
+    print("^^^^^^^^^^^^^^^^^^^^^^^^\n")
+    print("copying FFT ", fftid, "\n\n")
     status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
         x["name"] for x in mcd_model.fcattrs] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],

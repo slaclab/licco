@@ -293,10 +293,10 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     }
     ok, snapshot = get_recent_snapshot(licco_db, project_id)
     if not ok:
-        return ok, errormsg
+        return ok, f"No snapshot found for project id {project_id}"
     print("* Adding a new comment\nComment: ", new_comment, "\nSnapshot: ", snapshot, "\nfftid: ", fftid)
     if ObjectId(fftid) not in snapshot["devices"]:
-        print("DEV ID NOT IN COMMENTS")
+        print("DEV ID NOT IN SNAPSHOT")
         return False, f"No device with ID {fftid} exists in project {project_name}"
 
     # TODO: New snapshot for comments? We keep same snapshot but add comment?
@@ -310,7 +310,12 @@ def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, commen
     try:
         licco_db["device_history"].update_one(
             {"_id":ObjectId(device_id), "prjid": ObjectId(project_id)},
-            { "$push": { "discussion": comment } })
+            { "$push": 
+                { "discussion":{
+                    '$each': [comment],
+                    '$position': 0 }
+                }
+            })
     except PyMongoError as e:
         print("couldint insert")
         return False, f"Unable to insert comment for device {device_id} in project {project_id}"
@@ -375,6 +380,7 @@ def create_new_project(licco_db: MongoDb, userid: str, name: str, description: s
         if err:
             return err, {}
 
+    create_new_snapshot(licco_db, projectid=newprjid, devices=[], userid=userid)
     prj = get_project(licco_db, newprjid)
     return "", prj
 
@@ -738,7 +744,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 author = comment['author']
                 newval = comment['comment']
                 time = comment.get('time', modification_time)
-                new_comments.append({
+                new_comments.insert(0, {
                     #"_id": fftid,
                     #"key": attrname,
                     #"val": newval,
@@ -953,6 +959,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     destprj = licco_db["projects"].find_one({"_id": ObjectId(destprjid)})
     if not destprj:
         return False, f"Cannot find destination project {destprjid}", None
+
     fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
         return False, f"Cannot find FFT for {fftid}", None
@@ -1380,6 +1387,7 @@ def diff_project(licco_db: MongoDb, prjid, other_prjid, userid, approved=False):
 
     myflat = __flatten__(myfcs)
     thflat = __flatten__(thfcs)
+
 
     mydict = {x[0]: x[1] for x in myflat}
     thdict = {x[0]: x[1] for x in thflat}
