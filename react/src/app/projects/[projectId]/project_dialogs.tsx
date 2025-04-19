@@ -4,7 +4,7 @@ import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea, Text } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetails, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { CollapsibleProjectNotes } from "../projects_overview";
 
 
@@ -218,7 +218,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
 
     const projectIdToCopyTo = currentProject._id;
     const fftIdToCopyTo = FFT._id;
-    Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
+    Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
       { body: JSON.stringify(data) }
     ).then(updatedDeviceData => {
       onSubmit(deviceDetailsBackendToFrontend(updatedDeviceData));
@@ -662,7 +662,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
 
   const projectChangeTable = useMemo(() => {
     if (valueChanges.length == 0) {
-      return <NonIdealState icon="clean" title="No Value Changes" description={`There were no value changes for device ${device.fc}-${device.fg}`} />
+      return <NonIdealState icon="clean" title="No Value Changes" description={`There were no value changes for device ${device.fc}`} />
     }
 
     const values = sortProjectValueChanges(valueChanges);
@@ -715,7 +715,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
       valueChanges['discussion'] = changeComment;
     }
 
-    syncDeviceUserChanges(project._id, device.id, valueChanges)
+    syncDeviceUserChanges(project._id, device._id, valueChanges)
       .then((device) => {
         // There are 2 things that may happen:
         // 1) the user wanted to update a few fields of an existing device (an existing device will come back)
@@ -773,6 +773,8 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
   const [comment, setComment] = useState('');
 
   const userNotes = useMemo(() => {
+    console.log("notes ", device);
+
     let notes = device.discussion.map((d) => {
       let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;
       return text;
@@ -794,7 +796,7 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
     }
 
     setIsSubmitting(true);
-    addDeviceComment(project._id, device.id, comment)
+    addDeviceComment(project._id, device._id, comment)
       .then(updatedDevice => {
         setComment('');
         onCommentAdd(updatedDevice);
