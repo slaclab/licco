@@ -2,7 +2,7 @@
 The model level business logic goes here.
 Most of the code here gets a connection to the database, executes a query and formats the results.
 """
-import logging, pprint
+import logging
 import datetime
 import types
 from collections.abc import Mapping
@@ -17,7 +17,7 @@ from pymongo.synchronous.database import Database
 from pymongo.errors import PyMongoError
 
 from notifications.notifier import Notifier, NoOpNotifier
-from .projdetails import get_project_attributes, get_all_project_changes, get_recent_snapshot
+from .projdetails import get_project_attributes, get_all_project_changes, get_recent_snapshot, get_one_device_from_snapshot
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
@@ -268,7 +268,6 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     if not comment:
         return False, f"Comment should not be empty", None
 
-    print('comment parameters. Device: ', fftid, "project: ", project_id, "comment: ", comment)
     project = get_project(licco_db, project_id)
     project_name = project["name"]
     status = project["status"]
@@ -284,7 +283,7 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
         allowed_to_comment |= user_id in get_users_with_privilege(licco_db, "admin")
 
     if not allowed_to_comment:
-        return False, f"You are not allowed to comment on a device within a project '{project_name}'", None
+        return False, f"You are not allowed to comment on a device within a project '{project_name}'"
 
     new_comment = {
         'author': user_id,
@@ -294,9 +293,7 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     ok, snapshot = get_recent_snapshot(licco_db, project_id)
     if not ok:
         return ok, f"No snapshot found for project id {project_id}"
-    print("* Adding a new comment\nComment: ", new_comment, "\nSnapshot: ", snapshot, "\nfftid: ", fftid)
     if ObjectId(fftid) not in snapshot["devices"]:
-        print("DEV ID NOT IN SNAPSHOT")
         return False, f"No device with ID {fftid} exists in project {project_name}"
 
     # TODO: New snapshot for comments? We keep same snapshot but add comment?
@@ -305,8 +302,6 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     return status, errormsg
 
 def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, comment: Dict):
-    print("* Adding a new comment\nComment: ", comment, "\ndev: ", device_id, "\nproject: ", project_id)
-
     try:
         licco_db["device_history"].update_one(
             {"_id":ObjectId(device_id), "prjid": ObjectId(project_id)},
@@ -317,37 +312,42 @@ def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, commen
                 }
             })
     except PyMongoError as e:
-        print("couldint insert")
         return False, f"Unable to insert comment for device {device_id} in project {project_id}"
     return True, ""
 
 
-def delete_fft_comment(licco_db: MongoDb, user_id, comment_id):
-    comment = licco_db["projects_history"].find_one({"_id": ObjectId(comment_id)})
-    if not comment:
-        return False, f"Comment with id {comment_id} does not exist"
+def delete_fft_comment(licco_db: MongoDb, user_id, dev_id, prj_id, comment):
+    device = get_one_device_from_snapshot(licco_db, projectid=prj_id, device_id=dev_id)
+    
+    if not device:
+        return False, f"Device with id {dev_id} does not exist"
 
     # check permissions for deletion
-    project = get_project(licco_db, comment["prj"])
+    project = get_project(licco_db, prj_id)
     status = project["status"]
     project_is_in_correct_state = status == "development" or status == "submitted"
     if not project_is_in_correct_state:
         name = project["name"]
-        return False, f"Comment {comment_id} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
+        return False, f"Comment {comment} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
 
     # project is in a correct state
     # check if the user has permissions for deleting a comment
     allowed_to_delete = False
-    allowed_to_delete |= comment["user"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
+    allowed_to_delete |= comment["author"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
     allowed_to_delete |= project["owner"] == user_id   # project owner is always allowed to delete project comments
     if not allowed_to_delete:
         # if user is admin, they should be allowed to delete
         allowed_to_delete |= user_id in get_users_with_privilege(licco_db, "admin")
 
     if not allowed_to_delete:
-        return False, f"You are not allowed to delete comment {comment_id}"
+        return False, f"You are not allowed to delete comment {comment}"
+    
+    for ind, stored_comment in enumerate(device["discussion"]):
+        if stored_comment == comment:
+            device["discussion"].pop(ind)
 
-    licco_db["projects_history"].delete_one({"_id": ObjectId(comment_id)})
+    licco_db["device_history"].update_one({"_id": dev_id},
+                                          {"$set": { "discussion": device["discussion"]}})
     return True, ""
 
 
@@ -403,41 +403,6 @@ def validate_editors(licco_db: MongoDb, editors: List[str], notifier: Notifier) 
         invalid_users = ", ".join(invalid_editor_emails)
         return f"Invalid editor emails/accounts: [{invalid_users}]"
     return ""
-
-
-def find_or_create_fft(licco_db: MongoDb, fc_name: str, fg_name: str) -> Tuple[bool, str, Optional[Dict[str, any]]]:
-    print("find or create FFT")
-    fcobj = licco_db["fcs"].find_one({"name": fc_name})
-    fgobj = licco_db["fgs"].find_one({"name": fg_name})
-    if fcobj and fgobj:
-        fft = licco_db["ffts"].find_one({"fc": ObjectId(fcobj["_id"]), "fg": ObjectId(fgobj["_id"])})
-        if fft:
-            return True, "", fft
-        # fft was not found, fallthrough and create it
-
-    # fc and fg do not exist, create a new fft
-    ok, err, fft = create_new_fft(licco_db, fc_name, fg_name, "Auto generated", "Auto generated")
-    if not ok:
-        return False, err, None
-    return ok, err, fft
-
-
-def create_new_fft(licco_db: MongoDb, fc, prjid) -> Tuple[bool, str, Optional[Dict[str, any]]]:
-    """
-    Create a new functional component + fungible token based on their names
-    If the FC or FG don't exist; these are created if the associated descriptions are also passed in.
-    """
-    print("create a new fft")
-    if empty_string_or_none(fc):
-        err = "can't create a new fft: FC can't be empty"
-        return False, err, None
-
-    #TODO: get project ID
-    try:
-        #dev_id = licco_db["device_history"].insert_one({"project_id":prjid, "FC":fc}).inserted_id
-        return True, "", ''
-    except Exception as e:
-        return False, str(e), None
 
 def default_wrapper(func, default):
     def wrapped_func(val):
@@ -602,7 +567,6 @@ fcattrs = types.MappingProxyType({
 
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
     fftid = fcupdate["_id"]
-    print("\nchanging fft in project. \nFFT: ", fftid, "\n fcupdate: ", fcupdate)
 
     if empty_string_or_none(fftid):
         return False, f"Can't change device of a project: fftid should not be empty", ""
@@ -626,23 +590,16 @@ def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdat
     # since we fallback to the regular fft update
     ok, err, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, fcupdate)
     if not ok:
-        print("\nBREAKING, ", err)
         return False, err, ""
-    print("\n Adding new deivce ID ", device_id, " and removing ", fftid)
     new_devices = snapshot["devices"]
-    print('oring devices ', new_devices)
     new_devices.remove(ObjectId(fftid))
     new_devices.append(ObjectId(device_id))
-    print("Total new devices: ", new_devices, "\n")
     create_new_snapshot(licco_db, prjid, devices=new_devices, userid=userid, changelog=changelog)
     return ok, err, device_id
 
 def create_new_device(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
                           current_project_attributes=None) -> Tuple[bool, str, ObjectId]:
     #TODO: add validation. Rn lets just add everything
-    print("update device in project (create a device history)")
-    pprint.pprint(fcupdate)
-    print("\n")
     if "prjid" not in fcupdate:
         fcupdate["prjid"] = ObjectId(prjid)
     if "discussion" not in fcupdate:
@@ -666,39 +623,42 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     if not prj:
         return False, f"Cannot find project for {prjid}", [], ''
 
+
+    if not modification_time:
+        modification_time = datetime.datetime.now(datetime.UTC)
     #TODO: how to organize this better to do validation.
     #For now we just put it all in
 
-    pprint.pprint(fcupdate)
+    changelog = []
+
     if ("_id" not in fcupdate):
         ok, err, new_device = create_new_device(licco_db, userid, prjid, fcupdate=fcupdate, modification_time=modification_time)
-        return ok, err, [], new_device
+        for key in fcupdate:
+            changelog.append({
+                "_id": '',
+                "fc":fcupdate['fc'],
+                "prj":prj["name"],
+                "key": key,
+                "previous": None,
+                "val": fcupdate[key],
+                "user": userid,
+                "time":modification_time
+            })
+        return ok, err, changelog, new_device
     else:
-        print('using provided ID')
         fftid = fcupdate["_id"]
 
     current_attrs = current_project_attributes
     if current_attrs is None:
-        print("Doing a project attributes(current attrs) lookup")
         # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
         # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
         # (cca 150-300 ms per query).
-        #current_attrs = get_project_attributes(licco_db, ObjectId(prjid)).get(str(fftid), {})
         current_attrs = get_project_attributes(licco_db, ObjectId(prjid), fftid=fftid)
 
     # Format the dictionary in the way that we expect   
     if ("fc" in fcupdate) and fcupdate["fc"] in current_attrs:
         current_attrs = current_attrs[fcupdate["fc"]]
 
-    print("__"*14)
-    print("\ncurrent attrs")
-    pprint.pprint(current_attrs)
-    print("__"*14)
-
-
-
-    if not modification_time:
-        modification_time = datetime.datetime.now(datetime.UTC)
     # Make sure the timestamp on this server is monotonically increasing.
     latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
     if latest_changes:
@@ -714,17 +674,9 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     #         if (attrmeta.get("is_required_dimension") is True) and ((current_attrs.get(attrname, None) is None) and (fcupdate.get(attrname, None) is None)):
     #             return False, "FFTs should remain in the Conceptual state while the dimensions are still being determined.", insert_counter
 
-
-    print("in update_fft_in_projeectt\nFFTID: ", fftid)
-    print("\nfcupdate")
-    pprint.pprint(fcupdate)
-    print("__"*14)
-
-    changelog = []
     fft_fields_to_insert = {}
 
     for attrname, attrval in fcupdate.items():
-        print("attribute ", attrname, "val in update: ", attrval)
         if attrname == "_id":
             continue
 
@@ -758,7 +710,6 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         try:
             attrmeta = fcattrs[attrname]
         except KeyError:
-            print("\n KEY WRROR", attrname)
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
 
@@ -777,7 +728,6 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         try:
             newval = attrmeta["fromstr"](attrval)
         except:
-            print(" val breaking for some reason\n\n")
             return False, '', [], ''
         # Check that values are within bounds
         #range_err = validate_insert_range(attrname, newval)
@@ -787,7 +737,6 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         #     return False, error_str, insert_counter
 
         prevval = current_attrs.get(attrname, None)
-        print("comparing old ", attrname, "\nprevious value: ", prevval, "\nnew value ", newval)
         # {_id:x, fc:x, fg:, key:dbkey, prj:prjname, 'time':timestamp, 'user':'user, 'val':x} 
         # Set the FC if it doesn't currently exist-mostly happens on merge/approvals
         if "fc" in current_attrs:
@@ -812,8 +761,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             fft_fields_to_insert[attrname]=prevval
 
     if fft_fields_to_insert:
-        #logger.debug(f"Changing {len(changelog)} attributes in device {fftid}")
-        print(f"Changing {len(changelog)} attributes in device {fftid}")
+        logger.debug(f"Changing {len(changelog)} attributes in device {fftid}")
         current_attrs = {key: value for key, value in current_attrs.items() if key not in ["_id", "created", "projectid", "prjid"]}
         current_attrs.update(fft_fields_to_insert)
         ok, err, new_device = create_new_device(licco_db, userid, prjid, fcupdate=current_attrs, modification_time=modification_time)
@@ -893,12 +841,10 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     changes = []
     # Try to add each device/fft to project
     for dev in devices:
-        print('_'*12, 'dev going in', dev)
         status, errormsg, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, dev,
                                                             current_project_attributes=project_devices)
         def_logger.info(f"Import happened for {dev}. ID number {device_id}")
         if status:
-            pprint.pprint(dev)
             if dev["fc"] in project_devices:
                 del project_devices[dev["fc"]]
             changes.append(changelog)
@@ -910,7 +856,6 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     for remain_dev in project_devices:
         new_ids.append(project_devices[remain_dev]["_id"])
 
-    print("**"*17)
     create_new_snapshot(licco_db, prjid, devices=new_ids, userid=userid, changelog=changelog)
 
     # TODO: Validate/get missing device information! for now its wholesale!
@@ -1008,10 +953,8 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, dev_ids: List[str
     ok, snapshot = get_recent_snapshot(licco_db, prjid)
     if not ok:
         return False, f"No data found for project id {prjid}"
-    print("project ", snapshot)
     ids = [ObjectId(x) for x in dev_ids]
     final = list(set(ids)^set(snapshot["devices"]))
-    print('ids: ', ids, '\nexisting: ', snapshot["devices"], '\nfinal: ', final)
 
     licco_db["project_history"].insert_one({
         "project_id":ObjectId(prjid), 
@@ -1209,7 +1152,6 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
                                                              ignore_user_permission_check=True)
     if not status:
         # failed to insert changed fft data into master project
-        print("Failed to insert changes into master proejct")
         return False, False, errormsg, {}
 
     store_project_approval(licco_db, prjid, prj["submitter"])

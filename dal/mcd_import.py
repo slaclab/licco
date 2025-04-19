@@ -100,8 +100,10 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     if update_status:
         import_counter.add(update_status)
 
-    # number of recognized headers minus the id used for DB reference, and the hidden fg
-    import_counter.headers = len(fcuploads[0].keys())-2
+    # number of recognized headers minus the DB reference entries
+    # _id, prjid, discussion, created 
+    import_counter.headers = len(fcuploads[0].keys())-4
+
     status_str = create_status_update(prj_name, import_counter)
     imp_log.info(status_str)
     return True, "", import_counter

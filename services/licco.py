@@ -218,7 +218,6 @@ def svc_get_project_ffts(prjid):
     """
     Get the project's FFT's given a project id.
     """
-    print("Fetching all FFTs")
     showallentries = json.loads(request.args.get("showallentries", "true"))
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
@@ -255,8 +254,7 @@ def svc_update_fc_in_project(prjid, fftid):
     Update the values of a functional component in a project
     """
     fcupdate = request.json
-    print("__"*15)
-    print("updating fc ", fcupdate)
+
     fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
     #status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
@@ -285,7 +283,6 @@ def svc_add_fft_comment(prjid, fftid):
     Endpoint for adding a comment into a device fft, despite the project not being in a development mode
     (approval comments and discussions should always be available, regardless of the project status)
     """
-    print("ADDING COMMENT ENDPOINT", "_"*20)
     update = request.json
     comment = update.get('comment')
     if comment is None:
@@ -341,8 +338,6 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     reqparams = request.json
     logger.info(reqparams)
-    print("^^^^^^^^^^^^^^^^^^^^^^^^\n")
-    print("copying FFT ", fftid, "\n\n")
     status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
         destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
         x["name"] for x in mcd_model.fcattrs] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
@@ -364,7 +359,6 @@ def svc_update_ffts_in_project(prjid):
         ffts = [ffts]
 
     userid = context.security.get_current_user_id()
-    print("ADDING ", ffts)
     status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
     fft = mcd_model.get_project_ffts(licco_db, prjid)
     if errormsg:
@@ -488,8 +482,6 @@ def svc_submit_for_approval(prjid):
         if len(approvers) == 0:
             return json_error("At least 1 approver is expected")
         editors = request.json.get("editors", [])
-
-    print("APPROVERS ", approvers)
 
     userid = context.security.get_current_user_id()
     status, err, prj = mcd_model.submit_project_for_approval(licco_db, prjid, userid, editors, approvers, context.notifier)
