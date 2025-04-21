@@ -17,7 +17,7 @@ import context
 from context import licco_db
 from flask import Blueprint, request, Response, send_file
 
-from dal import mcd_model, mcd_import
+from dal import mcd_model, mcd_import, mcd_datatypes
 from dal.utils import JSONEncoder
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
@@ -66,7 +66,7 @@ def svc_get_keymap():
     """
     return json_response(dict(
         discussion="Discussion",
-        **mcd_model.KEYMAP_REVERSE,
+        **mcd_datatypes.KEYMAP_REVERSE,
     ))
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -339,9 +339,9 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     reqparams = request.json
     logger.info(reqparams)
     status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
-        destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-        x["name"] for x in mcd_model.fcattrs] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
-        userid=userid)
+                                                            destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
+        x["name"] for x in mcd_datatypes.FC_ATTRS] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
+                                                            userid=userid)
     if errormsg:
         return json_error(errormsg)
     return json_response(fc)

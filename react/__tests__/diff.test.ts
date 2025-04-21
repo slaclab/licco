@@ -8,7 +8,7 @@ const createMockProjectInfo = (name: string) => {
 }
 
 const createMockDeviceDetails = (fc: string, fg: string) => {
-    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, state: DeviceState.Conceptual.name, tc_part_no: "", comments: "", fg_desc: '', stand: '', discussion: [] }
+    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, location: '', beamline: '', state: DeviceState.Conceptual.name, tc_part_no: "", comments: "", fg_desc: '', stand: '', discussion: [] }
     return d;
 }
 
