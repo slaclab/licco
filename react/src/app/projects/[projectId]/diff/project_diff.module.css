@@ -10,12 +10,12 @@
 
 /* numbers (nom_loc, nom_ang) should be aligned to the right
  for easier comparison */
-.diffTable td:nth-child(6),
-.diffTable td:nth-child(7),
 .diffTable td:nth-child(8),
 .diffTable td:nth-child(9),
 .diffTable td:nth-child(10),
 .diffTable td:nth-child(11),
-.diffTable td:nth-child(12) {
+.diffTable td:nth-child(12),
+.diffTable td:nth-child(13),
+.diffTable td:nth-child(14) {
     text-align: right;
 }

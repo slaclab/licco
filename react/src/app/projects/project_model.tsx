@@ -214,6 +214,8 @@ export interface deviceDetailFields {
     comments: string;
     stand: string,
     state: string;
+    location: string;
+    beamline: string;
     nom_ang_x?: number;
     nom_ang_y?: number;
     nom_ang_z?: number;
