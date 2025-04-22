@@ -125,7 +125,7 @@ def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
                 # Check for keys we handle later, or don't want the end user downloading
                 if (key in ignore) or (key not in mcd_datatypes.KEYMAP_REVERSE):
                     continue
-                row_dict[mcd_model.KEYMAP_REVERSE[key]] = dev_info[key]
+                row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = dev_info[key]
 
             # Download file will have column order of KEYMAP var
             writer.writerow(row_dict)

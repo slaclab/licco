@@ -60,9 +60,6 @@ def db():
     res = db['roles'].insert_many([admin_users, approvers, super_approvers, editors])
     assert len(res.inserted_ids) == 4, "roles should be inserted"
 
-    # ffts used in tests
-    ffts = [{"fc": "TESTFC", "fg": "TESTFG"}, {"fc": "TESTFC_2", "fg": "TESTFG_2"}]
-
     return db
 
 @pytest.fixture(scope="session", autouse=True)
@@ -364,7 +361,6 @@ def test_diff_project(db):
             assert a_val is None
             assert b_val == 2.56
         else:
-            print('+++++++++++++++++\n', el['key'])
             if any(substring in el['key'] for substring in ignored_keys):
                 continue
             assert False, "unhandled diff element:\n{el}"
@@ -812,8 +808,8 @@ def test_project_rejection(db):
 def test_update_ffts_valid(db):
     project = create_test_project(db, "test_user", "test_update_ffts_valid", "")
 
-    fft1 = {'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_model.FCState.Conceptual.value, "nom_loc_z": 1, 'nom_ang_x': 1.23}
-    fft2 = {'fc':'TESTFC2', 'fg':'TESTFG2', 'state': mcd_model.FCState.Conceptual.value, "nom_loc_z": 2, 'nom_ang_x': 3}
+    fft1 = {'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.FCState.Conceptual.value, "nom_loc_z": 1, 'nom_ang_x': 1.23}
+    fft2 = {'fc':'TESTFC2', 'fg':'TESTFG2', 'state': mcd_datatypes.FCState.Conceptual.value, "nom_loc_z": 2, 'nom_ang_x': 3}
 
     ok, err, insert_counter = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], [fft1, fft2])
     assert err == ''

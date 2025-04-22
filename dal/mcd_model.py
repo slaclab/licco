@@ -392,7 +392,7 @@ def create_new_device(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict
     dev_id = licco_db["device_history"].insert_one(fcupdate).inserted_id
     return True, "", dev_id
 
-def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
+def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None, remove_discussion_comments=None,
                           current_project_attributes=None) -> Tuple[bool, str, ImportCounter]:
     """
     Update the value(s) of an FFT in a project
@@ -463,6 +463,8 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         #TODO: what do we want for comments changes, lets leave for now
         # special handling of discussion comments fields
         if attrname == "discussion" and isinstance(attrval, list):
+            if remove_discussion_comments:
+                continue
             old_comments = current_attrs.get(attrname, [])
             new_comments = old_comments
             old_comments = [x['comment'] for x in old_comments]
@@ -498,23 +500,12 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         #     insert_counter.fail += 1
         #     return False, f"Parameter {attrname} is a required attribute", insert_counter
 
-        # try:
-        #     newval = attrmeta["fromstr"](attrval)
-        # except ValueError:
-        #     # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
-        #     insert_counter.fail += 1
-        #     error_str = f"Wrong type - {attrname}, ('{attrval}')"
-        #     return False, error_str, insert_counter
         try:
             newval = attrmeta["fromstr"](attrval)
-        except:
-            return False, '', [], ''
-        # Check that values are within bounds
-        #range_err = validate_insert_range(attrname, newval)
-        # if range_err:
-        #     insert_counter.fail += 1
-        #     error_str = range_err
-        #     return False, error_str, insert_counter
+        except ValueError:
+            # <FFT>, <field>, invalid input rejected: [Wrong type| Out of range]
+            error_str = f"Wrong type - {attrname}, ('{attrval}')"
+            return False, error_str, [], ''
 
         prevval = current_attrs.get(attrname, None)
         # {_id:x, fc:x, fg:, key:dbkey, prj:prjname, 'time':timestamp, 'user':'user, 'val':x} 
@@ -622,8 +613,10 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     # Try to add each device/fft to project
     for dev in devices:
         status, errormsg, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, dev,
-                                                            current_project_attributes=project_devices)
+                                                            current_project_attributes=project_devices, remove_discussion_comments=remove_discussion_comments)
         def_logger.info(f"Import happened for {dev}. ID number {device_id}")
+        print(f"Import happened for {dev}. ID number {device_id}")
+
         if status:
             if dev["fc"] in project_devices:
                 del project_devices[dev["fc"]]
@@ -924,7 +917,6 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     #send those into the update ffts
     #new devices should just be added to the list
     # master project should not inherit old discussion comments from a submitted project, hence the removal flag
-    results = create_new_approved_snapshot(licco_db, master_project=master_project)
     status, errormsg, update_status = update_ffts_in_project(licco_db, userid,
                                                              master_project["_id"],
                                                              get_project_ffts(licco_db, prjid),
@@ -956,11 +948,6 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
 
     return True, all_assigned_approvers_approved, "", updated_project
 
-def create_new_approved_snapshot(licco_db: MongoDb, master_project):
-    # Get current master project device list
-    current_snapshot = get_recent_snapshot(licco_db, prjid=master_project["_id"])
-
-    return
 
 def reject_project(licco_db: MongoDb, prjid: str, userid: str, reason: str, notifier: Notifier):
     """

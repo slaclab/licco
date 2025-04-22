@@ -24,7 +24,7 @@ def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, a
         device_information = get_one_device_from_snapshot(db, projectid=projectid, device_id=fftid)
     else:
         # get information for each device
-        device_information = get_all_devices_from_snapshot(db, projectid, snapshot)
+        device_information = get_all_devices_from_snapshot(db, projectid=projectid, snapshot=snapshot)
 
     return device_information
 
