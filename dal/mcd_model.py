@@ -28,7 +28,7 @@ def initialize_collections(licco_db: MongoDb):
         licco_db["projects"].create_index([("editors", ASCENDING)], name="editors_1")
 
     if 'project_history_id_1' not in licco_db["project_history"].index_information().keys():
-        licco_db["project_history"].create_index([("project_id", ASCENDING), ("snapshot_timestamp", DESCENDING)], name="project_history_id_1")
+        licco_db["project_history"].create_index([("project_id", ASCENDING), ("created", DESCENDING)], name="project_history_id_1")
 
     if 'device_history_id_1' not in licco_db["device_history"].index_information().keys():
         licco_db["device_history"].create_index([("device_id", ASCENDING)], name="device_history_id_1")
@@ -615,7 +615,6 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         status, errormsg, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, dev,
                                                             current_project_attributes=project_devices, remove_discussion_comments=remove_discussion_comments)
         def_logger.info(f"Import happened for {dev}. ID number {device_id}")
-        print(f"Import happened for {dev}. ID number {device_id}")
 
         if status:
             if dev["fc"] in project_devices:
@@ -639,8 +638,8 @@ def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], u
     modification_time = datetime.datetime.now(datetime.UTC)
     inserts = {
         "project_id":ObjectId(projectid), 
-        "snapshot_author":userid, 
-        "snapshot_timestamp":modification_time,
+        "author":userid, 
+        "created":modification_time,
         "devices":devices,
     }
     if changelog:
@@ -731,8 +730,8 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, dev_ids: List[str
 
     licco_db["project_history"].insert_one({
         "project_id":ObjectId(prjid), 
-        "snapshot_author":userid, 
-        "snapshot_timestamp": datetime.datetime.now(datetime.UTC),
+        "author":userid, 
+        "created": datetime.datetime.now(datetime.UTC),
         "devices": final,
         })
     if len(final) == len(snapshot["devices"]):

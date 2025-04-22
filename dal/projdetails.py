@@ -47,7 +47,7 @@ def get_recent_snapshot(db, prjid: str):
     """
     snapshot = db["project_history"].find_one(
         {"project_id": ObjectId(prjid)},
-        sort=[( "snapshot_timestamp", -1 )]
+        sort=[( "created", -1 )]
         )
     if not snapshot:
         logger.debug(f"No database entry for project ID: {prjid}")
@@ -56,12 +56,9 @@ def get_recent_snapshot(db, prjid: str):
 
 def get_all_devices_from_snapshot(db, projectid, snapshot):
     proj_devices = {}
-    for device_id in snapshot["devices"]:
-        # TODO: handle subdevices, for now we dump all info, no filter
-        device = db["device_history"].find_one({"_id": device_id})
-        if not device:
-            logger.debug(f"No database entry for device ID: {device_id}")
-            continue
+    devices = db["device_history"].find( {"_id": { "$in": snapshot["devices"]}})
+    # TODO: handle subdevices, for now we dump all info, no filter
+    for device in devices:
         proj_devices[device["fc"]] = device
     return proj_devices
 
