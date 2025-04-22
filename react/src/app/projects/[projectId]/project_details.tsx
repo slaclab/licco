@@ -2,7 +2,7 @@ import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { createLink } from "@/app/utils/path_utils";
-import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
+import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
@@ -14,6 +14,7 @@ import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { numberOrDefault } from "@/app/utils/num_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
 
@@ -801,8 +802,8 @@ const DeviceDataEditTableRow: React.FC<{
 
     interface EditField {
         key: (keyof ProjectDeviceDetails);
-        type: "string" | "number" | "select"
-        value: [string | undefined, Dispatch<SetStateAction<string | undefined>>];
+        type: "string" | "number" | "select" | "multi-select"
+        value: [string | string[] | undefined, Dispatch<SetStateAction<string | undefined>> | Dispatch<SetStateAction<string[] | undefined>>];
         valueOptions?: string[]; // only used when type == "select"
         err: [boolean, Dispatch<SetStateAction<boolean>>];
         min?: number;
@@ -820,7 +821,7 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'location', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
-        { key: 'beamline', type: "select", valueOptions: availableBeamlines, value: useState<string>(), err: useState(false) },
+        { key: 'beamline', type: "multi-select", valueOptions: availableBeamlines, value: useState<string[]>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
 
         { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },
@@ -864,7 +865,7 @@ const DeviceDataEditTableRow: React.FC<{
             let field = editField.key;
             let device = copyDevice as any;
             if (editField.type == "number") {
-                device[field] = numberOrDefault(editField.value[0], undefined);
+                device[field] = numberOrDefault(editField.value[0] as string, undefined);
             } else {
                 device[field] = editField.value[0] || '';
             }
@@ -945,11 +946,13 @@ const DeviceDataEditTableRow: React.FC<{
                 // we cache edit fields via components.
                 let inputField: ReactNode;
                 if (field.type == "string") {
-                    inputField = <StringEditField value={field.value[0] ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
+                    inputField = <StringEditField value={field.value[0] as string ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
                 } else if (field.type == "number") {
-                    inputField = <NumericEditField value={field.value[0]} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} allowNumbersOnly={field.allowNumbersOnly} />
+                    inputField = <NumericEditField value={field.value[0] as string} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} allowNumbersOnly={field.allowNumbersOnly} />
                 } else if (field.type == "select") {
-                    inputField = <SelectEditField value={field.value[0] ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                    inputField = <SelectEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                } else if (field.type == "multi-select") {
+                    inputField = <MultiSelectEditField selectedValues={field.value[0] ? field.value[0] as string[] : []} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
                 } else {
                     throw new Error("Unhandled field type: ", field.type)
                 }
@@ -997,7 +1000,6 @@ const DeviceDataEditTableRow: React.FC<{
 }
 
 
-
 const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {
     return useMemo(() => {
         return <InputGroup value={value} onValueChange={(val) => setter(val)} style={{ width: 'auto', minWidth: "5ch" }} fill={true} />
@@ -1008,6 +1010,58 @@ const SelectEditField: React.FC<{ value: string, setter: any, options: string[],
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
     }, [value, options, err])
+}
+
+const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, options: string[], err: boolean, errSetter: any }> = ({ selectedValues, setter, options, err, errSetter }) => {
+    const filterSelect: ItemPredicate<string> = (query, val, _index, exactMatch) => {
+        const normalizedValue = val.toLowerCase();
+        const normalizedQuery = query.toLowerCase();
+        if (exactMatch) {
+            return normalizedValue === normalizedQuery;
+        }
+
+        return normalizedValue.indexOf(query) >= 0;
+    }
+
+    const removeTagValue = (tag: React.ReactNode, index: number) => {
+        selectedValues.splice(index, 1)
+        setter([...selectedValues])
+    }
+
+    return (<MultiSelect
+        items={options}
+        selectedItems={selectedValues}
+        tagInputProps={{ onRemove: removeTagValue }}
+        tagRenderer={(item) => <>{item}</>}
+        itemRenderer={(item: string, itemProps: ItemRendererProps) => {
+            if (!itemProps.modifiers.matchesPredicate) {
+                return null;
+            }
+            return <MenuItem key={itemProps.index} roleStructure="listoption"
+                selected={selectedValues !== undefined ? selectedValues.indexOf(item) >= 0 : false} text={item}
+                onFocus={itemProps.handleFocus}
+                onClick={itemProps.handleClick}
+            />
+        }}
+        itemPredicate={filterSelect}
+        onClear={() => setter([])}
+        onItemSelect={(item: string, event?: React.SyntheticEvent<HTMLElement>) => {
+            let elementShouldBeAdded = selectedValues.indexOf(item) < 0;
+            if (elementShouldBeAdded) {
+                let newValues = [...selectedValues, item];
+                newValues.sort((a, b) => sortString(a, b, false));
+                setter(newValues);
+            } else {
+                // remove an already added element
+                let newValues = selectedValues.filter(sv => sv !== item)
+                setter(newValues);
+            }
+        }}
+        noResults={<MenuItem disabled={true} text="No Results" roleStructure="listoption" />}
+        popoverProps={{ minimal: true }}
+        resetOnSelect={true}
+    />
+    )
 }
 
 // performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
