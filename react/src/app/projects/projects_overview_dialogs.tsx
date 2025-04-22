@@ -38,7 +38,7 @@ export const CreateNewProjectDialog: React.FC<{ isOpen: boolean, approvedProject
             }).finally(() => {
                 setIsLoading(false);
             })
-    }, [isOpen]);
+    }, [isOpen, user]);
 
     const projectTemplates = useMemo(() => {
         return [DEFAULT_TEMPLATE, ...approvedProjects.map(p => p.name)];
@@ -256,7 +256,7 @@ export const EditProjectDialog: React.FC<{ isOpen: boolean, project: ProjectInfo
             }).finally(() => {
                 setLoadingData(false);
             })
-    }, [isOpen])
+    }, [isOpen, project.description, project.editors, project.name, project.owner])
 
     const submit = () => {
         let data = { "name": projectName, "description": projectDescription, "editors": projectEditors }
@@ -384,7 +384,7 @@ export const HistoryOfProjectApprovalsDialog: React.FC<{ isOpen: boolean, onClos
             </table>
         )
 
-    }, [projectHistory])
+    }, [projectHistory, dialogError, isLoading])
 
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`History of Project Approvals`} style={{ width: "60rem", maxWidth: "90%" }}>
@@ -614,7 +614,7 @@ export const ProjectComparisonDialog: React.FC<{ isOpen: boolean, project: Proje
         let p = availableProjects.filter(p => p.name != project.name).map(p => p.name);
         p.sort((a, b) => sortString(a, b, false));
         return [DEFAULT_PROJECT, ...p];
-    }, [availableProjects]);
+    }, [availableProjects, project.name]);
 
     const selectedProject = useMemo(() => {
         if (selectedProjectName == DEFAULT_PROJECT) {
@@ -629,7 +629,7 @@ export const ProjectComparisonDialog: React.FC<{ isOpen: boolean, project: Proje
             }
         }
         return project;
-    }, [selectedProjectName])
+    }, [selectedProjectName, availableProjects, project])
 
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={`Compare Projects`} autoFocus={true}>
