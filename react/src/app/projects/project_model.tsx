@@ -209,7 +209,13 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBack
 }
 
 export interface deviceDetailFields {
-    fg_desc: string,
+    // device metadata
+    device_id: number,
+    device_type: number,  // depending on the type of a device may have different fields
+    created: Date,
+
+    // mcd fields (all devices have them)
+    fg_desc: string,  // deprecated ? 
     tc_part_no: string;
     comments: string;
     stand: string,

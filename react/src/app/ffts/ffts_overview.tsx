@@ -52,10 +52,10 @@ export const FFTOverviewTable: React.FC = () => {
                     <tr>
                         <th scope="col" className="text-nowrap">
                             <ButtonGroup>
-                                <Button icon="add" title="Add a new FC" small={true} minimal={true}
+                                <Button icon="add" title="Add a new FC" size="small" variant="minimal"
                                     onClick={e => setIsFftDialogOpen(true)}
                                 />
-                                {isLoading ? <Button loading={isLoading} minimal={true} /> : null}
+                                {isLoading ? <Button loading={isLoading} variant="minimal" /> : null}
                             </ButtonGroup>
                         </th>
                         <th scope="col" className="">Functional component name</th>
@@ -68,7 +68,7 @@ export const FFTOverviewTable: React.FC = () => {
                             return (
                                 <tr key={fft._id}>
                                     <td>{fft.is_being_used ? null :
-                                        <Button icon="trash" title="Delete this FFT from the system" small={true} minimal={true}
+                                        <Button icon="trash" title="Delete this FFT from the system" size="small" variant="minimal"
                                             onClick={e => setFftToDelete(fft)} />
                                     }
                                     </td>

@@ -7,7 +7,7 @@ import { MultiLineText } from "../components/multiline_text";
 import { formatToLiccoDateTime } from "../utils/date_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { SortState, sortDate, sortString } from "../utils/sort_utils";
-import { ProjectInfo, fetchAllProjectsInfo, UserRoles, fetchUsers, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
+import { ProjectInfo, UserRoles, fetchAllProjectsInfo, fetchUsers, isProjectApproved, isProjectHidden, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, transformProjectForFrontendUse, whoAmI } from "./project_model";
 import { CloneProjectDialog, CreateNewProjectDialog, EditProjectDialog, HistoryOfProjectApprovalsDialog, ProjectComparisonDialog, ProjectExportDialog, ProjectImportDialog, RemoveProjectDialog } from "./projects_overview_dialogs";
 
 import styles from './projects_overview.module.css';
@@ -148,10 +148,10 @@ export const ProjectsOverview: React.FC = ({ }) => {
                     <thead>
                         <tr>
                             <th scope="col">
-                                <Button icon="add" title="Add new Project" onClick={(e) => showAddProjectDialog()} minimal={true} small={true} />
-                                <Button icon="history" title="Show the history of project approvals" onClick={(e) => setIsProjectHistoryDialogOpen(true)} minimal={true} small={true} />
+                                <Button icon="add" title="Add new Project" onClick={(e) => showAddProjectDialog()} variant="minimal" size="small" />
+                                <Button icon="history" title="Show the history of project approvals" onClick={(e) => setIsProjectHistoryDialogOpen(true)} variant="minimal" size="small" />
                                 {projectDataLoading ?
-                                    <Button minimal={true} small={true} disabled={true} loading={projectDataLoading} />
+                                    <Button variant="minimal" size="small" disabled={true} loading={projectDataLoading} />
                                     : null
                                 }
                             </th>
@@ -170,20 +170,20 @@ export const ProjectsOverview: React.FC = ({ }) => {
                             return (
                                 <tr key={project._id} className={`${isProjectApproved(project) ? 'approved-table-row' : ''} ${isProjectHidden(project) ? 'hidden-project-table-row' : ''}`}>
                                     <td>
-                                        <ButtonGroup minimal={true}>
+                                        <ButtonGroup variant="minimal">
                                             {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status === "submitted") ?
-                                                <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} minimal={true} small={true}
+                                                <AnchorButton icon="confirm" title="Approve submitted project" intent={"danger"} style={{ zIndex: 1 }} variant="minimal" size="small"
                                                     href={createLink(`/projects/${project._id}/approval`)}
                                                 />
                                                 : null
                                             }
-                                            <Button icon="comparison" title="Compare (diff) with another project" minimal={true} small={true}
+                                            <Button icon="comparison" title="Compare (diff) with another project" variant="minimal" size="small"
                                                 onClick={e => {
                                                     setSelectedProject(project);
                                                     setIsComparisonDialogOpen(true);
                                                 }}
                                             />
-                                            <Button icon="duplicate" title="Clone this project" minimal={true} small={true}
+                                            <Button icon="duplicate" title="Clone this project" variant="minimal" size="small"
                                                 onClick={(e) => {
                                                     setSelectedProject(project);
                                                     setIsCloneDialogOpen(true);
@@ -192,7 +192,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
                                             {!isProjectSubmitted(project) && !isProjectApproved(project) ?
                                                 <>
-                                                    <Button icon="edit" title="Edit this project" minimal={true} small={true}
+                                                    <Button icon="edit" title="Edit this project" variant="minimal" size="small"
                                                         disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
@@ -203,11 +203,11 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                                     <AnchorButton icon="user" title="Submit this project for approval"
                                                         disabled={!allowProjectEdits}
                                                         href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                                        minimal={true} small={true}
+                                                        variant="minimal" size="small"
                                                     />
 
                                                     <Button icon="export" title="Upload data to this project"
-                                                        minimal={true} small={true}
+                                                        variant="minimal" size="small"
                                                         disabled={!allowProjectEdits}
                                                         onClick={(e) => {
                                                             setSelectedProject(project);
@@ -219,7 +219,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
                                             }
 
                                             <Button icon="import" title="Download a copy of this project"
-                                                minimal={true} small={true}
+                                                variant="minimal" size="small"
                                                 onClick={(e) => {
                                                     setSelectedProject(project);
                                                     setIsExportDialogOpen(true);
@@ -228,7 +228,7 @@ export const ProjectsOverview: React.FC = ({ }) => {
 
                                             {(project.owner === currentlyLoggedInUser) || (admins.includes(currentlyLoggedInUser)) ?
                                                 <Button icon="trash" title="Delete this project"
-                                                    minimal={true} small={true}
+                                                    variant="minimal" size="small"
                                                     onClick={(e) => {
                                                         setSelectedProject(project);
                                                         setIsDeleteDialogOpen(true);
@@ -387,7 +387,7 @@ export const CollapsibleProjectNotes: React.FC<{ notes: string[], defaultNoNoteM
 
     return (
         <>
-            <Button small={true} onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
+            <Button size="small" onClick={e => setShowingNotes((c) => !c)}>{showingNotes ? "Hide Notes" : "Show Notes"} ({notes.length})</Button>
             <Collapse isOpen={showingNotes} keepChildrenMounted={true}>
                 {notes.map((note, i) => {
                     return (

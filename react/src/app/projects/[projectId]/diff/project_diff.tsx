@@ -106,7 +106,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
     }, [diff, type])
 
     const renderDiscussionButton = (device: ProjectDeviceDetails) => {
-        return <Button icon="chat" minimal={true} onClick={e => setCommentDevice(device)}>({device.discussion.length})</Button>
+        return <Button icon="chat" variant="minimal" onClick={e => setCommentDevice(device)}>({device.discussion.length})</Button>
     }
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
@@ -263,7 +263,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         <div className="mb-5">
             <Row className="align-items-center m-0">
                 <Col className="col-auto ps-0 pe-0">
-                    <Button icon={collapsed ? "chevron-right" : "chevron-down"} minimal={true}
+                    <Button icon={collapsed ? "chevron-right" : "chevron-down"} variant="minimal"
                         onClick={(e) => setCollapsed((collapsed) => !collapsed)}
                     />
                 </Col>
