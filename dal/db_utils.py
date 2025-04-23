@@ -11,4 +11,11 @@ def create_mongo_client(mongodb_url: str = "", timeout: int = 5000):
 
     if not mongodb_url:
         logger.info("Connecting to MongoDB on localhost:27017")
-    return MongoClient(host=mongodb_url, tz_aware=True, serverSelectionTimeoutMS=timeout)
+        
+    client = MongoClient(host=mongodb_url, tz_aware=True, serverSelectionTimeoutMS=timeout)
+    
+    # ping the client to confirm that mongodb is running and the configuration is correct
+    # (will raise ConnectionFailure otherwise)
+    client.admin.command('ping')
+    
+    return client

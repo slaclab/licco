@@ -126,7 +126,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
         let msg = `Failed to fetch project data: ${e.error}`;
         setDialogErr(msg);
       })
-  }, [isOpen]);
+  }, [isOpen, currentProject.name]);
 
 
   // query for fft changes between chosen from/to projects
@@ -171,7 +171,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
       }).finally(() => {
         setFetchingProjectDiff(false);
       })
-  }, [selectedProject, FFT, isOpen])
+  }, [selectedProject, FFT, isOpen, availableProjects, currentProject._id])
 
   // clear the checkboxes whenever fft diff changes
   useEffect(() => {
@@ -379,7 +379,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
       }).finally(() => {
         setIsLoading(false);
       })
-  }, [isOpen]);
+  }, [isOpen, currentProject._id]);
 
 
   const projectHistoryTable = useMemo(() => {
@@ -433,7 +433,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
         </tbody>
       </table>
     )
-  }, [data, dialogErr, isLoading])
+  }, [data, dialogErr, isLoading, currentProject.name, displayProjectSince, keymap])
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "70rem", maxWidth: "95%" }}>
@@ -695,7 +695,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
         </table>
       </>
     )
-  }, [valueChanges, device])
+  }, [valueChanges, device, keymap])
 
   const submit = () => {
     setDialogErr('');

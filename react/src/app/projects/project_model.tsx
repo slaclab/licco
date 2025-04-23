@@ -546,7 +546,7 @@ export async function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);
 }
 
-export function whoAmIHook() {
+export function useWhoAmIHook() {
     const [user, setUser] = useState('');
     const [isUserDataLoading, setIsUserDataLoading] = useState(false);
     const [userLoadingError, setUserLoadingError] = useState('');
