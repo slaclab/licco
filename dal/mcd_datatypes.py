@@ -89,21 +89,26 @@ def str2float(val):
 def str2int(val):
     return int(val)
 
+
+def _verify_beamline_locations(arr):
+    for e in arr:
+        if e not in MCD_BEAMLINES:
+            raise Exception(f"{e} is not a valid beamline location")
+
+
 def beamline_locations(arr):
     if not arr:
         return
 
     if isinstance(arr, str):
         arr = [field.strip() for field in arr.split(",")]
+        _verify_beamline_locations(arr)
         return arr
 
     if not isinstance(arr, list):
         raise Exception(f"beamline locations should be an array, but got {arr}")
 
-    # @FUTURE: verify beamline locations
-    #for e in arr:
-    #    if not e in MCD_BEAMLINES:
-    #        raise Exception(f"'{e}' is not a valid beamline location")
+    _verify_beamline_locations(arr)
     return arr
 
 

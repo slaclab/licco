@@ -825,6 +825,8 @@ def validate_import_headers(licco_db: MongoDb, fft: Dict[str, any], prjid: str):
         except (ValueError, KeyError) as e:
             error_str = f"Invalid data type for '{attr}': '{fft[attr]}'"
             return False, error_str
+        except Exception as e:
+            return False, str(e)
     return True, ""
 
 
