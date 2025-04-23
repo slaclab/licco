@@ -291,7 +291,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // create the csv document from filtered devices
         let data = `FC,Fungible,TC_part_no,Stand,Area,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(" | "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
+            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(", "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
@@ -1042,6 +1042,7 @@ const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, op
                 return null;
             }
             return <MenuItem key={itemProps.index} roleStructure="listoption"
+                active={itemProps.modifiers.active}
                 selected={selectedValues !== undefined ? selectedValues.indexOf(item) >= 0 : false} text={item}
                 onFocus={itemProps.handleFocus}
                 onClick={itemProps.handleClick}
