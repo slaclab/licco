@@ -7,6 +7,7 @@ import sys
 from json import JSONEncoder
 from flask import Flask, Response
 from flask_cors import CORS
+from pymongo.errors import ConnectionFailure
 
 import context
 
@@ -58,7 +59,12 @@ def handle_exception(e):
 
 
 # setup global variables (db, email notifiers, security helpers). Also migrates db
-context.init_context(conf)
+try:
+    context.init_context(conf)
+except ConnectionFailure as err:
+    logger.fatal(f"Connection to mongodb unsuccessful: {err}")
+    sys.exit(1)
+
 
 # register routes (this should happen after initializing context, since controllers refer to those global variables)
 from pages import pages_blueprint              # noqa: E402

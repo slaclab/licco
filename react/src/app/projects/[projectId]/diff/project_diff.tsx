@@ -1,9 +1,9 @@
 import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
-import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, whoAmIHook } from "../../project_model";
+import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, useWhoAmIHook } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
-import { ProjectFftDiff, fetchProjectDiffDataHook } from "./project_diff_model";
+import { ProjectFftDiff, useFetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
@@ -12,8 +12,8 @@ import styles from './project_diff.module.css';
 
 // displays the diff tables between two projects
 export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string }> = ({ projectIdA, projectIdB }) => {
-    const { isLoading, loadError, diff } = fetchProjectDiffDataHook(projectIdA, projectIdB)
-    const { user, isUserDataLoading, userLoadingError } = whoAmIHook();
+    const { isLoading, loadError, diff } = useFetchProjectDiffDataHook(projectIdA, projectIdB)
+    const { user, isUserDataLoading, userLoadingError } = useWhoAmIHook();
     return <ProjectDiffTables isLoading={isLoading || isUserDataLoading} loadError={loadError || userLoadingError} user={user} diff={diff} />
 }
 

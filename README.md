@@ -13,6 +13,9 @@ see: https://confluence.slac.stanford.edu/display/PCDS/Validated+Machine+Configu
     - `conda activate mcd_0_0_1`
 - Install flask_authnz submodule
     - Update and activate submodule
+    - `cd $HOME/licco`
+    - `git submodule init`
+    - `git submodule update`
 - Install javascript packages from within react folder
     - `cd react`
     - `npm install` OR copy over a node_modules folder installed on a machine with the same build requirements

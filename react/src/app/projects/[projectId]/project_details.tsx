@@ -182,7 +182,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }).finally(() => {
             setIsLoading(false);
         })
-    }, []);
+    }, [projectId, queryParams]);
 
 
     // apply table filters, when any filter or original data changes
@@ -253,7 +253,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
             if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
-                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: "{project.name}".</>);
+                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
                 return
             }
         }
@@ -779,7 +779,7 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.comments}</td>
             </tr>
         )
-    }, [project, device, currentUser, disabled])
+    }, [project, device, currentUser, disabled, onCopyFft, onDeleteFft, onEdit, onUserComment])
     return row;
 }
 
@@ -843,7 +843,8 @@ const DeviceDataEditTableRow: React.FC<{
             }
             field.value[1](device[field.key] as any);
         }
-    }, [device])
+    // can't add editableDeviceFields as a dependency due to its use of useState()
+    }, [device])    // eslint-disable-line react-hooks/exhaustive-deps 
 
     let errStates = editableDeviceFields.map(f => f.err[0]);
     const allFieldsAreValid = useMemo(() => {
@@ -855,7 +856,8 @@ const DeviceDataEditTableRow: React.FC<{
 
         // all fields are valid, we can submit this change
         return true;
-    }, [...errStates])
+    // can't add editableDeviceFields as a dependency due to its use of useState()
+    }, [...errStates])  // eslint-disable-line react-hooks/exhaustive-deps 
 
 
     const createDeviceWithChanges = (device: ProjectDeviceDetails, fields: EditField[]): ProjectDeviceDetails => {
@@ -1001,13 +1003,13 @@ const DeviceDataEditTableRow: React.FC<{
 const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {
     return useMemo(() => {
         return <InputGroup value={value} onValueChange={(val) => setter(val)} style={{ width: 'auto', minWidth: "5ch" }} fill={true} />
-    }, [value, err])
+    }, [value, setter])
 }
 
 const SelectEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
-    }, [value, options, err])
+    }, [value, options, setter])
 }
 
 // performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
@@ -1059,6 +1061,6 @@ const NumericEditField: React.FC<{ value: string | number | undefined, setter: a
             }
         />
         )
-    }, [value, err])
+    }, [value, err, allowNumericCharsOnly, errSetter, max, min, setter])
     return field;
 }
