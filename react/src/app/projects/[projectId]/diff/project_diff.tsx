@@ -7,6 +7,7 @@ import { ProjectFftDiff, useFetchProjectDiffDataHook } from "./project_diff_mode
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
+import { renderTableField } from "../../project_utils";
 import { FFTCommentViewerDialog } from "../project_dialogs";
 import styles from './project_diff.module.css';
 
@@ -66,7 +67,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th>Fungible</th>
                 <th>TC Part No.</th>
                 <th>Stand/Nearest Stand</th>
-                <th>Location</th>
+                <th>Area</th>
                 <th>Beamline</th>
                 <th>State</th>
 
@@ -132,6 +133,10 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 return "<empty>";
             }
 
+            if (Array.isArray(val)) {
+                return val.join(", ");
+            }
+
             if (typeof val == "string" && val.trim() == "") {
                 // html by default collapses multiple spaces into 1; since we would like to preserve
                 // the exact number of spaces, an extra span is needed.
@@ -166,7 +171,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 <td>{renderField(devices.a, devices.b, 'fg_desc')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
                 <td>{renderField(devices.a, devices.b, 'stand')}</td>
-                <td>{renderField(devices.a, devices.b, 'location')}</td>
+                <td>{renderField(devices.a, devices.b, 'area')}</td>
                 <td>{renderField(devices.a, devices.b, 'beamline')}</td>
                 <td>{renderField(devices.a, devices.b, 'state')}</td>
 
@@ -196,8 +201,8 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                     <td>{d.fg_desc}</td>
                     <td>{d.tc_part_no}</td>
                     <td>{d.stand}</td>
-                    <td>{d.location}</td>
-                    <td>{d.beamline}</td>
+                    <td>{d.area}</td>
+                    <td>{renderTableField(d.beamline)}</td>
                     <td>{d.state}</td>
 
                     <td>{formatDevicePositionNumber(d.nom_loc_z)}</td>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isArrayEqual } from "../utils/arr_utils";
 import { toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 
@@ -214,7 +215,7 @@ export interface deviceDetailFields {
     comments: string;
     stand: string,
     state: string;
-    location: string;
+    area: string;
     beamline: string[];
     nom_ang_x?: number;
     nom_ang_y?: number;
@@ -255,6 +256,15 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
 
         const aVal = a[key];
         const bVal = b[key];
+        if (key == 'beamline') {
+            if (!isArrayEqual(aVal as any[], bVal as any[])) {
+                // found a difference
+                return true;
+            }
+            // keep looking for differences in other fields
+            continue;
+        }
+
         if (aVal != bVal) {
             if ((aVal == undefined && bVal == '') || (aVal == '' && bVal == undefined)) {
                 // both fields are empty, and we shouldn't display them as a change of value 

@@ -16,6 +16,7 @@ import { numberOrDefault } from "@/app/utils/num_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
 import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { FFTInfo } from "../project_model";
+import { renderTableField } from "../project_utils";
 import styles from './project_details.module.css';
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
@@ -89,7 +90,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [keymap, setKeymap] = useState<Record<string, string>>({});
     /* @FUTURE: these two fields may come from backend in the future */
     const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
-    const [beamlineLocations, setBeamlineLocations] = useState(["", "TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
+    const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -288,9 +289,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         // create the csv document from filtered devices
-        let data = `FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
+        let data = `FC,Fungible,TC_part_no,Stand,Area,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
+            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(" | "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
@@ -450,7 +451,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
                             <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displaySortOrderIconInColumn('stand')}</th>
-                            <th onClick={e => changeSortOrder('location')}>Location {displaySortOrderIconInColumn('location')}</th>
+                            <th onClick={e => changeSortOrder('area')}>Area {displaySortOrderIconInColumn('area')}</th>
                             <th onClick={e => changeSortOrder('beamline')}>Beamline {displaySortOrderIconInColumn('beamline')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
 
@@ -763,8 +764,8 @@ const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDevic
                 <td>{device.fg_desc}</td>
                 <td>{device.tc_part_no}</td>
                 <td>{device.stand}</td>
-                <td>{device.location}</td>
-                <td>{device.beamline}</td>
+                <td>{device.area}</td>
+                <td>{renderTableField(device.beamline)}</td>
                 <td>{device.state}</td>
 
                 <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
@@ -820,7 +821,7 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'fg_desc', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
-        { key: 'location', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
+        { key: 'area', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
         { key: 'beamline', type: "multi-select", valueOptions: availableBeamlines, value: useState<string[]>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
 
@@ -1026,8 +1027,9 @@ const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, op
     }
 
     const removeTagValue = (tag: React.ReactNode, index: number) => {
-        selectedValues.splice(index, 1)
-        setter([...selectedValues])
+        let values = [...selectedValues];
+        values.splice(index, 1)
+        setter(values);
     }
 
     return (<MultiSelect
@@ -1055,7 +1057,7 @@ const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, op
                 setter(newValues);
             } else {
                 // remove an already added element
-                let newValues = selectedValues.filter(sv => sv !== item)
+                let newValues = selectedValues.filter(sv => sv !== item);
                 setter(newValues);
             }
         }}

@@ -24,7 +24,7 @@ KEYMAP = {
     "Fungible": "fg_desc",
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
-    "Location": "location",
+    "Area": "area",
     "Beamline": "beamline",
     "State": "state",
     "LCLS_Z_loc": "nom_loc_z",
@@ -89,6 +89,23 @@ def str2float(val):
 def str2int(val):
     return int(val)
 
+def beamline_locations(arr):
+    if not arr:
+        return
+
+    if isinstance(arr, str):
+        arr = [field.strip() for field in arr.split(",")]
+        return arr
+
+    if not isinstance(arr, list):
+        raise Exception(f"beamline locations should be an array, but got {arr}")
+
+    # @FUTURE: verify beamline locations
+    #for e in arr:
+    #    if not e in MCD_BEAMLINES:
+    #        raise Exception(f"'{e}' is not a valid beamline location")
+    return arr
+
 
 # mcd 1.0 data types. This should be removed in favor of Validator routines
 FC_ATTRS = types.MappingProxyType({
@@ -108,12 +125,12 @@ FC_ATTRS = types.MappingProxyType({
         "desc": "TC_part_no",
         "required": False
     },
-    "location": {
-        "name": "location",
+    "area": {
+        "name": "area",
         "type": "enum",
         "fromstr": str,
         "enumvals": MCD_LOCATIONS,
-        "label": "Location",
+        "label": "Area",
         "desc": "Device location",
         "required": False,
         "default": ""
@@ -121,7 +138,7 @@ FC_ATTRS = types.MappingProxyType({
     "beamline": {
         "name": "beamline",
         "type": "enum",
-        "fromstr": str,
+        "fromstr": beamline_locations,
         "enumvals": MCD_BEAMLINES,
         "label": "Beamline",
         "desc": "Device beamline location",

@@ -171,7 +171,13 @@ def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
                 # Check for keys we handle later, or don't want the end user downloading
                 if (key in ["fft", "discussion"]) or (key not in mcd_datatypes.KEYMAP_REVERSE):
                     continue
-                row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = fft_dict[key]
+
+                if key == "beamline":
+                    # turn beamline array into a string separated with a ','
+                    row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = ", ".join(fft_dict[key])
+                else:
+                    row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = fft_dict[key]
+
             for key in fft_dict["fft"]:
                 # Check for keys we don't want the end user downloading
                 if key in ["_id", "fg"]:
