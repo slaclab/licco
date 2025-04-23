@@ -50,7 +50,20 @@ def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, a
             details[fft_id] = { "fft": { "_id": fft_id, "fc": hist["fcobj"]["name"], "fg": hist["fgobj"]["name"] } }
         field_name = hist["latestkey"]
         field_val = hist["latestval"]
+
         # all other fields are primitive types (scalars, strings) and only the latest values are important
+        if field_name == 'beamline':
+            # turn single string beamlines into an array (initially beamlines were a single string)
+            # This should be handled in the migration script for MCD 2.0
+            if field_val and isinstance(field_val, str):
+                field_val = [field_val]
+
+        if field_name == "location":
+            if details[fft_id].get('area'):
+                # area was already found and inserted, this location field should be skipped
+                continue
+            field_name = 'area'
+
         details[fft_id][field_name] = field_val
 
     if len(details) == 0:

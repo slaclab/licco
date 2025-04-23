@@ -1,7 +1,7 @@
 import { formatToLiccoDateTime, toUnixMilliseconds } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, TextArea, Text } from "@blueprintjs/core";
+import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
 import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetailsBackend, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
@@ -287,8 +287,9 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                 <td>{change.other}</td>
                 <td>
                   {/* note: leave the comparison === true, otherwise the React will complain about controlled
-                              and uncontrolled components. I think this is a bug in the library and not the issue with our code,
-                              since our usage of controlled component is correct here */}
+                      and uncontrolled components. I think this is a bug in the library and not the issue with our code,
+                      since our usage of controlled component is correct here
+                    */}
                   <Checkbox className="table-checkbox"
                     checked={fftDiffSelection[i] === true} value={''}
                     onChange={(e) => {
@@ -660,6 +661,13 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
     setDialogErr('');
   }, [])
 
+  const renderEntry = (entry: any) => {
+    if (Array.isArray(entry)) {
+      return entry.join(", ");
+    }
+    return entry;
+  }
+
   const projectChangeTable = useMemo(() => {
     if (valueChanges.length == 0) {
       return <NonIdealState icon="clean" title="No Value Changes" description={`There were no value changes for device ${device.fc}-${device.fg}`} />
@@ -684,9 +692,9 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
               return (
                 <tr key={entry[0]}>
                   <td>{keymap[entry[0]]}</td>
-                  <td>{d[entry[0]]}</td>
+                  <td>{renderEntry(d[entry[0]])}</td>
                   <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
-                  <td>{entry[1]}</td>
+                  <td>{renderEntry(entry[1])}</td>
                 </tr>
               )
             }
@@ -710,7 +718,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
       changeComment += "\n\n--- Changes: ---\n";
       let d = device as any;
       for (let field of fieldsThatChanged) {
-        changeComment += `${field}: ${d[field] ?? ''} -> ${valueChanges[field] ?? ''}\n`;
+        changeComment += `${field}: ${renderEntry(d[field]) ?? ''} -> ${renderEntry(valueChanges[field]) ?? ''}\n`;
       }
       valueChanges['discussion'] = changeComment;
     }
