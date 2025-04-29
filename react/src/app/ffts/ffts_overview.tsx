@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { FFTInfo, deleteFft, fetchFfts } from "../projects/project_model";
 import { JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
+import { StringSuggest } from "../components/suggestion_field";
 
 export const FFTOverviewTable: React.FC = () => {
     const [data, setData] = useState<FFTInfo[]>([]);
@@ -221,25 +222,15 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
                 {isLoading ?
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
                     :
-                    <>
-                        <datalist id="fc-names-list">
-                            {Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
-                                return <option key={name} value={name} />
-                            })
-                            }
-                        </datalist>
-
-                        <FormGroup label="Functional Component:" labelFor="fc-name">
-                            <InputGroup id="fc-name"
-                                autoFocus={true}
-                                list="fc-names-list"
-                                placeholder=""
-                                value={fcName}
-                                rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
-                                onValueChange={(val: string) => setFcName(val)} />
-                        </FormGroup>
-
-                    </>
+                    <FormGroup label="Functional Component:" labelFor="fc-name">
+                        <StringSuggest value={fcName} setValue={setFcName} items={Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false))} 
+                            inputProps={{ 
+                                id: "fc-name", 
+                                autoFocus: true,
+                                rightElement: <Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} /> 
+                            }} 
+                        />
+                    </FormGroup>
                 }
 
             </DialogBody>

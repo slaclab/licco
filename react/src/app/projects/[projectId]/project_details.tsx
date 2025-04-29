@@ -18,6 +18,7 @@ import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/sele
 import { FFTInfo } from "../project_model";
 import { renderTableField } from "../project_utils";
 import styles from './project_details.module.css';
+import { StringSuggest } from "@/app/components/suggestion_field";
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
@@ -91,6 +92,15 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     /* @FUTURE: these two fields may come from backend in the future */
     const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
     const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
+    // @FUTURE: retrieve this data from the backend once the API is updated
+    const [functionalComponents, setFunctionalComponents] = useState([
+        'AT1L0', 'AT2L0',   'BS1L0', 'BS1L1', 'BS2L1',  'BS3L0',   'BS4L0',  'BT1L0',  'BT1L1', 'BT2L0', 
+        'BT2L1', 'BT3L0',   'BT3L1', 'BT4L0', 'BT5L0',  'BTM2',    'BTM3',   'EM1L0',  'EM2L0', 'EM3L0', 
+        'IM1L0', 'IM1L1',   'IM2L0', 'IM3L0', 'IM4L0',  'MBTMSFT', 'MBXPM1', 'MBXPM2', 'MR1L0', 'MR1L1', 
+        'MR2L0', 'MSFTDMP', 'ND1H',  'PA1L0', 'PC1L0',  'PC1L1',   'PC2L0',  'PC2L1',  'PC3L0', 'PC3L1', 
+        'PC4L0', 'PCPM2',   'PCPM3', 'PF1L0', 'RTDSL0', 'SL1L0',   'SL2L0',  'SL3L0',  'SP1L0', 'ST1L0', 
+        'ST1L1', 'TP',      'TV1L0', 'TV1L1', 'TV2L0',  'TV3L0'
+    ])
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -508,6 +518,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 availableFftStates={availableFftStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
+                                availableFcs={functionalComponents}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -859,8 +870,9 @@ const DeviceDataEditTableRow: React.FC<{
     availableFftStates: DeviceState[],
     availableLocations: string[],
     availableBeamlines: string[],
+    availableFcs:       string[],
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
-}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, onEditDone }) => {
+}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, availableFcs, onEditDone }) => {
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -868,9 +880,9 @@ const DeviceDataEditTableRow: React.FC<{
 
     interface EditField {
         key: (keyof ProjectDeviceDetails);
-        type: "string" | "number" | "select" | "multi-select"
+        type: "string" | "number" | "select" | "multi-select" | "suggest"
         value: [string | string[] | undefined, Dispatch<SetStateAction<string | undefined>> | Dispatch<SetStateAction<string[] | undefined>>];
-        valueOptions?: string[]; // only used when type == "select"
+        valueOptions?: string[]; // only used when type == "select" or "suggest"
         err: [boolean, Dispatch<SetStateAction<boolean>>];
         min?: number;
         max?: number;
@@ -882,7 +894,7 @@ const DeviceDataEditTableRow: React.FC<{
     }, [availableFftStates])
 
     const editableDeviceFields: EditField[] = [
-        { key: 'fc', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'fc', type: "suggest", valueOptions: availableFcs, value: useState<string>(), err: useState(false) },
         { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
@@ -1021,7 +1033,9 @@ const DeviceDataEditTableRow: React.FC<{
                     inputField = <SelectEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
                 } else if (field.type == "multi-select") {
                     inputField = <MultiSelectEditField selectedValues={field.value[0] ? field.value[0] as string[] : []} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
-                } else {
+                } else if (field.type == "suggest") {
+                    inputField = <SuggestEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                }else {
                     throw new Error("Unhandled field type: ", field.type)
                 }
                 return <td key={field.key}>{inputField}</td>
@@ -1077,6 +1091,12 @@ const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errS
 const SelectEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
+    }, [value, options, setter])
+}
+
+const SuggestEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
+    return useMemo(() => {
+        return <StringSuggest value={value} setValue={setter} items={options} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
     }, [value, options, setter])
 }
 
