@@ -639,7 +639,6 @@ def create_imp_msg(fft, status, errormsg=None):
         res = "FAIL"
     if 'fc' not in fft:
         fft['fc'] = "NO VALID FC"
-
     msg = f"{res}: {fft['fc']} - {errormsg}"
     return msg
 

@@ -928,8 +928,8 @@ def test_export_csv_from_a_project(db):
 
     # import via csv endpoint (import should be possible in any order of columns)
     import_csv = """
-FC,Fungible,TC_part_no,Stand,Location,Beamline,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
-AT1L0,COMBO,12324,SOME_TEST_STAND,,,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
+FC,Fungible,TC_part_no,Stand,Area,Beamline,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
+AT1L0,COMBO,12324,SOME_TEST_STAND,,"RIX, TMO",Conceptual,TEST,1.21,0.21,2.213,1.231,,,
 AT2L0,GAS,3213221,,,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
@@ -945,8 +945,8 @@ AT2L0,GAS,3213221,,,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
     assert err == ""
     # by default the csv writer ends the lines with \r\n, so this assert would fail without our replace
     expected_export = """
-FC,Fungible,TC_part_no,Stand,Location,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
-AT1L0,COMBO,12324,SOME_TEST_STAND,,,Conceptual,1.21,0.21,2.213,1.231,,,,TEST
+FC,Fungible,TC_part_no,Stand,Area,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments
+AT1L0,COMBO,12324,SOME_TEST_STAND,,"RIX, TMO",Conceptual,1.21,0.21,2.213,1.231,,,,TEST
 AT2L0,GAS,3213221,,,,Conceptual,,,,1.23,-1.25,-0.895304,1,GAS ATTENUATOR
 """
 
