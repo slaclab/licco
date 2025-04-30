@@ -196,19 +196,14 @@ export interface ProjectDeviceDetails extends deviceDetailFields {
 
 export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): ProjectDeviceDetails {
     // remove fft field from object, but copy every other field
-    console.log("pre ", details)
-
     const { _id, ...copiedFields } = details;
-    console.log("details ", details)
     let data: ProjectDeviceDetails = {
         ...copiedFields,
         _id: _id,
     }
     // turn dates into date objects
     // turn any number strings into undefined fields
-    console.log("pre2 ", data)
     transformProjectDeviceDetails(data);
-    console.log("pre3 ", data)
 
     return data;
 }
@@ -295,8 +290,6 @@ export async function fetchProjectFfts(projectId: string, showAllEntries: boolea
     return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
         .then(data => {
             let devices = Object.values(data);
-            console.log("fetched backend ", devices);
-            console.log("mapping next");
             return devices.map(d => deviceDetailsBackendToFrontend(d));
         });
 }
@@ -318,7 +311,6 @@ function numberOrDefault(input: number | string | undefined, defaultVal: number 
 
 
 function transformProjectDeviceDetails(device: deviceDetailFields) {
-    console.log("transforming ", device)
     device.state = DeviceState.fromString(device.state).name;
 
     // empty numeric fields are sent through as strings
@@ -458,7 +450,6 @@ export async function addDeviceComment(projectId: string, fftId: string, comment
     const data = { 'comment': comment };
     return Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectId}/fcs/${fftId}/comment`, { body: JSON.stringify(data) })
         .then(device => {
-            console.log("returning", device, "returning, after:", deviceDetailsBackendToFrontend(device))
             return deviceDetailsBackendToFrontend(device);
         });
 }

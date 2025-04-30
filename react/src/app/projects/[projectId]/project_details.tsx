@@ -248,19 +248,15 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
             return;
         }
-        console.log("in project", fftData);
 
         // check if desired fft combination already exist within the project 
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
-            console.log("wtf")
-            console.log(fft);
             if (fft.fc === newFft.fc.name) {
                 setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: "{project.name}".</>);
                 return
             }
         }
-        console.log(newFft);
 
         /*         let fft: ProjectDevice = {
                     fc: newFft,
@@ -471,7 +467,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         {fftDataDisplay.map(device => {
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
-                            console.log('fft display device ', device)
                             if (!isEditedDevice) {
                                 return <DeviceDataTableRow key={device._id}
                                     project={project} device={device} currentUser={currentlyLoggedInUser}
@@ -486,7 +481,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         setIsDeleteDialogOpen(true);
                                     }}
                                     onUserComment={(device) => {
-                                        console.log("this is comment device ", device)
                                         setCommentDevice(device);
                                         setIsFftCommentViewerOpen(true);
                                     }}
@@ -629,14 +623,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
                         for (let fft of fftData) {
-                            console.log("comparing ", fft, "\nand", updatedDevice);
                             if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }
                             updatedFftData.push(updatedDevice);
                         }
-                        console.log("comparing2 ", updatedFftData, "\nand ", updatedDevice);
                         setFftData(updatedFftData);
                         setCommentDevice(updatedDevice);
                     }
@@ -738,7 +730,6 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
-    console.log("creating row", device)
     const row = useMemo(() => {
         return (
             <tr className={disabled ? 'table-disabled' : ''}>

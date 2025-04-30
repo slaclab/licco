@@ -773,7 +773,6 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
   const [comment, setComment] = useState('');
 
   const userNotes = useMemo(() => {
-    console.log("notes ", device);
 
     let notes = device.discussion.map((d) => {
       let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;

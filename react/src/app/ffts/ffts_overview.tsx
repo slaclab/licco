@@ -198,27 +198,13 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
             // a new one.
         }
 
-        console.log("in ffts ");
-        console.log(fcName, currentProject);
-
         let data: any = {
             fc: fcName,
             prjid: currentProject
         }
 
-        console.log(data);
         setIsSubmitting(true);
         onSubmit(data);
-        /*         Fetch.post<FFTInfo>("/ws/ffts/", { body: JSON.stringify(data) })
-                    .then((resp) => {
-                        onSubmit(resp);
-                    }).catch((e: JsonErrorMsg) => {
-                        let msg = "Failed to create new fft: " + e.error;
-                        setDialogError(msg)
-                        console.error(msg, e);
-                    }).finally(() => {
-                        setIsSubmitting(false);
-                    }) */
     }
 
     return (
