@@ -114,6 +114,14 @@ def beamline_locations(arr):
 
 # mcd 1.0 data types. This should be removed in favor of Validator routines
 FC_ATTRS = types.MappingProxyType({
+ "fc": {
+        "name": "fc",
+        "type": "text",
+        "fromstr": str,
+        "label": "FC",
+        "desc": "FC_user",
+        "required": False
+    },
     "fg_desc": {
         "name": "fg_desc",
         "type": "text",

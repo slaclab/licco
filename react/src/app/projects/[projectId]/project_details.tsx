@@ -19,7 +19,7 @@ import { FFTInfo } from "../project_model";
 import { renderTableField } from "../project_utils";
 import styles from './project_details.module.css';
 
-type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
+type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
 /**
  * Helper function for sorting device details based on the clicked table column header
@@ -247,25 +247,23 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const addNewFft = (newFft: FFTInfo) => {
         if (!project) {
             // this should never happen
-            setErrorAlertMsg("Can't add a new fft to a project without knowing the projec details; this is a programming bug");
+            setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
             return;
         }
 
         // check if desired fft combination already exist within the project 
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
-            if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
+            if (fft.fc === newFft.fc.name) {
                 setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
                 return
             }
         }
 
-        let fft: ProjectFFT = {
-            _id: newFft._id,
-            fc: newFft.fc._id,
-            fg: newFft.fg._id,
-        }
-        return addFftsToProject(project._id, [fft])
+        /*         let fft: ProjectDevice = {
+                    fc: newFft,
+                } */
+        return addFftsToProject(project._id, newFft)
             .then(data => {
                 // TODO: when we try to add an fft that is already there, the backend doesn't complain
                 // it just returns success: true, erromsg: no changes detected.
@@ -472,16 +470,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.id}
+                                return <DeviceDataTableRow key={device._id}
                                     project={project} device={device} currentUser={currentlyLoggedInUser}
                                     disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
                                         setIsCopyFFTDialogOpen(true);
                                     }}
                                     onDeleteFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
                                         setIsDeleteDialogOpen(true);
                                     }}
                                     onUserComment={(device) => {
@@ -508,7 +506,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     let updatedDevices = [...fftData];
                                     for (let i = 0; i < updatedDevices.length; i++) {
                                         const device = updatedDevices[i];
-                                        if (device.id === oldDevice.id) {
+                                        if (device._id === oldDevice._id) {
                                             // found the device index that has to be replaced
                                             updatedDevices[i] = updatedDeviceData;
                                             break;
@@ -537,6 +535,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             {project ?
                 <AddFftDialog
                     dialogType="addToProject"
+                    currentProject={project._id}
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
                     onSubmit={(newFft) => addNewFft(newFft)}
@@ -568,7 +567,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // find current fft and update device details
                         let updatedData = [];
                         for (let d of fftData) {
-                            if (d.id != newDeviceDetails.id) {
+                            if (d._id != newDeviceDetails._id) {
                                 updatedData.push(d);
                                 continue;
                             }
@@ -597,7 +596,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 setIsDeleteDialogOpen(false);
 
                                 // update data 
-                                let updatedFftData = fftData.filter(d => d.id != fft._id);
+                                let updatedFftData = fftData.filter(d => d._id != fft._id);
                                 setFftData(updatedFftData);
                             }).catch((e: JsonErrorMsg) => {
                                 let msg = `Failed to delete a device ${currentFFT.fc}-${currentFFT.fg}: ${e.error}`;
@@ -626,7 +625,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
                         for (let fft of fftData) {
-                            if (fft.id != updatedDevice.id) {
+                            if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }

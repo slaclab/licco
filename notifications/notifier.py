@@ -78,7 +78,8 @@ def create_notification_msg(template_key: str, format_type: Literal["html"], **k
 class Notifier:
     """Helper class for sending user notifications"""
     # TODO: decide on the default 'from' username, should probably come from email configuration as well
-    DEFAULT_FROM_USER = "slac noreply"
+    # Username cannot have spaces or email fails
+    DEFAULT_FROM_USER = "slac-noreply"
 
     def __init__(self, licco_service_url: str, email_sender: EmailSenderInterface, admin_email: str):
         # service url is necessary so we can construct a valid url that points to the project
