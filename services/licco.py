@@ -237,13 +237,14 @@ def svc_get_project_changes(prjid):
     changes = mcd_model.get_all_project_changes(licco_db, prjid)
     return json_response(changes)
 
+# @TODO: rename endpoint at some point (we no longer use ffts, only fcs as strings)
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_ffts():
+def svc_get_fcs():
     """
-    Get a list of functional fungible tokens
+    Get a list of FC strings from a master project
     """
-    ffts = mcd_model.get_ffts(licco_db)
+    ffts = mcd_model.get_fcs(licco_db)
     return json_response(ffts)
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])

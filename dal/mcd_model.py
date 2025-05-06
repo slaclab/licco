@@ -13,7 +13,7 @@ from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from notifications.notifier import Notifier, NoOpNotifier
 from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS
-from .projdetails import get_project_attributes, get_all_project_changes, get_recent_snapshot, get_one_device_from_snapshot
+from .mcd_db import get_project_attributes, get_all_project_changes, get_recent_snapshot, get_one_device_from_snapshot
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
@@ -170,39 +170,21 @@ def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestam
     return get_project_attributes(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, fftid=fftid)
 
 
-def get_ffts(licco_db: MongoDb):
+def get_fcs(licco_db: MongoDb) -> List[str]:
     """
-    Get the functional fungible token objects.
-    In addition to id's we also return the fc and fg name and description
+    Get the FC ids from a master project. These are generally used for autocompleting ids when the user creates
+    a new device in a project.
     """
-    #TODO: Needs to be updated to 2.0. 
-    # this was previously used when creating a new fft in a
-    # project via the button to provide user with suggestions. 
-    ffts = list(licco_db["ffts"].aggregate([
-        {"$lookup": {"from": "fcs", "localField": "fc",
-                     "foreignField": "_id", "as": "fc"}},
-        {"$unwind": "$fc"},
-        {"$lookup": {"from": "fgs", "localField": "fg",
-                     "foreignField": "_id", "as": "fg"}},
-        {"$unwind": "$fg"}
-    ]))
-    ffts_used = set(licco_db["projects_history"].distinct("fft"))
-    for fft in ffts:
-        fft["is_being_used"] = fft["_id"] in ffts_used
-    return ffts
+    master_project = get_master_project(licco_db)
+    if not master_project:
+        # we don't have any ffts
+        return []
 
-
-def delete_fft(licco_db: MongoDb, fftid):
-    """
-    Delete an FFT if it is not currently being used by any project.
-    """
-    fftid = ObjectId(fftid)
-    ffts_used = set(licco_db["projects_history"].distinct("fft"))
-    if fftid in ffts_used:
-        return False, "This FFT is being used in a project", None
-    logger.info("Deleting FFT with id " + str(fftid))
-    licco_db["ffts"].delete_one({"_id": fftid})
-    return True, "", None
+    # get device ffts
+    latest_master_project = get_recent_snapshot(licco_db, master_project["_id"])
+    ids = latest_master_project["devices"]
+    fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
+    return [doc['fc'] for doc in fc_names]
 
 
 def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, device_id: str, comment: str):
@@ -1047,10 +1029,9 @@ def get_all_projects_last_edit_time(licco_db: MongoDb) -> Dict[str, Dict[str, da
 
 
 def get_project_last_edit_time(licco_db: MongoDb, project_id: str) -> Optional[datetime.datetime]:
-    most_recent = licco_db["projects_history"].find_one(
-        {"prj": ObjectId(project_id)}, {"time": 1}, sort=[("time", DESCENDING)])
-    if most_recent:
-        return most_recent["time"]
+    snapshot = get_recent_snapshot(licco_db, project_id)
+    if snapshot:
+        return snapshot["created"]
     return None
 
 
@@ -1239,7 +1220,7 @@ def delete_project(licco_db: MongoDb, userid, project_id):
     if user_is_admin:
         # deletion for admin role means 'delete'
         licco_db["projects"].delete_one({'_id': ObjectId(project_id)})
-        licco_db["projects_history"].delete_many({'prj': ObjectId(project_id)})
+        licco_db["project_snapshots"].delete_many({'project_id': ObjectId(project_id)})
         licco_db["tags"].delete_many({'prj': ObjectId(project_id)})
         return True, ""
 
