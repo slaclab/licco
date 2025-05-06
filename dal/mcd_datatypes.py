@@ -20,7 +20,7 @@ MCD_BEAMLINES = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI",
 KEYMAP = {
     # Column names defined in confluence
     "FC": "fc",
-    "FG": "fg",
+    "Fungible": "fg",
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
     "Area": "area",

@@ -11,7 +11,6 @@ from typing import Dict, Tuple, List, Optional
 import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import PyMongoError
 from notifications.notifier import Notifier, NoOpNotifier
 from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS
 from .projdetails import get_project_attributes, get_all_project_changes, get_recent_snapshot, get_one_device_from_snapshot
@@ -28,8 +27,8 @@ def initialize_collections(licco_db: MongoDb):
     if 'editors_1' not in licco_db["projects"].index_information().keys():
         licco_db["projects"].create_index([("editors", ASCENDING)], name="editors_1")
 
-    if 'project_history_id_1' not in licco_db["project_history"].index_information().keys():
-        licco_db["project_history"].create_index([("project_id", ASCENDING), ("created", DESCENDING)], name="project_history_id_1")
+    if 'project_snapshots_1' not in licco_db["project_snapshots"].index_information().keys():
+        licco_db["project_snapshots"].create_index([("project_id", ASCENDING), ("created", DESCENDING)], name="project_snapshots_1")
 
     if 'device_history_id_1' not in licco_db["device_history"].index_information().keys():
         licco_db["device_history"].create_index([("device_id", ASCENDING)], name="device_history_id_1")
@@ -80,10 +79,10 @@ def get_device_id_from_name(licco_db: MongoDb, prjid, fc):
     """
     Look up a device by its fc name and the project its affiliated with
     """
-    device = licco_db["device_history"].find_one({"prjid": prjid, "fc":fc})
+    device = licco_db["device_history"].find_one({"prjid": prjid, "fc": fc})
     if not device:
         return False, ""
-    return True, device["_id"]
+    return True, str(device["_id"])
 
 def get_users_with_privilege(licco_db: MongoDb, privilege):
     """
@@ -206,7 +205,7 @@ def delete_fft(licco_db: MongoDb, fftid):
     return True, "", None
 
 
-def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str, comment: str):
+def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, device_id: str, comment: str):
     if not comment:
         return False, f"Comment should not be empty", None
 
@@ -228,6 +227,7 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
         return False, f"You are not allowed to comment on a device within a project '{project_name}'"
 
     new_comment = {
+        'id': str(uuid.uuid4()),
         'author': user_id,
         'comment': comment,
         'time': datetime.datetime.now(datetime.UTC),
@@ -235,59 +235,62 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, fftid: str
     ok, snapshot = get_recent_snapshot(licco_db, project_id)
     if not ok:
         return ok, f"No snapshot found for project id {project_id}"
-    if ObjectId(fftid) not in snapshot["devices"]:
-        return False, f"No device with ID {fftid} exists in project {project_name}"
 
-    status, errormsg = insert_comment_db(licco_db, project_id, fftid, new_comment)
+    if ObjectId(device_id) not in snapshot["devices"]:
+        return False, f"No device with ID {device_id} exists in project {project_name}"
+
+    status, errormsg = insert_comment_db(licco_db, project_id, device_id, new_comment)
     return status, errormsg
+
 
 def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, comment: Dict):
     try:
         licco_db["device_history"].update_one(
-            {"_id":ObjectId(device_id), "prjid": ObjectId(project_id)},
-            { "$push": 
-                { "discussion":{
-                    '$each': [comment],
-                    '$position': 0 }
-                }
-            })
-    except PyMongoError as e:
-        return False, f"Unable to insert comment for device {device_id} in project {project_id}"
+            {"_id": ObjectId(device_id)},
+            {"$push": {"discussion": {'$each': [comment], '$position': 0}}})
+    except Exception as e:
+        return False, f"Unable to insert comment for device {device_id} in project {project_id}: {str(e)}"
     return True, ""
 
 
-def delete_fft_comment(licco_db: MongoDb, user_id, dev_id, prj_id, comment):
-    device = get_one_device_from_snapshot(licco_db, projectid=prj_id, device_id=dev_id)
-    
+def delete_fft_comment(licco_db: MongoDb, user_id, project_id: str, device_id: str, comment_id):
+    device = get_one_device_from_snapshot(licco_db, projectid=project_id, device_id=device_id)
     if not device:
-        return False, f"Device with id {dev_id} does not exist"
+        return False, f"Device with id {device_id} does not exist"
 
     # check permissions for deletion
-    project = get_project(licco_db, prj_id)
+    project = get_project(licco_db, project_id)
     status = project["status"]
     project_is_in_correct_state = status == "development" or status == "submitted"
     if not project_is_in_correct_state:
         name = project["name"]
-        return False, f"Comment {comment} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
+        return False, f"Comment {comment_id} could not be deleted: project '{name}' is not in a development or submitted state (current state = {status})"
+
+    # find comment
+    comment_to_delete = None
+    for comment in device["discussion"]:
+        if comment["id"] == comment_id:
+            comment_to_delete = comment
+            break
+
+    if not comment_to_delete:
+        return False, f"Comment {comment_id} could not be deleted as it does not exist for a device {device_id}"
 
     # project is in a correct state
     # check if the user has permissions for deleting a comment
     allowed_to_delete = False
-    allowed_to_delete |= comment["author"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
+    allowed_to_delete |= comment_to_delete["author"] == user_id    # comment owner (editor and approver) is always allowed to delete their own comments
     allowed_to_delete |= project["owner"] == user_id   # project owner is always allowed to delete project comments
     if not allowed_to_delete:
         # if user is admin, they should be allowed to delete
         allowed_to_delete |= user_id in get_users_with_privilege(licco_db, "admin")
 
     if not allowed_to_delete:
-        return False, f"You are not allowed to delete comment {comment}"
-    
-    for ind, stored_comment in enumerate(device["discussion"]):
-        if stored_comment == comment:
-            device["discussion"].pop(ind)
+        return False, f"You are not allowed to delete comment {comment_id}"
 
-    licco_db["device_history"].update_one({"_id": dev_id},
-                                          {"$set": { "discussion": device["discussion"]}})
+    # remove chosen comment from an array
+    updated_comments = [comment for comment in device["discussion"] if not comment["id"] == comment_id]
+    licco_db["device_history"].update_one({"_id": ObjectId(device_id)}, {"$set": {"discussion": updated_comments}})
     return True, ""
 
 
@@ -308,7 +311,7 @@ def create_new_project(licco_db: MongoDb, userid: str, name: str, description: s
     # check if a project with this name already exists
     existing_project = licco_db["projects"].find_one({"name": name})
     if existing_project:
-        return False, f"Project with name {name} already exists", None  
+        return f"Project with name {name} already exists", {}
 
     newprjid = licco_db["projects"].insert_one({
         "name": name, "description": description, "owner": userid, "editors": [], "approvers": [],
@@ -474,7 +477,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 time = comment.get('time', modification_time)
                 new_comments.insert(0, {
                     # each comment needs an uuid, so we can uniquely identify it, if the user decides to delete it
-                    "id": uuid.uuid4(),
+                    "id": str(uuid.uuid4()),
                     "author": author,
                     "comment": newval,
                     "time": time,
@@ -629,7 +632,7 @@ def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], u
         "project_id": ObjectId(projectid),
         "author": userid,
         "created": modification_time,
-        "devices": devices,
+        "devices": [ObjectId(device) for device in devices],
     }
     if changelog:
         inserts["made_changes"] = changelog
@@ -705,7 +708,10 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
     return True, "", get_project_attributes(licco_db, ObjectId(destprjid)).get(fftid, {})
 
 
-def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, dev_ids: List[str]) -> Tuple[bool, str]:
+def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, device_ids_to_remove: List[str]) -> Tuple[bool, str]:
+    if len(device_ids_to_remove) == 0:
+        return True, ""
+
     editable, errormsg = is_project_editable(licco_db, prjid, userid)
     if not editable:
         return False, errormsg
@@ -713,21 +719,27 @@ def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, dev_ids: List[str
     ok, snapshot = get_recent_snapshot(licco_db, prjid)
     if not ok:
         return False, f"No data found for project id {prjid}"
-    ids = [ObjectId(x) for x in dev_ids]
-    final = list(set(ids)^set(snapshot["devices"]))
 
-    licco_db["project_history"].insert_one({
-        "project_id":ObjectId(prjid), 
-        "author":userid, 
+    ids = [ObjectId(x) for x in device_ids_to_remove]
+    final = list(set(ids) ^ set(snapshot["devices"]))
+
+    licco_db["project_snapshots"].insert_one({
+        "project_id": ObjectId(prjid),
+        "author": userid,
         "created": datetime.datetime.now(datetime.UTC),
         "devices": final,
-        })
+        # @TODO: add changelog once we decide how it should look like
+    })
+
     if len(final) == len(snapshot["devices"]):
         # this should never happen when using the GUI (the user can only delete a device if a device is displayed
         # in a GUI (with a valid id) - there should always be at least one such document.
         # Nevertheless, this situation can happen if someone decides to delete a device via a REST API
         # while providing a list of invalid ids.
-        return False, f"Chosen ffts {dev_ids} do not exist"
+        #
+        # One possibility is also a concurrent delete: user A deletes a device just before user B tries to delete the same device.
+        return False, f"Chosen ffts {device_ids_to_remove} do not exist"
+
     return True, ""
 
 def is_project_editable(db, prjid, userid):
