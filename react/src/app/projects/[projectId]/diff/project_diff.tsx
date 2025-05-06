@@ -112,7 +112,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
         const formatValueIfNumber = (val: any, field: keyof ProjectDeviceDetails) => {
-            if (field == "id" || field == "fc" || field == "fg") {
+            if (field == "_id" || field == "fc" || field == "fg_desc") {
                 return val;
             }
             const isPositionField = ProjectDevicePositionKeys.indexOf(field) >= 0;
@@ -166,7 +166,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         }
 
         return data.map(devices => {
-            return (<tr key={devices.a.id}>
+            return (<tr key={devices.a._id}>
                 <td>{renderField(devices.a, devices.b, 'fc')}</td>
                 <td>{renderField(devices.a, devices.b, 'fg_desc')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
@@ -196,7 +196,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
     const renderDataRows = (data: ProjectDeviceDetails[], renderDiscussion: boolean = true) => {
         return data.map(d => {
             return (
-                <tr key={d.id}>
+                <tr key={d._id}>
                     <td>{d.fc}</td>
                     <td>{d.fg_desc}</td>
                     <td>{d.tc_part_no}</td>
@@ -244,7 +244,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
     const replaceDeviceDiscussion = (newDevice: ProjectDeviceDetails, devices: ProjectDeviceDetails[]) => {
         for (let device of devices) {
-            if (device.id == newDevice.id) {
+            if (device._id == newDevice._id) {
                 device.discussion = newDevice.discussion;
                 return
             }
@@ -304,7 +304,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                         replaceDeviceDiscussion(newDevice, diff.missing);
                         replaceDeviceDiscussion(newDevice, diff.new);
                         for (let devices of diff.updated) {
-                            if (devices.a.id == newDevice.id) {
+                            if (devices.a._id == newDevice._id) {
                                 devices.a.discussion = newDevice.discussion
                                 break
                             }
