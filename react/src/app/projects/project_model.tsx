@@ -180,6 +180,11 @@ export function isProjectInDevelopment(project?: ProjectInfo): boolean {
     return project?.status === "development";
 }
 
+export function deviceHasSubdevice(device: ProjectDeviceDetails): boolean {
+    // TODO: check for 'subdevice' field once we add it
+    return false
+}
+
 export interface ProjectDeviceDetails extends deviceDetailFields {
     _id: string,
 }
@@ -200,13 +205,13 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): P
 
 export interface deviceDetailFields {
     // device metadata
-    device_id: number,
-    device_type: number,  // depending on the type of a device may have different fields
-    created: Date,
+    device_id: string;
+    device_type: number;  // depending on the type of a device may have different fields
+    created: Date;
 
     // mcd fields (all devices have them)
     fc: string;
-    fg_desc: string,  // deprecated ? 
+    fg: string;
     tc_part_no: string;
     comments: string;
     stand: string;
@@ -247,7 +252,7 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key == "fc" || key == "fg_desc" || key == "discussion") { // ignored 
+        if (key === "fc" || key === "fg" || key === "discussion") { // ignored 
             continue;
         }
 
@@ -262,8 +267,8 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
             continue;
         }
 
-        if (aVal != bVal) {
-            if ((aVal == undefined && bVal == '') || (aVal == '' && bVal == undefined)) {
+        if (aVal !== bVal) {
+            if ((aVal === undefined && bVal === '') || (aVal === '' && bVal === undefined)) {
                 // both fields are empty, and we shouldn't display them as a change of value 
                 // since that would cause <empty>-<empty> to be displayed in the GUI which 
                 // would look confusing.

@@ -79,7 +79,6 @@ class DeviceMcd {
     fc: string = "";
     fg: string = "";
 
-    fg_desc: string = "";  // deprecated field ? 
     tc_part_no: string = "";
     state: string = "";
     stand: string = "";

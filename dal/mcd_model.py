@@ -4,6 +4,7 @@ Most of the code here gets a connection to the database, executes a query and fo
 """
 import logging
 import datetime
+import uuid
 from collections.abc import Mapping
 import math
 from typing import Dict, Tuple, List, Optional
@@ -344,8 +345,15 @@ def validate_editors(licco_db: MongoDb, editors: List[str], notifier: Notifier) 
     return ""
 
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
-    fftid = fcupdate["_id"]
+    """
+    FC field has changed.
 
+    HISTORY: This used to quite problematic to do in MCD 1.0 (as we had to delete the old device and create a new one),
+    but it should be more straightforward now.
+
+    @REFACTOR: I am not sure if this method is even needed right now?
+    """
+    fftid = fcupdate["_id"]
     if empty_string_or_none(fftid):
         return False, f"Can't change device of a project: fftid should not be empty", ""
 
@@ -355,13 +363,10 @@ def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdat
     if project['status'] != 'development':
         return False, f"Can't change fft {fftid}: Project {project['name']} is not in a development mode (status={project['status']})", ""
 
-    # fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
-    # if not fft:
-    #     return False, f"Cannot find functional+fungible token for {fftid}", ""
-
     ok, snapshot = get_recent_snapshot(licco_db, prjid=prjid)
     if not ok:
-        return ok, f"No data found for project {prjid}"
+        return ok, f"No data found for project {prjid}", ""
+
     #change_of_fft = 'fc' in fcupdate
     #if not change_of_fft:
     # this is a regular update, and as such this method was not really used correctly, but it's not a bug
@@ -375,25 +380,25 @@ def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdat
     create_new_snapshot(licco_db, prjid, devices=new_devices, userid=userid, changelog=changelog)
     return ok, err, device_id
 
-def create_new_device(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None,
-                          current_project_attributes=None) -> Tuple[bool, str, ObjectId]:
-    if "prjid" not in fcupdate:
-        fcupdate["prjid"] = ObjectId(prjid)
-    if "discussion" not in fcupdate:
-        fcupdate["discussion"] = []
-    if "state" not in fcupdate:
-        fcupdate["state"] = "Conceptual"
+def create_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any], modification_time=None,
+                      current_project_attributes=None) -> Tuple[bool, str, ObjectId]:
+    if "prjid" not in values:
+        values["prjid"] = ObjectId(prjid)
+    if "discussion" not in values:
+        values["discussion"] = []
+    if "state" not in values:
+        values["state"] = "Conceptual"
     if not modification_time:
         modification_time = datetime.datetime.now(datetime.UTC)
-    fcupdate["created"] = modification_time
-    dev_id = licco_db["device_history"].insert_one(fcupdate).inserted_id
+    values["created"] = modification_time
+    dev_id = licco_db["device_history"].insert_one(values).inserted_id
     return True, "", dev_id
 
 def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None, remove_discussion_comments=None,
-                          current_project_attributes=None) -> Tuple[bool, str, ImportCounter]:
+                          current_project_attributes=None) -> Tuple[bool, str, List[Dict[str, any]], str]:
     """
     Update the value(s) of an FFT in a project
-    Returns: a tuple containing (success flag (true/false if error), error message (if any), and an insert count
+    Returns: a tuple containing (success flag (true/false if error), error message (if any), and newly created device_id
     """
 
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
@@ -406,19 +411,19 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     changelog = []
 
     if ("_id" not in fcupdate):
-        ok, err, new_device = create_new_device(licco_db, userid, prjid, fcupdate=fcupdate, modification_time=modification_time)
+        ok, err, new_device_id = create_new_device(licco_db, userid, prjid, values=fcupdate, modification_time=modification_time)
         for key in fcupdate:
             changelog.append({
                 "_id": '',
-                "fc":fcupdate['fc'],
-                "prj":prj["name"],
+                "fc": fcupdate['fc'],
+                "prj": prj["name"],
                 "key": key,
                 "previous": None,
                 "val": fcupdate[key],
                 "user": userid,
-                "time":modification_time
+                "time": modification_time
             })
-        return ok, err, changelog, new_device
+        return ok, err, changelog, str(new_device_id)
     else:
         fftid = fcupdate["_id"]
 
@@ -434,13 +439,14 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         current_attrs = current_attrs[fcupdate["fc"]]
 
     # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
-    if latest_changes:
+    ok, snapshot = get_recent_snapshot(licco_db, prjid)
+    if ok:
         # NOTE: not sure if this is the best approach, but when using mongomock for testing
         # we get an error (can't compare offset-naive vs offset aware timestamps), hence we
         # set the timezone info manually.
-        if modification_time < latest_changes[0]["time"].replace(tzinfo=pytz.utc):
-            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", [], ''
+        time = snapshot["created"]
+        if modification_time < time.replace(tzinfo=pytz.utc):
+            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {time.isoformat()}", [], ''
 
     fft_fields_to_insert = {}
 
@@ -452,6 +458,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         if attrname == "discussion" and isinstance(attrval, list):
             if remove_discussion_comments:
                 continue
+            # @REFACTOR: not sure what is the purpose of this?
             old_comments = current_attrs.get(attrname, [])
             new_comments = old_comments
             old_comments = [x['comment'] for x in old_comments]
@@ -466,21 +473,22 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 newval = comment['comment']
                 time = comment.get('time', modification_time)
                 new_comments.insert(0, {
-                    #"_id": fftid,
-                    #"key": attrname,
-                    #"val": newval,
-                    "comment": newval,
+                    # each comment needs an uuid, so we can uniquely identify it, if the user decides to delete it
+                    "id": uuid.uuid4(),
                     "author": author,
+                    "comment": newval,
                     "time": time,
                 })
-            fft_fields_to_insert['discussion']=new_comments
+            fft_fields_to_insert['discussion'] = new_comments
             continue
 
+        # @TODO: replace field validation with our new device validator
         try:
             attrmeta = FC_ATTRS[attrname]
         except KeyError:
             logger.debug(f"Parameter {attrname} is not in DB. Skipping entry.")
             continue
+
         try:
             newval = attrmeta["fromstr"](attrval)
         except ValueError:
@@ -489,39 +497,41 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
             return False, error_str, [], ''
 
         prevval = current_attrs.get(attrname, None)
-        # {_id:x, fc:x, fg:, key:dbkey, prj:prjname, 'time':timestamp, 'user':'user, 'val':x} 
+
         # Set the FC if it doesn't currently exist-mostly happens on merge/approvals
         if "fc" in current_attrs:
             fc = current_attrs["fc"]
         else:
             fc = fcupdate["fc"]
+
         if prevval != newval:
+            # value has changed
+            # append this change to a changelog
             changelog.append({
                 "_id": fftid,
-                "fc":fc,
-                "prj":prj["name"],
+                "fc": fc,
+                "prj": prj["name"],
                 "key": attrname,
                 "previous": prevval,
                 "val": newval,
                 "user": userid,
-                "time":modification_time
+                "time": modification_time
             })
-            fft_fields_to_insert[attrname]=newval
-        # Keep original value
-        else:
-            # With the new device creation system, its more difficult to track same values
-            fft_fields_to_insert[attrname]=prevval
+            fft_fields_to_insert[attrname] = newval
 
     if fft_fields_to_insert:
         logger.debug(f"Changing {len(changelog)} attributes in device {fftid}")
         current_attrs = {key: value for key, value in current_attrs.items() if key not in ["_id", "created", "projectid", "prjid"]}
         current_attrs.update(fft_fields_to_insert)
-        ok, err, new_device = create_new_device(licco_db, userid, prjid, fcupdate=current_attrs, modification_time=modification_time)
-        return True, "", changelog, new_device
+        # we should create a new device based on old device
+        ok, err, new_device_id = create_new_device(licco_db, userid, prjid, values=current_attrs, modification_time=modification_time)
+        return True, "", changelog, str(new_device_id)
 
     logger.debug("In update_fft_in_project, all_inserts is an empty list")
     return False, "", changelog, ''
 
+
+# @TODO: @REMOVE it's no longer used
 def validate_insert_range(attr, val) -> str:
     """
     Helper function to validate data prior to being saved in DB
@@ -593,7 +603,8 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     # Try to add each device/fft to project
     for dev in devices:
         status, errormsg, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, dev,
-                                                            current_project_attributes=project_devices, remove_discussion_comments=remove_discussion_comments)
+                                                           current_project_attributes=project_devices,
+                                                           remove_discussion_comments=remove_discussion_comments)
         def_logger.info(f"Import happened for {dev}. ID number {device_id}")
 
         if status:
@@ -608,22 +619,23 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     for remain_dev in project_devices:
         new_ids.append(project_devices[remain_dev]["_id"])
 
-    create_new_snapshot(licco_db, prjid, devices=new_ids, userid=userid, changelog=changelog)
-    return True, errormsg, insert_counter
+    create_new_snapshot(licco_db, prjid, devices=new_ids, userid=userid, changelog=changes)
+    return True, "", insert_counter
+
 
 def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], userid, changelog=None, snapshot_name=None):
     modification_time = datetime.datetime.now(datetime.UTC)
     inserts = {
-        "project_id":ObjectId(projectid), 
-        "author":userid, 
-        "created":modification_time,
-        "devices":devices,
+        "project_id": ObjectId(projectid),
+        "author": userid,
+        "created": modification_time,
+        "devices": devices,
     }
     if changelog:
         inserts["made_changes"] = changelog
     if snapshot_name:
         inserts["snapshot_name"] = snapshot_name
-    licco_db["project_history"].insert_one(inserts)
+    licco_db["project_snapshots"].insert_one(inserts)
     return
 
 

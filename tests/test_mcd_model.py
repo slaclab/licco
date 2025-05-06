@@ -896,10 +896,10 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
         assert len(got_ffts) == 2, "There should be 2 ffts inserted into a project"
 
         expected_ffts = {
-            'COMBO': {'fc': 'AT1L0', 'fg':'', 'fg_desc': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
+            'COMBO': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
                       'state': 'Conceptual', 'comments': 'TEST',
                       'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
-            'GAS': {'fc': 'AT2L0', 'fg': '', 'fg_desc': 'GAS', 'tc_part_no': '3213221',
+            'GAS': {'fc': 'AT2L0', 'fg': 'GAS', 'tc_part_no': '3213221',
                     'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
                     'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
         }

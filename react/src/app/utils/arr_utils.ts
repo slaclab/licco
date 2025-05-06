@@ -4,7 +4,7 @@ export function isArrayEqual<T>(a: T[], b: T[]) {
         return false;
     }
 
-    if (a.length != b.length) {
+    if (a.length !== b.length) {
         return false;
     }
 

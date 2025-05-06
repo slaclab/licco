@@ -112,7 +112,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
         const formatValueIfNumber = (val: any, field: keyof ProjectDeviceDetails) => {
-            if (field == "_id" || field == "fc" || field == "fg_desc") {
+            if (field == "_id" || field == "fc" || field == "fg") {
                 return val;
             }
             const isPositionField = ProjectDevicePositionKeys.indexOf(field) >= 0;
@@ -168,7 +168,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         return data.map(devices => {
             return (<tr key={devices.a._id}>
                 <td>{renderField(devices.a, devices.b, 'fc')}</td>
-                <td>{renderField(devices.a, devices.b, 'fg_desc')}</td>
+                <td>{renderField(devices.a, devices.b, 'fg')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
                 <td>{renderField(devices.a, devices.b, 'stand')}</td>
                 <td>{renderField(devices.a, devices.b, 'area')}</td>
@@ -198,7 +198,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
             return (
                 <tr key={d._id}>
                     <td>{d.fc}</td>
-                    <td>{d.fg_desc}</td>
+                    <td>{d.fg}</td>
                     <td>{d.tc_part_no}</td>
                     <td>{d.stand}</td>
                     <td>{d.area}</td>
