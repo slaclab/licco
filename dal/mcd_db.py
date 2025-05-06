@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def get_all_project_changes(propdb, projectid):
             changelist += snap["made_changes"]
     return changelist
 
-def get_recent_snapshot(db, prjid: str):
+def get_recent_snapshot(db, prjid: str) -> Tuple[bool, Dict[str, any]]:
     """
     Gets the newest snapshot for any one project
     """

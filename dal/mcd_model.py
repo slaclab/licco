@@ -181,7 +181,10 @@ def get_fcs(licco_db: MongoDb) -> List[str]:
         return []
 
     # get device ffts
-    latest_master_project = get_recent_snapshot(licco_db, master_project["_id"])
+    ok, latest_master_project = get_recent_snapshot(licco_db, master_project["_id"])
+    if not ok:
+        return []
+
     ids = latest_master_project["devices"]
     fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
     return [doc['fc'] for doc in fc_names]
@@ -1029,10 +1032,10 @@ def get_all_projects_last_edit_time(licco_db: MongoDb) -> Dict[str, Dict[str, da
 
 
 def get_project_last_edit_time(licco_db: MongoDb, project_id: str) -> Optional[datetime.datetime]:
-    snapshot = get_recent_snapshot(licco_db, project_id)
-    if snapshot:
-        return snapshot["created"]
-    return None
+    ok, snapshot = get_recent_snapshot(licco_db, project_id)
+    if not ok:
+        return None
+    return snapshot["created"]
 
 
 def __flatten__(obj, prefix=""):
