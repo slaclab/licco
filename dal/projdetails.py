@@ -4,130 +4,65 @@ from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
+
+
 def get_project_attributes(db, projectid, fftid=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
+    # get correct project ID
     project = db["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
         logger.error("Cannot find project for id %s", projectid)
         return {}
 
-    mtch = { "$match": {"$and": [ { "prj": ObjectId(projectid)} ]}}
-    if skipClonedEntries:  # skip initial values (when cloning a project)
-        mtch["$match"]["$and"].append({"time": {"$gt": project["creation_time"]}})
-    if asoftimestamp:   # find the values before a specific timestamp
-        mtch["$match"]["$and"].append({"time": {"$lte": asoftimestamp}})
-    if fftid:  # only values of a specific fftid should be returned
-        mtch["$match"]["$and"].append({"fft": ObjectId(fftid)})
+    # find most recent project snapshot
+    status, snapshot = get_recent_snapshot(db, projectid)
+    if not status:
+        logger.debug(f"No recent snapshot found for project {projectid}")
+        return {}
 
-    histories = [x for x in db["projects_history"].aggregate([
-        mtch,
-        {"$match": {"key": {"$ne": "discussion"}}},
-        {"$sort": {"time": -1}},
-        {"$group": {
-            "_id": {"fft": "$fft", "key": "$key"},
-            "latestkey": {"$first":  "$key"},
-            "latestval": {"$first":  "$val"},
-        }},
-        {"$project": {
-            "prj": "$prj",
-            "fft": "$_id.fft",
-            "latestkey": "$latestkey",
-            "latestval": "$latestval",
-        }},
-        {"$lookup": {"from": "ffts", "localField": "fft", "foreignField": "_id", "as": "fftobj"}},
-        {"$unwind": "$fftobj"},
-        {"$lookup": {"from": "fcs", "localField": "fftobj.fc", "foreignField": "_id", "as": "fcobj"}},
-        {"$unwind": "$fcobj"},
-        {"$lookup": {"from": "fgs", "localField": "fftobj.fg", "foreignField": "_id", "as": "fgobj"}},
-        {"$unwind": "$fgobj"},
-        {"$sort": {"prj": 1, "fcobj.name": 1, "fgobj.name": 1, "latestkey": 1}}
-    ])]
-    details = {}
-    for hist in histories:
-        fft = hist["fftobj"]
-        fft_id = str(fft["_id"])
+    # get information for one specified FFT
+    if fftid:
+        device_information = get_one_device_from_snapshot(db, projectid=projectid, device_id=fftid)
+    else:
+        # get information for each device
+        device_information = get_all_devices_from_snapshot(db, projectid=projectid, snapshot=snapshot)
 
-        if fft_id not in details:
-            details[fft_id] = { "fft": { "_id": fft_id, "fc": hist["fcobj"]["name"], "fg": hist["fgobj"]["name"] } }
-        field_name = hist["latestkey"]
-        field_val = hist["latestval"]
-        # all other fields are primitive types (scalars, strings) and only the latest values are important
-        details[fft_id][field_name] = field_val
-
-    if len(details) == 0:
-        # we found nothing for this set of filters, early return
-        return details
-
-    # fetch and aggregate comments for all ffts
-    commentFilter = {"$match": {"$and": [{"key": "discussion"}]}}
-    if commentAfterTimestamp:
-        commentFilter["$match"]["$and"].append({"time": {"$gt": commentAfterTimestamp}})
-
-    comments: List[Dict[str, any]] = [x for x in db["projects_history"].aggregate([
-        mtch,
-        commentFilter,
-        {"$sort": {"time": -1}},
-        {"$project": {
-            "prj": "$prj",
-            "fft": "$fft",
-            "key": "$key",
-            "val": "$val",
-            "user": "$user",
-            "time": "$time",
-        }},
-    ])]
-
-    for c in comments:
-        field_name = "discussion"
-        fft_id = str(c["fft"])
-        comment_id = str(c["_id"])
-        user = c["user"]
-        timestamp = c["time"]
-        val = c["val"]
-
-        device = details.get(fft_id, None)
-        if not device:
-            # this comment is not relevant since the project no longer has this device
-            continue
-
-        device_comments = device.get(field_name, [])
-        device_comments.append({'id': comment_id, 'author': user, 'time': timestamp, 'comment': val})
-        details[fft_id][field_name] = device_comments
-
-    for device in details.values():
-        # ensures discussion field is always present (at least as an empty array)
-        if not device.get("discussion"):
-            device["discussion"] = []
-
-    return details
+    return device_information
 
 
 def get_all_project_changes(propdb, projectid):
-    project = propdb["projects"].find_one({"_id": ObjectId(projectid)})
-    if not project:
-        logger.error("Cannot find project for id %s", projectid)
-        return {}
+    # format [{_id:x, fc:x, fg:, key:dbkey, prj:prjname, 'time':timestamp, 'user':'user, 'val':x}, {}, ...]
+    snapshots = propdb["project_history"].find({"project_id": ObjectId(projectid)})
+    if not snapshots:
+        logger.error("No projects with project ID %s", projectid)
+    changelist = []
+    for snap in snapshots:
+        if "made_changes" in snap:
+            #changes = {'_id':snap[""]'fc':snap['made_changes']['fc'], ...}
+            changelist += snap["made_changes"]
+    return changelist
 
-    mtch = { "$match": {"$and": [ { "prj": ObjectId(projectid)} ]}}
+def get_recent_snapshot(db, prjid: str):
+    """
+    Gets the newest snapshot for any one project
+    """
+    snapshot = db["project_history"].find_one(
+        {"project_id": ObjectId(prjid)},
+        sort=[( "created", -1 )]
+        )
+    if not snapshot:
+        logger.debug(f"No database entry for project ID: {prjid}")
+        return False, {}
+    return True, snapshot
 
-    histories = [ x for x in propdb["projects_history"].aggregate([
-        mtch,
-        {"$sort": { "time": -1}},
-        {"$lookup": { "from": "projects", "localField": "prj", "foreignField": "_id", "as": "prjobj"}},
-        {"$unwind": "$prjobj"},
-        {"$lookup": { "from": "ffts", "localField": "fft", "foreignField": "_id", "as": "fftobj"}},
-        {"$unwind": "$fftobj"},
-        {"$lookup": { "from": "fcs", "localField": "fftobj.fc", "foreignField": "_id", "as": "fcobj"}},
-        {"$unwind": "$fcobj"},
-        {"$lookup": { "from": "fgs", "localField": "fftobj.fg", "foreignField": "_id", "as": "fgobj"}},
-        {"$unwind": "$fgobj"},
-        {"$project": {
-            "prj": "$prjobj.name",
-            "fc": "$fcobj.name",
-            "fg": "$fgobj.name",
-            "key": "$key",
-            "val": "$val",
-            "user": "$user",
-            "time": "$time"
-        }},
-    ])]
-    return histories
+def get_all_devices_from_snapshot(db, projectid, snapshot):
+    proj_devices = {}
+    devices = db["device_history"].find( {"_id": { "$in": snapshot["devices"]}})
+    # TODO: handle subdevices, for now we dump all info, no filter
+    for device in devices:
+        proj_devices[device["fc"]] = device
+    return proj_devices
+
+def get_one_device_from_snapshot(db, projectid, device_id):
+    device = db["device_history"].find_one(
+        {"_id": ObjectId(device_id)})
+    return device

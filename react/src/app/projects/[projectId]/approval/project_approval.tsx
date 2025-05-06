@@ -46,39 +46,38 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
             }).finally(() => {
                 setIsLoading(false);
             });
-    }, [])
+    }, [projectId])
 
     const userIsEditor = useMemo(() => {
         return diff?.a.owner === loggedInUser || diff?.a.editors.includes(loggedInUser);
     }, [loggedInUser, diff])
-
-    const approveCallback = () => {
-        if (!diff) {
-            return;
-        }
-
-        setIsApproving(true);
-        approveProject(projectId)
-            .then(approvedProject => {
-                // refetch the entire diff
-                return fetchDiffWithMasterProject(projectId)
-                    .then(updatedDiff => {
-                        setUserDecision("Approved")
-                        setDiff(updatedDiff)
-                        setUserActionError('');
-                    })
-            }).catch((e: JsonErrorMsg) => {
-                setUserActionError(e.error);
-            }).finally(() => {
-                setIsApproving(false);
-            })
-    }
 
     const summaryTable = useMemo(() => {
         if (!diff) {
             return;
         }
 
+        const approveCallback = () => {
+            if (!diff) {
+                return;
+            }
+    
+            setIsApproving(true);
+            approveProject(projectId)
+                .then(approvedProject => {
+                    // refetch the entire diff
+                    return fetchDiffWithMasterProject(projectId)
+                        .then(updatedDiff => {
+                            setUserDecision("Approved")
+                            setDiff(updatedDiff)
+                            setUserActionError('');
+                        })
+                }).catch((e: JsonErrorMsg) => {
+                    setUserActionError(e.error);
+                }).finally(() => {
+                    setIsApproving(false);
+                })
+        }
 
         const renderDecisionField = () => {
             if (diff.a.approved_by?.includes(loggedInUser)) {
@@ -93,7 +92,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
             const submitedOrAproved = isProjectSubmitted(project) || isProjectApproved(project);
             if (!submitedOrAproved) {
                 // if project is in development state, we should not render approval buttons
-                return <b>You can't approve a project with status: {project.status}</b>
+                return <b>You can&apos;t approve a project with status: {project.status}</b>
             }
 
             if (isProjectApproved(project)) {
@@ -222,7 +221,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                 </table>
             </Container>
         )
-    }, [userDecision, userActionError, isApproving, diff])
+    }, [userDecision, userActionError, isApproving, diff, projectId, loggedInUser, userIsEditor])
 
 
     return (

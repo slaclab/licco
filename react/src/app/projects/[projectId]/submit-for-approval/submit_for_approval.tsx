@@ -4,7 +4,7 @@ import { MultiChoiceStringSelector } from "@/app/components/selector";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createLink } from "@/app/utils/path_utils";
 import { AnchorButton, Button, Colors, Icon, NonIdealState } from "@blueprintjs/core";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
 import { ProjectEditData, ProjectInfo, UserRoles, editProject, fetchUsers, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
@@ -92,7 +92,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         return { availableApprovers, availableEditors }
     }, [allApprovers, selectedApprovers, allEditors, selectedEditors])
 
-    const userCanSubmitTheProject = () => {
+    const userCanSubmitTheProject = useCallback(() => {
         if (!diff?.a) {
             return false;
         }
@@ -106,7 +106,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
         }
 
         return false;
-    }
+    }, [diff?.a, loggedInUser])
 
     const disableEditActions = useMemo(() => {
         if (userCanSubmitTheProject()) {
@@ -114,7 +114,7 @@ export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ proj
             return false;
         }
         return !isProjectInDevelopment(project) || !userCanSubmitTheProject();
-    }, [project, loggedInUser])
+    }, [project, userCanSubmitTheProject])
 
 
 

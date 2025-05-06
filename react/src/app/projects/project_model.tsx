@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isArrayEqual } from "../utils/arr_utils";
 import { toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 
@@ -179,32 +180,21 @@ export function isProjectInDevelopment(project?: ProjectInfo): boolean {
     return project?.status === "development";
 }
 
-// device details used for frontend code; the reason why we don't use 
-// the backend one is due to its nested fft fields; frontend code 
-// and rendering data doesn't like nesting.
 export interface ProjectDeviceDetails extends deviceDetailFields {
-    id: string; // fft id
-    fc: string; // fc id
-    fg: string; // fg id
-    // + the rest of device fields 
+    _id: string,
 }
 
-export interface ProjectDeviceDetailsBackend extends deviceDetailFields {
-    fft: ProjectFFT;
-}
-
-export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetailsBackend): ProjectDeviceDetails {
+export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): ProjectDeviceDetails {
     // remove fft field from object, but copy every other field
-    const { fft, ...copiedFields } = details;
+    const { _id, ...copiedFields } = details;
     let data: ProjectDeviceDetails = {
         ...copiedFields,
-        id: details.fft._id,
-        fc: details.fft.fc,
-        fg: details.fft.fg,
+        _id: _id,
     }
     // turn dates into date objects
     // turn any number strings into undefined fields
     transformProjectDeviceDetails(data);
+
     return data;
 }
 
@@ -215,13 +205,14 @@ export interface deviceDetailFields {
     created: Date,
 
     // mcd fields (all devices have them)
+    fc: string;
     fg_desc: string,  // deprecated ? 
     tc_part_no: string;
     comments: string;
-    stand: string,
+    stand: string;
     state: string;
-    location: string;
-    beamline: string;
+    area: string;
+    beamline: string[];
     nom_ang_x?: number;
     nom_ang_y?: number;
     nom_ang_z?: number;
@@ -230,6 +221,7 @@ export interface deviceDetailFields {
     nom_loc_z?: number;
     ray_trace?: number;
     discussion: ChangeComment[];
+    project_id: string;
 }
 
 // used for displaying comment threads
@@ -255,12 +247,21 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key == "id" || key == "fc" || key == "fg" || key == "discussion") { // ignored 
+        if (key == "fc" || key == "fg_desc" || key == "discussion") { // ignored 
             continue;
         }
 
         const aVal = a[key];
         const bVal = b[key];
+        if (key == 'beamline') {
+            if (!isArrayEqual(aVal as any[], bVal as any[])) {
+                // found a difference
+                return true;
+            }
+            // keep looking for differences in other fields
+            continue;
+        }
+
         if (aVal != bVal) {
             if ((aVal == undefined && bVal == '') || (aVal == '' && bVal == undefined)) {
                 // both fields are empty, and we shouldn't display them as a change of value 
@@ -290,7 +291,7 @@ export async function fetchProjectFfts(projectId: string, showAllEntries: boolea
     }
 
 
-    return Fetch.get<Record<string, ProjectDeviceDetailsBackend>>(url)
+    return Fetch.get<Record<string, ProjectDeviceDetails>>(url)
         .then(data => {
             let devices = Object.values(data);
             return devices.map(d => deviceDetailsBackendToFrontend(d));
@@ -323,7 +324,7 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
         d[k] = numberOrDefault(d[k], undefined);
     }
 
-    if (device.discussion) {
+    if (device.discussion && device.discussion.length >= 1) {
         for (let comment of device.discussion) {
             comment.time = new Date(comment.time);
         }
@@ -334,6 +335,11 @@ export interface ProjectFFT {
     _id: string;
     fc: string;
     fg: string;
+}
+
+export interface ProjectDevice {
+    fc: string;
+    prjid: string;
 }
 
 export interface FFTDiff {
@@ -440,13 +446,13 @@ export class DeviceState {
 export async function syncDeviceUserChanges(projectId: string, fftId: string, changes: Record<string, any>): Promise<ProjectDeviceDetails> {
     // undefined values are not serialized, hence deleting a field (field == undefined) should be replaced with an empty string
     let data = { body: JSON.stringify(changes, (k, v) => v === undefined ? '' : v) };
-    return Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectId}/fcs/${fftId}`, data)
+    return Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectId}/fcs/${fftId}`, data)
         .then(d => deviceDetailsBackendToFrontend(d));
 }
 
 export async function addDeviceComment(projectId: string, fftId: string, comment: string): Promise<ProjectDeviceDetails> {
     const data = { 'comment': comment };
-    return Fetch.post<ProjectDeviceDetailsBackend>(`/ws/projects/${projectId}/fcs/${fftId}/comment`, { body: JSON.stringify(data) })
+    return Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectId}/fcs/${fftId}/comment`, { body: JSON.stringify(data) })
         .then(device => {
             return deviceDetailsBackendToFrontend(device);
         });
@@ -483,7 +489,7 @@ export interface ProjectApprovalHistory {
 }
 
 export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise<ProjectDeviceDetails[]> {
-    return Fetch.post<Record<string, ProjectDeviceDetailsBackend>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(ffts) })
+    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(ffts) })
         .then(resp => {
             let data = [...Object.values(resp)];
             let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));
@@ -552,7 +558,7 @@ export async function whoAmI(): Promise<string> {
     return Fetch.get<string>(`/ws/users/WHOAMI/`);
 }
 
-export function whoAmIHook() {
+export function useWhoAmIHook() {
     const [user, setUser] = useState('');
     const [isUserDataLoading, setIsUserDataLoading] = useState(false);
     const [userLoadingError, setUserLoadingError] = useState('');
@@ -597,12 +603,4 @@ export function fetchFfts(): Promise<FFTInfo[]> {
 
 export function deleteFft(fftId: string): Promise<void> {
     return Fetch.delete<void>(`/ws/ffts/${fftId}`);
-}
-
-export function fetchFcs(): Promise<FC[]> {
-    return Fetch.get<FC[]>("/ws/fcs/");
-}
-
-export function fetchFgs(): Promise<FG[]> {
-    return Fetch.get<FG[]>("/ws/fgs/");
 }

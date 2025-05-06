@@ -116,7 +116,7 @@ export const loadProjectDiff = async (projectIdA: string, projectIdB: string): P
 }
 
 
-export const fetchProjectDiffDataHook = (projectIdA: string, projectIdB: string) => {
+export const useFetchProjectDiffDataHook = (projectIdA: string, projectIdB: string) => {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [diff, setDiff] = useState<ProjectFftDiff>();

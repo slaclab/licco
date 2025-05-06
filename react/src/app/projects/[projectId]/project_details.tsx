@@ -2,7 +2,7 @@ import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { createLink } from "@/app/utils/path_utils";
-import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, NonIdealState, NumericInput } from "@blueprintjs/core";
+import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
 import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
@@ -14,10 +14,11 @@ import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { numberOrDefault } from "@/app/utils/num_utils";
 import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { FFTInfo } from "../project_model";
 import styles from './project_details.module.css';
 
-type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "id" | "comments" | "discussion">);
+type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
 /**
  * Helper function for sorting device details based on the clicked table column header
@@ -37,7 +38,7 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                 return sortString(a.fg_desc, b.fg_desc, false); // asc 
             });
             break;
-        case "fg":
+        case "fg_desc":
             data.sort((a, b) => {
                 let diff = sortString(a.fg_desc, b.fg_desc, desc);
                 if (diff != 0) {
@@ -88,7 +89,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [keymap, setKeymap] = useState<Record<string, string>>({});
     /* @FUTURE: these two fields may come from backend in the future */
     const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
-    const [beamlineLocations, setBeamlineLocations] = useState(["", "TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
+    const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -182,7 +183,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }).finally(() => {
             setIsLoading(false);
         })
-    }, []);
+    }, [projectId, queryParams]);
 
 
     // apply table filters, when any filter or original data changes
@@ -245,24 +246,25 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const addNewFft = (newFft: FFTInfo) => {
         if (!project) {
             // this should never happen
-            setErrorAlertMsg("Can't add a new fft to a project without knowing the projec details; this is a programming bug");
+            setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
             return;
         }
 
         // check if desired fft combination already exist within the project 
         // if it does, simply show an error message to the user
         for (let fft of fftData) {
-            if (fft.fc === newFft.fc.name && fft.fg === newFft.fg.name) {
-                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: "{project.name}".</>);
+            if (fft.fc === newFft.fc.name) {
+                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
                 return
             }
         }
 
         let fft: ProjectFFT = {
             _id: newFft._id,
-            fc: newFft.fc._id,
-            fg: newFft.fg._id,
+            fc: newFft.fc.name,
+            fg: newFft.fg.name,
         }
+
         return addFftsToProject(project._id, [fft])
             .then(data => {
                 // TODO: when we try to add an fft that is already there, the backend doesn't complain
@@ -287,9 +289,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         }
 
         // create the csv document from filtered devices
-        let data = `FC,Fungible,TC_part_no,Stand,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
+        let data = `FC,Fungible,TC_part_no,Stand,Area,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
+            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(", "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
@@ -459,7 +461,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
                             <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displaySortOrderIconInColumn('stand')}</th>
-                            <th onClick={e => changeSortOrder('location')}>Location {displaySortOrderIconInColumn('location')}</th>
+                            <th onClick={e => changeSortOrder('area')}>Area {displaySortOrderIconInColumn('area')}</th>
                             <th onClick={e => changeSortOrder('beamline')}>Beamline {displaySortOrderIconInColumn('beamline')}</th>
                             <th onClick={e => changeSortOrder('state')}>State {displayFilterIconInColumn(stateFilter)} {displaySortOrderIconInColumn('state')}</th>
 
@@ -480,16 +482,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice;
                             if (!isEditedDevice) {
-                                return <DeviceDataTableRow key={device.id}
+                                return <DeviceDataTableRow key={device._id}
                                     project={project} device={device} currentUser={currentlyLoggedInUser}
                                     disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg_desc });
                                         setIsCopyFFTDialogOpen(true);
                                     }}
                                     onDeleteFft={(device) => {
-                                        setCurrentFFT({ _id: device.id, fc: device.fc, fg: device.fg });
+                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg_desc });
                                         setIsDeleteDialogOpen(true);
                                     }}
                                     onUserComment={(device) => {
@@ -499,7 +501,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device}
+                            return <DeviceDataEditTableRow key={device._id} keymap={keymap} project={project} device={device}
                                 availableFftStates={availableFftStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
@@ -516,7 +518,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     let updatedDevices = [...fftData];
                                     for (let i = 0; i < updatedDevices.length; i++) {
                                         const device = updatedDevices[i];
-                                        if (device.id === oldDevice.id) {
+                                        if (device._id === oldDevice._id) {
                                             // found the device index that has to be replaced
                                             updatedDevices[i] = updatedDeviceData;
                                             break;
@@ -545,6 +547,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             {project ?
                 <AddFftDialog
                     dialogType="addToProject"
+                    currentProject={project._id}
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
                     onSubmit={(newFft) => addNewFft(newFft)}
@@ -576,7 +579,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // find current fft and update device details
                         let updatedData = [];
                         for (let d of fftData) {
-                            if (d.id != newDeviceDetails.id) {
+                            if (d._id != newDeviceDetails._id) {
                                 updatedData.push(d);
                                 continue;
                             }
@@ -605,7 +608,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 setIsDeleteDialogOpen(false);
 
                                 // update data 
-                                let updatedFftData = fftData.filter(d => d.id != fft._id);
+                                let updatedFftData = fftData.filter(d => d._id != fft._id);
                                 setFftData(updatedFftData);
                             }).catch((e: JsonErrorMsg) => {
                                 let msg = `Failed to delete a device ${currentFFT.fc}-${currentFFT.fg}: ${e.error}`;
@@ -634,7 +637,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
                         for (let fft of fftData) {
-                            if (fft.id != updatedDevice.id) {
+                            if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }
@@ -783,7 +786,7 @@ const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDevice
                     <td>{device.fg_desc}</td>
                     <td>{device.tc_part_no}</td>
                     <td>{device.stand}</td>
-                    <td>{device.location}</td>
+                    <td>{device.area}</td>
                     <td>{device.beamline}</td>
                     <td>{device.state}</td>
 
@@ -817,7 +820,7 @@ const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDevice
                                     <tr>
                                         <th>MCD</th>
                                         <td>{device.fc}</td>
-                                        <td>{device.fg}</td>
+                                        <td>{device.fg_desc}</td>
                                         <td>{device.state}</td>
                                     </tr>
                                     <tr>
@@ -834,7 +837,8 @@ const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDevice
                 }
             </>
         )
-    }, [project, device, currentUser, disabled, subdeviceRowOpen])
+    }, [project, device, currentUser, disabled, onCopyFft, onDeleteFft, onEdit, onUserComment, subdeviceRowOpen])
+
     return row;
 }
 
@@ -856,8 +860,8 @@ const DeviceDataEditTableRow: React.FC<{
 
     interface EditField {
         key: (keyof ProjectDeviceDetails);
-        type: "string" | "number" | "select"
-        value: [string | undefined, Dispatch<SetStateAction<string | undefined>>];
+        type: "string" | "number" | "select" | "multi-select"
+        value: [string | string[] | undefined, Dispatch<SetStateAction<string | undefined>> | Dispatch<SetStateAction<string[] | undefined>>];
         valueOptions?: string[]; // only used when type == "select"
         err: [boolean, Dispatch<SetStateAction<boolean>>];
         min?: number;
@@ -874,8 +878,8 @@ const DeviceDataEditTableRow: React.FC<{
         { key: 'fg_desc', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
-        { key: 'location', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
-        { key: 'beamline', type: "select", valueOptions: availableBeamlines, value: useState<string>(), err: useState(false) },
+        { key: 'area', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
+        { key: 'beamline', type: "multi-select", valueOptions: availableBeamlines, value: useState<string[]>(), err: useState(false) },
         { key: 'state', type: "select", valueOptions: fftStates, value: useState<string>(), err: useState(false) },
 
         { key: 'nom_loc_z', type: "number", value: useState<string>(), err: useState(false) },
@@ -893,12 +897,13 @@ const DeviceDataEditTableRow: React.FC<{
 
     useEffect(() => {
         for (let field of editableDeviceFields) {
-            if (field.key == 'id') { // fft field is not editable
+            if (field.key == '_id') { // fft field is not editable
                 continue;
             }
             field.value[1](device[field.key] as any);
         }
-    }, [device])
+        // can't add editableDeviceFields as a dependency due to its use of useState()
+    }, [device])    // eslint-disable-line react-hooks/exhaustive-deps 
 
     let errStates = editableDeviceFields.map(f => f.err[0]);
     const allFieldsAreValid = useMemo(() => {
@@ -910,7 +915,8 @@ const DeviceDataEditTableRow: React.FC<{
 
         // all fields are valid, we can submit this change
         return true;
-    }, [...errStates])
+        // can't add editableDeviceFields as a dependency due to its use of useState()
+    }, [...errStates])  // eslint-disable-line react-hooks/exhaustive-deps 
 
 
     const createDeviceWithChanges = (device: ProjectDeviceDetails, fields: EditField[]): ProjectDeviceDetails => {
@@ -919,7 +925,7 @@ const DeviceDataEditTableRow: React.FC<{
             let field = editField.key;
             let device = copyDevice as any;
             if (editField.type == "number") {
-                device[field] = numberOrDefault(editField.value[0], undefined);
+                device[field] = numberOrDefault(editField.value[0] as string, undefined);
             } else {
                 device[field] = editField.value[0] || '';
             }
@@ -933,7 +939,7 @@ const DeviceDataEditTableRow: React.FC<{
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
         let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
-        fieldNames = fieldNames.filter(field => field != "id" && field != "discussion");
+        fieldNames = fieldNames.filter(field => field != "_id" && field != "discussion");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             let value = deviceWithChanges[field];
@@ -1000,11 +1006,13 @@ const DeviceDataEditTableRow: React.FC<{
                 // we cache edit fields via components.
                 let inputField: ReactNode;
                 if (field.type == "string") {
-                    inputField = <StringEditField value={field.value[0] ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
+                    inputField = <StringEditField value={field.value[0] as string ?? ''} setter={field.value[1]} err={field.err[0]} errSetter={field.err[1]} />
                 } else if (field.type == "number") {
-                    inputField = <NumericEditField value={field.value[0]} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} allowNumbersOnly={field.allowNumbersOnly} />
+                    inputField = <NumericEditField value={field.value[0] as string} setter={field.value[1]} min={field.min} max={field.max} err={field.err[0]} errSetter={field.err[1]} allowNumbersOnly={field.allowNumbersOnly} />
                 } else if (field.type == "select") {
-                    inputField = <SelectEditField value={field.value[0] ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                    inputField = <SelectEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                } else if (field.type == "multi-select") {
+                    inputField = <MultiSelectEditField selectedValues={field.value[0] ? field.value[0] as string[] : []} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
                 } else {
                     throw new Error("Unhandled field type: ", field.type)
                 }
@@ -1052,17 +1060,70 @@ const DeviceDataEditTableRow: React.FC<{
 }
 
 
-
 const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errSetter: any }> = ({ value, setter, err, errSetter }) => {
     return useMemo(() => {
         return <InputGroup value={value} onValueChange={(val) => setter(val)} style={{ width: 'auto', minWidth: "5ch" }} fill={true} />
-    }, [value, err])
+    }, [value, setter])
 }
 
 const SelectEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
-    }, [value, options, err])
+    }, [value, options, setter])
+}
+
+const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, options: string[], err: boolean, errSetter: any }> = ({ selectedValues, setter, options, err, errSetter }) => {
+    const filterSelect: ItemPredicate<string> = (query, val, _index, exactMatch) => {
+        const normalizedValue = val.toLowerCase();
+        const normalizedQuery = query.toLowerCase();
+        if (exactMatch) {
+            return normalizedValue === normalizedQuery;
+        }
+
+        return normalizedValue.indexOf(query) >= 0;
+    }
+
+    const removeTagValue = (tag: React.ReactNode, index: number) => {
+        let values = [...selectedValues];
+        values.splice(index, 1)
+        setter(values);
+    }
+
+    return (<MultiSelect
+        items={options}
+        selectedItems={selectedValues}
+        tagInputProps={{ onRemove: removeTagValue }}
+        tagRenderer={(item) => <>{item}</>}
+        itemRenderer={(item: string, itemProps: ItemRendererProps) => {
+            if (!itemProps.modifiers.matchesPredicate) {
+                return null;
+            }
+            return <MenuItem key={itemProps.index} roleStructure="listoption"
+                active={itemProps.modifiers.active}
+                selected={selectedValues !== undefined ? selectedValues.indexOf(item) >= 0 : false} text={item}
+                onFocus={itemProps.handleFocus}
+                onClick={itemProps.handleClick}
+            />
+        }}
+        itemPredicate={filterSelect}
+        onClear={() => setter([])}
+        onItemSelect={(item: string, event?: React.SyntheticEvent<HTMLElement>) => {
+            let elementShouldBeAdded = selectedValues.indexOf(item) < 0;
+            if (elementShouldBeAdded) {
+                let newValues = [...selectedValues, item];
+                newValues.sort((a, b) => sortString(a, b, false));
+                setter(newValues);
+            } else {
+                // remove an already added element
+                let newValues = selectedValues.filter(sv => sv !== item);
+                setter(newValues);
+            }
+        }}
+        noResults={<MenuItem disabled={true} text="No Results" roleStructure="listoption" />}
+        popoverProps={{ minimal: true }}
+        resetOnSelect={true}
+    />
+    )
 }
 
 // performance optimization to avoid re-rendering every field in a row every time the user types one character in one of them.
@@ -1114,6 +1175,6 @@ const NumericEditField: React.FC<{ value: string | number | undefined, setter: a
             }
         />
         )
-    }, [value, err])
+    }, [value, err, allowNumericCharsOnly, errSetter, max, min, setter])
     return field;
 }

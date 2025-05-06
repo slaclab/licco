@@ -8,7 +8,7 @@ const createMockProjectInfo = (name: string) => {
 }
 
 const createMockDeviceDetails = (fc: string, fg: string) => {
-    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, location: '', beamline: '', state: DeviceState.Conceptual.name, tc_part_no: "", comments: "", fg_desc: '', stand: '', discussion: [] }
+    let d: ProjectDeviceDetails = { id: `${fc}-${fg}`, fc: fc, fg: fg, area: '', beamline: [], state: DeviceState.Conceptual.name, tc_part_no: "", comments: "", fg_desc: '', stand: '', discussion: [] }
     return d;
 }
 
@@ -98,5 +98,55 @@ test('diff algorithm grouping', () => {
         expect(identicalDevice.fc).toBe("A");
         expect(identicalDevice.fg).toBe("IDENTICAL_DEVICE");
         expect(identicalDevice.nom_ang_z).toBe(1.2);
+    }
+})
+
+// test if beamline array element change is correctly detected
+test('diff beamline detection', () => {
+    let projectA = createMockProjectInfo("a");
+    let projectB = createMockProjectInfo("b");
+
+    let devicesA: ProjectDeviceDetails[] = [];
+    {
+        let identicalDevice = createMockDeviceDetails("A", "IDENTICAL_DEVICE");
+        identicalDevice.nom_ang_x = 0.01
+        identicalDevice.beamline = ['AAA', 'BBB'];
+
+        let updatedDevice = createMockDeviceDetails("B", "UPDATED_DEVICE");
+        updatedDevice.beamline = ['AAA', 'BBB'];
+
+        devicesA.push(identicalDevice, updatedDevice);
+    }
+
+    let devicesB: ProjectDeviceDetails[] = [];
+    {
+        let identicalDevice = createMockDeviceDetails("A", "IDENTICAL_DEVICE");
+        identicalDevice.nom_ang_x = 0.01
+        identicalDevice.beamline = ['AAA', 'BBB'];
+
+        let updatedDevice = createMockDeviceDetails("B", "UPDATED_DEVICE");
+        updatedDevice.beamline = ['AAA', 'CCC'];
+
+        devicesB.push(identicalDevice, updatedDevice)
+    }
+
+    let diff = createFftDiff(projectA, devicesA, projectB, devicesB)
+    { // check if we found identical device
+        expect(diff.identical.length).toBe(1);
+        let identicalDevice = diff.identical[0];
+        expect(identicalDevice.fc).toBe("A");
+        expect(["AAA", "BBB"])
+        expect(identicalDevice.beamline).toEqual(["AAA", "BBB"]);
+    }
+
+    // check updated devices
+    {
+        expect(diff.updated.length).toBe(1);
+        let updatedDevice = diff.updated[0];
+        expect(updatedDevice.a.fc).toBe("B");
+        expect(updatedDevice.b.fc).toBe("B");
+
+        expect(updatedDevice.a.beamline).toEqual(["AAA", "BBB"]);
+        expect(updatedDevice.b.beamline).toEqual(["AAA", "CCC"]);
     }
 })
