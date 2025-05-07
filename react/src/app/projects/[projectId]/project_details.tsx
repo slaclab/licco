@@ -2,10 +2,10 @@ import { HtmlPage } from "@/app/components/html_page";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { createLink } from "@/app/utils/path_utils";
-import { Alert, AnchorButton, Button, ButtonGroup, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
+import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
@@ -36,12 +36,12 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                 if (diff != 0) {
                     return diff;
                 }
-                return sortString(a.fg_desc, b.fg_desc, false); // asc 
+                return sortString(a.fg, b.fg, false); // asc 
             });
             break;
         case "fg":
             data.sort((a, b) => {
-                let diff = sortString(a.fg_desc, b.fg_desc, desc);
+                let diff = sortString(a.fg, b.fg, desc);
                 if (diff != 0) {
                     return diff;
                 }
@@ -154,7 +154,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         {
             // set filters based on query params
             setFcFilter(queryParams.get("fc") ?? "");
-            setFgFilter(queryParams.get("fg_desc") ?? "");
+            setFgFilter(queryParams.get("fg") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
             setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
         }
@@ -198,7 +198,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             return true;
         }).filter(d => {
             if (fgFilter) {
-                return fgGlobMatcher.test(d.fg_desc);
+                return fgGlobMatcher.test(d.fg);
             }
             return true;
         }).filter(d => {
@@ -260,10 +260,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             }
         }
 
-        /*         let fft: ProjectDevice = {
-                    fc: newFft,
-                } */
-        return addFftsToProject(project._id, newFft)
+        let fft: ProjectFFT = {
+            _id: newFft._id,
+            fc: newFft.fc.name,
+            fg: newFft.fg.name,
+        }
+
+        return addFftsToProject(project._id, [fft])
             .then(data => {
                 // TODO: when we try to add an fft that is already there, the backend doesn't complain
                 // it just returns success: true, erromsg: no changes detected.
@@ -289,17 +292,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         // create the csv document from filtered devices
         let data = `FC,Fungible,TC_part_no,Stand,Area,Beamline,State,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace,Comments\n`;
         for (let device of devices) {
-            data += `${r(device.fc)},${r(device.fg_desc)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(", "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
+            data += `${r(device.fc)},${r(device.fg)},${r(device.tc_part_no)},${r(device.stand)},${r(device.area)},"${r(device.beamline.join(", "))}",${r(device.state)},${r(device.nom_loc_z)},${r(device.nom_loc_x)},${r(device.nom_loc_y)},${r(device.nom_ang_z)},${r(device.nom_ang_x)},${r(device.nom_ang_y)},${r(device.ray_trace)},${r(device.comments)}\n`;
         }
         return data;
     }
 
-    const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
-    const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
-    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
-    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
-    const isEditedTable = editedDevice != undefined;
-    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
+
+    // -------------------- rendering part -------------------- 
 
     if (isLoading) {
         return (
@@ -317,125 +316,139 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         )
     }
 
+    if (!project) {
+        // This edge case should never happen: either all data was loaded or there was an error.
+        // The only way this could happen, is if the backend returned an empty JSON dictionary
+        return (<HtmlPage>
+            <NonIdealState className="mb-4 mt-4" icon="error" title="Error" description={'Not everything was loaded correctly: this is a programming bug'} />
+        </HtmlPage>
+        )
+    }
+
+    const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
+    const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
+    const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
+    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
+    const isEditedTable = editedDevice != undefined;
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
+
     return (
         <HtmlPage>
             {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
             <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
-                <table className={`table table-bordered table-sm table-sticky table-striped ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
+                <table className={`table table-bordered table-sm table-sticky ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
                     <thead>
                         <tr>
-                            <th colSpan={isProjectInDevelopment ? 8 : 7}>
-                                {!project ? <></> :
-                                    <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
+                            <th colSpan={8}>
+                                <ButtonGroup vertical={false} className={isEditedTable ? "table-disabled" : ''}>
 
-                                        <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{project?.name}</h5>
+                                    <h5 className="m-0 me-3" style={{ color: Colors.RED2 }}>{project?.name}</h5>
 
-                                        <Button icon="import" title="Download a copy of this project"
-                                            minimal={true} small={true}
-                                            onClick={(e) => { setIsExportDialogOpen(true) }}
-                                        />
+                                    <Button icon="import" title="Download a copy of this project"
+                                        variant="minimal" size="small"
+                                        onClick={(e) => { setIsExportDialogOpen(true) }}
+                                    />
 
-                                        <Button icon="bring-data" title="Download filtered data"
-                                            minimal={true} small={true}
-                                            disabled={!isFilterApplied}
-                                            onClick={e => {
-                                                let data = createCsvStringFromDevices(fftDataDisplay)
-                                                let blob = new Blob([data], { type: "text/plain" });
-                                                let url = window.URL.createObjectURL(blob);
-                                                let a = document.createElement('a');
-                                                a.href = url;
-                                                const now = new Date().toISOString();
-                                                a.download = `${project.name}_${now}_filtered.csv`;
-                                                a.click();
-                                            }}
-                                        />
+                                    <Button icon="bring-data" title="Download filtered data"
+                                        variant="minimal" size="small"
+                                        disabled={!isFilterApplied}
+                                        onClick={e => {
+                                            let data = createCsvStringFromDevices(fftDataDisplay)
+                                            let blob = new Blob([data], { type: "text/plain" });
+                                            let url = window.URL.createObjectURL(blob);
+                                            let a = document.createElement('a');
+                                            a.href = url;
+                                            const now = new Date().toISOString();
+                                            a.download = `${project.name}_${now}_filtered.csv`;
+                                            a.click();
+                                        }}
+                                    />
 
-                                        <Button icon="export" title="Upload data to this project"
-                                            minimal={true} small={true}
-                                            disabled={disableActionButtons}
-                                            onClick={(e) => { setIsImportDialogOpen(true) }}
-                                        />
+                                    <Button icon="export" title="Upload data to this project"
+                                        variant="minimal" size="small"
+                                        disabled={disableActionButtons}
+                                        onClick={(e) => { setIsImportDialogOpen(true) }}
+                                    />
 
-                                        <Divider />
+                                    <Divider />
 
-                                        <Button icon="add" title="Add a new Device to Project" minimal={true} small={true}
-                                            disabled={disableActionButtons}
-                                            onClick={e => setIsAddNewFftDialogOpen(true)}
-                                        />
+                                    <Button icon="add" title="Add a new Device to Project" variant="minimal" size="small"
+                                        disabled={disableActionButtons}
+                                        onClick={e => setIsAddNewFftDialogOpen(true)}
+                                    />
 
-                                        <Divider />
+                                    <Divider />
 
-                                        <Button icon="filter" title="Filter FFTs" minimal={true} small={true} intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)} />
+                                    <Button icon="filter" title="Filter FFTs" variant="minimal" size="small" intent={isFilterApplied ? "warning" : "none"} onClick={(e) => setIsFilterDialogOpen(true)} />
 
-                                        <Button icon="filter-remove" title="Clear filters to show all FFTs" minimal={true} small={true} disabled={!isRemoveFilterEnabled}
-                                            onClick={(e) => {
-                                                setFcFilter('')
-                                                setFgFilter('');
-                                                setStateFilter('');
-                                                let timestampFilter = asOfTimestampFilter;
-                                                setAsOfTimestampFilter('');
+                                    <Button icon="filter-remove" title="Clear filters to show all FFTs" variant="minimal" size="small" disabled={!isRemoveFilterEnabled}
+                                        onClick={(e) => {
+                                            setFcFilter('')
+                                            setFgFilter('');
+                                            setStateFilter('');
+                                            let timestampFilter = asOfTimestampFilter;
+                                            setAsOfTimestampFilter('');
 
-                                                if (showFftSinceCreationFilter) {
-                                                    setShowFftSinceCreationFilter(false);
-                                                    loadFFTData(project._id, true);
-                                                } else if (timestampFilter) {
-                                                    // timestamp filter was applied and now we have to load original data
-                                                    loadFFTData(project._id, true);
-                                                }
-                                                updateQueryParams('', '', '', '');
-                                            }}
-                                        />
+                                            if (showFftSinceCreationFilter) {
+                                                setShowFftSinceCreationFilter(false);
+                                                loadFFTData(project._id, true);
+                                            } else if (timestampFilter) {
+                                                // timestamp filter was applied and now we have to load original data
+                                                loadFFTData(project._id, true);
+                                            }
+                                            updateQueryParams('', '', '', '');
+                                        }}
+                                    />
 
-                                        <Button icon="filter-open" minimal={true} small={true} intent={showFftSinceCreationFilter ? "warning" : "none"}
-                                            title="Show only FCs with changes after the project was created"
-                                            onClick={(e) => {
-                                                if (showFftSinceCreationFilter) {
-                                                    // filter is applied, therefore we have to toggle it off and show all entries
-                                                    loadFFTData(projectId, true);
-                                                } else {
-                                                    // filter is not applied, therefore we have to display changes after project was created
-                                                    loadFFTData(projectId, false);
-                                                }
+                                    <Button icon="filter-open" variant="minimal" size="small" intent={showFftSinceCreationFilter ? "warning" : "none"}
+                                        title="Show only FCs with changes after the project was created"
+                                        onClick={(e) => {
+                                            if (showFftSinceCreationFilter) {
+                                                // filter is applied, therefore we have to toggle it off and show all entries
+                                                loadFFTData(projectId, true);
+                                            } else {
+                                                // filter is not applied, therefore we have to display changes after project was created
+                                                loadFFTData(projectId, false);
+                                            }
 
-                                                // toggle the filter flag 
-                                                setShowFftSinceCreationFilter(show => !show);
-                                            }}
-                                        />
+                                            // toggle the filter flag 
+                                            setShowFftSinceCreationFilter(show => !show);
+                                        }}
+                                    />
 
-                                        <Divider />
-                                        {isProjectApproved ?
-                                            <>
-                                                <Button icon="tag-add" title="Create a snapshot" minimal={true} small={true}
-                                                    onClick={(e) => { setIsTagCreationDialogOpen(true) }}
-                                                />
-                                                <Button icon="tags" title="Show created snapshots" minimal={true} small={true}
-                                                    onClick={(e) => { setIsTagSelectionDialogOpen(true) }}
-                                                />
-                                                <Divider />
-                                            </>
-                                            : null
-                                        }
-                                        <Button icon="history" title="Show the history of changes" minimal={true} small={true}
-                                            intent={asOfTimestampFilter ? "danger" : "none"}
-                                            onClick={(e) => setIsProjectHistoryDialogOpen(true)}
-                                        />
-                                        <AnchorButton icon="user" title="Submit this project for approval" minimal={true} small={true}
-                                            href={createLink(`/projects/${project._id}/submit-for-approval`)}
-                                            disabled={disableActionButtons}
-                                        />
+                                    <Divider />
 
-                                        {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
-                                            <>
-                                                <Divider />
-                                                <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" minimal={true} small={true}
-                                                    href={createLink(`/projects/${project._id}/approval`)}
-                                                />
-                                            </>
-                                            : null
-                                        }
+                                    {isProjectApproved ?
+                                        <>
+                                            <Button icon="tag-add" title="Create a snapshot" variant="minimal" size="small"
+                                                onClick={(e) => { setIsTagCreationDialogOpen(true) }} />
+                                            <Button icon="tags" title="Show created snapshots" variant="minimal" size="small"
+                                                onClick={(e) => { setIsTagSelectionDialogOpen(true) }} />
+                                            <Divider />
+                                        </>
+                                        : null
+                                    }
 
-                                    </ButtonGroup>
-                                }
+                                    <Button icon="history" title="Show the history of changes" variant="minimal" size="small"
+                                        intent={asOfTimestampFilter ? "danger" : "none"}
+                                        onClick={(e) => setIsProjectHistoryDialogOpen(true)}
+                                    />
+
+                                    <AnchorButton icon="user" title="Submit this project for approval" variant="minimal" size="small"
+                                        href={createLink(`/projects/${project._id}/submit-for-approval`)}
+                                        disabled={disableActionButtons}
+                                    />
+
+                                    {isUserAProjectApprover(project, currentlyLoggedInUser) || (isUserAProjectEditor(project, currentlyLoggedInUser) && project.status == "submitted") ?
+                                        <>
+                                            <Divider />
+                                            <AnchorButton icon="confirm" title="Approve submitted project" intent="danger" variant="minimal" size="small"
+                                                href={createLink(`/projects/${project._id}/approval`)} />
+                                        </>
+                                        : null
+                                    }
+
+                                </ButtonGroup>
                             </th>
 
                             <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
@@ -444,9 +457,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             <th></th>
                         </tr>
                         <tr>
-                            {isProjectInDevelopment ? <th></th> : null}
+                            <th></th>
                             <th onClick={e => changeSortOrder('fc')}>FC {displayFilterIconInColumn(fcFilter)}{displaySortOrderIconInColumn('fc')}</th>
-                            <th onClick={e => changeSortOrder('fg_desc')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg_desc')}</th>
+                            <th onClick={e => changeSortOrder('fg')}>Fungible {displayFilterIconInColumn(fgFilter)}{displaySortOrderIconInColumn('fg')}</th>
                             <th onClick={e => changeSortOrder('tc_part_no')}>TC Part No. {displaySortOrderIconInColumn('tc_part_no')}</th>
                             <th onClick={e => changeSortOrder('stand')}>Stand/Nearest Stand {displaySortOrderIconInColumn('stand')}</th>
                             <th onClick={e => changeSortOrder('area')}>Area {displaySortOrderIconInColumn('area')}</th>
@@ -489,7 +502,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 />
                             }
 
-                            return <DeviceDataEditTableRow key={device.id} keymap={keymap} project={project} device={device}
+                            return <DeviceDataEditTableRow key={device._id} keymap={keymap} project={project} device={device}
                                 availableFftStates={availableFftStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
@@ -729,65 +742,112 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 }
 
 
-const DeviceDataTableRow: React.FC<{ project?: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
+const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
+    const [subdeviceRowOpen, setSubdeviceRowOpen] = useState(false);
     const row = useMemo(() => {
+        /* TODO: 
+        depending on the row position in the table, we will have to mark them as striped or not
+        striped = i +1 % 2 == 0 
+        */
+
+        // turn this on, depending on the type of a device 
+        const hasSubdevice = deviceHasSubdevice(device);
+        const trClassName = `${styles.deviceRow}${disabled ? ' table-disabled' : ''}`
+
         return (
-            <tr className={disabled ? 'table-disabled' : ''}>
-                {project && isProjectInDevelopment(project) ?
+            <>
+                <tr className={trClassName}>
                     <td>
-                        {isUserAProjectEditor(project, currentUser) ?
+                        {isProjectInDevelopment(project) && isUserAProjectEditor(project, currentUser) ?
                             <>
-                                <Button icon="edit" minimal={true} small={true} title="Edit this device"
+                                <Button icon="edit" variant="minimal" size="small" title="Edit this device"
                                     onClick={(e) => onEdit(device)}
                                 />
-                                <Button icon="refresh" minimal={true} small={true} title={"Copy over the value from another project"}
+                                <Button icon="refresh" variant="minimal" size="small" title={"Copy over the value from another project"}
                                     onClick={(e) => onCopyFft(device)}
                                 />
-                                <Button icon="trash" minimal={true} small={true} title={"Delete this device"}
+                                <Button icon="trash" variant="minimal" size="small" title={"Delete this device"}
                                     onClick={(e) => onDeleteFft(device)}
                                 />
+                                <Button icon="chat" variant="minimal" size="small" title={"See user comments"}
+                                    onClick={(e) => onUserComment(device)}
+                                >({device.discussion.length})</Button>
                             </>
                             : null
                         }
 
-                        <Button icon="chat" minimal={true} small={true} title={"See user comments"}
-                            onClick={(e) => onUserComment(device)}
-                        >({device.discussion.length})</Button>
+                        {hasSubdevice && <Button icon={subdeviceRowOpen ? 'chevron-down' : 'chevron-right'}
+                            variant="minimal" size="small"
+                            onClick={e => setSubdeviceRowOpen(open => !open)} />
+                        }
                     </td>
-                    : null
+
+                    <td>{device.fc}</td>
+                    <td>{device.fg}</td>
+                    <td>{device.tc_part_no}</td>
+                    <td>{device.stand}</td>
+                    <td>{device.area}</td>
+                    <td>{renderTableField(device.beamline)}</td>
+                    <td>{device.state}</td>
+
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_loc_y)}</td>
+
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_ang_z)}</td>
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_ang_x)}</td>
+                    <td className="text-number">{formatDevicePositionNumber(device.nom_ang_y)}</td>
+
+                    <td>{device.ray_trace ?? null}</td>
+
+                    <td>{device.comments}</td>
+                </tr>
+
+                {hasSubdevice && <tr className={styles.subdeviceRow}>
+                    <td colSpan={999} style={{ 'padding': '0', 'paddingLeft': '2rem' }}>
+                        <Collapse isOpen={subdeviceRowOpen}>
+                            <p className="pt-2"><b>{device.fc}</b></p>
+                            <table className="table table-hover table-sm table-bordered mb-4">
+                                <thead style={{ "boxShadow": "1px 1px 0px #ccc" }}>
+                                    <tr>
+                                        <th></th>
+                                        <th>FC</th>
+                                        <th>FG</th>
+                                        <th>State</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <th>MCD</th>
+                                        <td>{device.fc}</td>
+                                        <td>{device.fg}</td>
+                                        <td>{device.state}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Location</th>
+                                        <td>{device.nom_loc_x}</td>
+                                        <td>{device.nom_loc_y}</td>
+                                        <td>{device.nom_loc_z}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </Collapse>
+                    </td>
+                </tr>
                 }
-
-                <td>{device.fc}</td>
-                <td>{device.fg_desc}</td>
-                <td>{device.tc_part_no}</td>
-                <td>{device.stand}</td>
-                <td>{device.area}</td>
-                <td>{renderTableField(device.beamline)}</td>
-                <td>{device.state}</td>
-
-                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_z)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_x)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_loc_y)}</td>
-
-                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_z)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_x)}</td>
-                <td className="text-number">{formatDevicePositionNumber(device.nom_ang_y)}</td>
-
-                <td>{device.ray_trace ?? null}</td>
-
-                <td>{device.comments}</td>
-            </tr>
+            </>
         )
-    }, [project, device, currentUser, disabled, onCopyFft, onDeleteFft, onEdit, onUserComment])
+    }, [project, device, currentUser, disabled, onCopyFft, onDeleteFft, onEdit, onUserComment, subdeviceRowOpen])
+
     return row;
 }
 
 
 
 const DeviceDataEditTableRow: React.FC<{
-    project?: ProjectInfo,
+    project: ProjectInfo,
     keymap: Record<string, string>,
     device: ProjectDeviceDetails,
     availableFftStates: DeviceState[],
@@ -817,7 +877,7 @@ const DeviceDataEditTableRow: React.FC<{
 
     const editableDeviceFields: EditField[] = [
         { key: 'fc', type: "string", value: useState<string>(), err: useState(false) },
-        { key: 'fg_desc', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'area', type: "select", valueOptions: availableLocations, value: useState<string>(), err: useState(false) },
@@ -839,12 +899,12 @@ const DeviceDataEditTableRow: React.FC<{
 
     useEffect(() => {
         for (let field of editableDeviceFields) {
-            if (field.key == 'id') { // fft field is not editable
+            if (field.key == '_id') { // fft field is not editable
                 continue;
             }
             field.value[1](device[field.key] as any);
         }
-    // can't add editableDeviceFields as a dependency due to its use of useState()
+        // can't add editableDeviceFields as a dependency due to its use of useState()
     }, [device])    // eslint-disable-line react-hooks/exhaustive-deps 
 
     let errStates = editableDeviceFields.map(f => f.err[0]);
@@ -857,7 +917,7 @@ const DeviceDataEditTableRow: React.FC<{
 
         // all fields are valid, we can submit this change
         return true;
-    // can't add editableDeviceFields as a dependency due to its use of useState()
+        // can't add editableDeviceFields as a dependency due to its use of useState()
     }, [...errStates])  // eslint-disable-line react-hooks/exhaustive-deps 
 
 
@@ -881,7 +941,7 @@ const DeviceDataEditTableRow: React.FC<{
         // find changes that have to be synced with backend
         // later on, we may have to add a user comment to each of those changes
         let fieldNames = Object.keys(deviceWithChanges) as (keyof ProjectDeviceDetails)[];
-        fieldNames = fieldNames.filter(field => field != "id" && field != "discussion");
+        fieldNames = fieldNames.filter(field => field != "_id" && field != "discussion");
         let changes: Record<string, any> = {};
         for (let field of fieldNames) {
             let value = deviceWithChanges[field];
@@ -931,13 +991,13 @@ const DeviceDataEditTableRow: React.FC<{
     return (
         <tr>
             <td>
-                <Button icon="tick" minimal={true} small={true} loading={isSubmitting}
+                <Button icon="tick" variant="minimal" size="small" loading={isSubmitting}
                     title="Submit your edits"
                     disabled={!allFieldsAreValid}
                     onClick={(e) => submitChanges()}
                 />
 
-                <Button icon="cross" minimal={true} small={true} title="Discard your edits"
+                <Button icon="cross" variant="minimal" size="small" title="Discard your edits"
                     onClick={(e) => onEditDone(createDeviceWithChanges(device, editableDeviceFields), "cancel")}
                 />
             </td>
@@ -963,7 +1023,7 @@ const DeviceDataEditTableRow: React.FC<{
             }
 
 
-            {project && confirmDialogOpen ?
+            {confirmDialogOpen ?
                 <ProjectEditConfirmDialog
                     isOpen={confirmDialogOpen}
                     valueChanges={valueChanges}

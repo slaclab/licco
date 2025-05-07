@@ -1,7 +1,7 @@
 import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useState } from "react";
 import { FFTInfo, deleteFft, fetchFfts } from "../projects/project_model";
-import { Fetch, JsonErrorMsg } from "../utils/fetching";
+import { JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
 
 export const FFTOverviewTable: React.FC = () => {
@@ -52,10 +52,10 @@ export const FFTOverviewTable: React.FC = () => {
                     <tr>
                         <th scope="col" className="text-nowrap">
                             <ButtonGroup>
-                                <Button icon="add" title="Add a new FC" small={true} minimal={true}
+                                <Button icon="add" title="Add a new FC" size="small" variant="minimal"
                                     onClick={e => setIsFftDialogOpen(true)}
                                 />
-                                {isLoading ? <Button loading={isLoading} minimal={true} /> : null}
+                                {isLoading ? <Button loading={isLoading} variant="minimal" /> : null}
                             </ButtonGroup>
                         </th>
                         <th scope="col" className="">Functional component name</th>
@@ -68,7 +68,7 @@ export const FFTOverviewTable: React.FC = () => {
                             return (
                                 <tr key={fft._id}>
                                     <td>{fft.is_being_used ? null :
-                                        <Button icon="trash" title="Delete this FFT from the system" small={true} minimal={true}
+                                        <Button icon="trash" title="Delete this FFT from the system" size="small" variant="minimal"
                                             onClick={e => setFftToDelete(fft)} />
                                     }
                                     </td>
@@ -86,6 +86,7 @@ export const FFTOverviewTable: React.FC = () => {
             <AddFftDialog isOpen={isFftDialogOpen}
                 dialogType="create"
                 ffts={data}
+                currentProject=""
                 onClose={() => setIsFftDialogOpen(false)}
                 onSubmit={(fft) => {
                     let updatedFfts = [...data, fft];
@@ -186,7 +187,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
             // when we are adding an fft to a project that doesn't already have such fft 
             // assigned.
             for (let fft of allFfts) {
-                if (fft.fc.name == fc && fft.fg.name == fg) {
+                if (fft.fc.name == fc) {
                     // the chosen combination already exists, so there is nothing 
                     // to create. Simply return
                     onSubmit(fft)
@@ -198,9 +199,12 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
             // a new one.
         }
 
-        let data: any = {
-            fc: fcName,
-            prjid: currentProject
+        // TODO: refactor this, we are no longer using this
+        let data: FFTInfo = {
+            fc: { _id: '', name: fc, description: '' },
+            fg: { _id: '', name: fg, description: '' },
+            is_being_used: false,
+            _id: currentProject
         }
 
         setIsSubmitting(true);

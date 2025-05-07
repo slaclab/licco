@@ -179,7 +179,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
                                         </ul>
 
                                         {userIsEditor ?
-                                            <AnchorButton small={true} href={createLink(`/projects/${project._id}/submit-for-approval`)}>
+                                            <AnchorButton size="small" href={createLink(`/projects/${project._id}/submit-for-approval`)}>
                                                 Edit Approvers
                                             </AnchorButton>
                                             : null

@@ -4,7 +4,7 @@ import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectDeviceDetails, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { CollapsibleProjectNotes } from "../projects_overview";
 
 
@@ -635,7 +635,7 @@ export const SnapshotSelectionDialog: React.FC<{
 
 // sort project value changes according to the order in which device fields appear in the device table
 const sortProjectValueChanges = (changes: Record<string, any>) => {
-  let order: (keyof ProjectDeviceDetails)[] = ['fc', 'fg', 'fg_desc', 'tc_part_no', 'stand', 'state', 'comments', 'nom_loc_z', 'nom_loc_x', 'nom_loc_y', 'nom_ang_z', 'nom_ang_x', 'nom_ang_y', 'ray_trace'];
+  let order: (keyof ProjectDeviceDetails)[] = ['fc', 'fg', 'tc_part_no', 'stand', 'state', 'comments', 'nom_loc_z', 'nom_loc_x', 'nom_loc_y', 'nom_ang_z', 'nom_ang_x', 'nom_ang_y', 'ray_trace'];
   let sortOrder: Record<any, number> = {};
   for (let i = 0; i < order.length; i++) {
     sortOrder[order[i]] = i;

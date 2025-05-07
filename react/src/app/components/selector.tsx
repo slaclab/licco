@@ -100,7 +100,7 @@ export const MultiChoiceSelector = <T,>({ availableItems: allSelections, default
                 {selectedItems.map((item, i) => {
                     return <li key={i}>
                         <ControlGroup>
-                            <Button icon="cross" small={true} minimal={true}
+                            <Button icon="cross" size="small" variant="minimal"
                                 disabled={disableActions}
                                 onClick={(e) => removeItem(i)} />
                             {renderer(item)}
@@ -191,7 +191,7 @@ export const MultiChoiceStringSelector: React.FC<{ availableItems: string[], def
                 {selectedItems.map((item, i) => {
                     return <li key={i}>
                         <ControlGroup>
-                            <Button icon="cross" small={true} minimal={true}
+                            <Button icon="cross" size="small" variant="minimal"
                                 disabled={disabled}
                                 onClick={(e) => removeItem(i)} />
                             {item}

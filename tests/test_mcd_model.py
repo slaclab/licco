@@ -160,7 +160,7 @@ def test_create_delete_project_admin(db):
 
     # add a comment to an existing device 
     new_comment = "my comment"
-    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, fftid=dev_id, comment=new_comment)
+    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=dev_id, comment=new_comment)
     assert err == ""
 
     # verify inserted ffts
@@ -218,7 +218,7 @@ def test_clone_project(db):
 
     # add discussion comment to the project
     new_comment = "my comment"
-    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, fftid=dev_id, comment=new_comment)    
+    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=dev_id, comment=new_comment)
     assert err == ""
 
     # clone the project and verify that all ffts (including discussion comments) are cloned
@@ -546,7 +546,6 @@ def test_remove_fft_from_project(db):
     inserted_fft = inserted_ffts[fft_update['fc']]
     assert str(inserted_fft["_id"]) == str(dev_id)
 
-
     # remove inserted fft
     ok, err = mcd_model.remove_ffts_from_project(db, "test_user", prjid, [dev_id])
     assert err == ""
@@ -660,7 +659,7 @@ def test_create_delete_comment(db):
     assert comment["author"] == "test_user"
 
     # delete a comment
-    ok, err = mcd_model.delete_fft_comment(db, "test_user", dev_id=dev_id, prj_id=project["_id"], comment=comment)
+    ok, err = mcd_model.delete_fft_comment(db, "test_user", project_id=project["_id"], device_id=dev_id, comment_id=comment['id'])
     assert err == ""
     assert ok
 
@@ -896,10 +895,10 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
         assert len(got_ffts) == 2, "There should be 2 ffts inserted into a project"
 
         expected_ffts = {
-            'COMBO': {'fc': 'AT1L0', 'fg':'', 'fg_desc': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
+            'COMBO': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
                       'state': 'Conceptual', 'comments': 'TEST',
                       'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
-            'GAS': {'fc': 'AT2L0', 'fg': '', 'fg_desc': 'GAS', 'tc_part_no': '3213221',
+            'GAS': {'fc': 'AT2L0', 'fg': 'GAS', 'tc_part_no': '3213221',
                     'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
                     'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
         }

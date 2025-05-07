@@ -62,7 +62,7 @@ def svc_get_keymap():
     """
     Returns the keymap responsible for mapping backend names to human readable ones
     (For frontend/react needs, adds in additional frontend attributes)
-    Ex: nom_loc_x -> LCLS_X_loc or fg_desc -> Fungible
+    Ex: nom_loc_x -> LCLS_X_loc or fg -> Fungible
     """
     return json_response(dict(
         discussion="Discussion",
@@ -237,13 +237,14 @@ def svc_get_project_changes(prjid):
     changes = mcd_model.get_all_project_changes(licco_db, prjid)
     return json_response(changes)
 
+# @TODO: rename endpoint at some point (we no longer use ffts, only fcs as strings)
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_ffts():
+def svc_get_fcs():
     """
-    Get a list of functional fungible tokens
+    Get a list of FC strings from a master project
     """
-    ffts = mcd_model.get_ffts(licco_db)
+    ffts = mcd_model.get_fcs(licco_db)
     return json_response(ffts)
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
@@ -305,13 +306,21 @@ def svc_add_fft_comment(prjid, fftid):
 @context.security.authentication_required
 def svc_remove_fft_comment(prjid, fftid):
     """Remove a specific fft device comment or a set of comments"""
+    userid = context.security.get_current_user_id()
+
+    if True:
+        # @TODO: implement this
+        # NOTE: every comment should have an id and a device id so we can locate it within the array
+        raise NotImplementedError("this endpoint is not yet implemented")
+
     comment_ids = request.json().get('comments')
     if not comment_ids:
         return json_error("Comment field should not be empty")
 
     errors = []
     for comment_id in comment_ids:
-        deleted, errormsg = mcd_model.delete_fft_comment(licco_db, prjid, comment_id)
+        device_id = "missing"
+        deleted, errormsg = mcd_model.delete_fft_comment(licco_db, userid, prjid, device_id, comment_id)
         if not deleted:
             errors.append(errormsg)
 

@@ -20,8 +20,7 @@ MCD_BEAMLINES = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI",
 KEYMAP = {
     # Column names defined in confluence
     "FC": "fc",
-    "FG": "fg",
-    "Fungible": "fg_desc",
+    "Fungible": "fg",
     "TC_part_no": "tc_part_no",
     "Stand": "stand",
     "Area": "area",
@@ -122,8 +121,8 @@ FC_ATTRS = types.MappingProxyType({
         "desc": "FC_user",
         "required": False
     },
-    "fg_desc": {
-        "name": "fg_desc",
+    "fg": {
+        "name": "fg",
         "type": "text",
         "fromstr": str,
         "label": "Fungible",

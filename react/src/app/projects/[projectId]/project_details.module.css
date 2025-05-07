@@ -19,3 +19,16 @@ because of one long comment field; hence we wrap the text
     max-width: 30ch;
     white-space: wrap;
 }
+
+.deviceRow td {
+    background-color: #f5f5f5;
+}
+
+.subdeviceRow {
+    border-width: 0 !important;
+    border: none !important;
+}
+
+.subdeviceRow > td {
+    border: none !important;
+}
