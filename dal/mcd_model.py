@@ -13,7 +13,7 @@ from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from notifications.notifier import Notifier, NoOpNotifier
 from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS
-from .mcd_db import get_project_attributes, get_all_project_changes, get_recent_snapshot, get_one_device_from_snapshot
+from .mcd_db import get_latest_project_data, get_all_project_changes, get_recent_snapshot, get_device
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
@@ -165,9 +165,7 @@ def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestam
     """
     Get the current devices with their data from a project id
     """
-    oid = ObjectId(prjid)
-    logger.info("Looking for project details for %s", oid)
-    return get_project_attributes(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, fftid=fftid)
+    return get_latest_project_data(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, device_id=fftid)
 
 
 def get_fcs(licco_db: MongoDb) -> List[str]:
@@ -188,6 +186,17 @@ def get_fcs(licco_db: MongoDb) -> List[str]:
     ids = latest_master_project["devices"]
     fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
     return [doc['fc'] for doc in fc_names]
+
+def get_device_by_fc_name(licco_db: MongoDb, project_id: str, fc_name: str) -> Tuple[Dict[str, any], str]:
+    ok, snapshot = get_recent_snapshot(licco_db, project_id)
+    if not ok:
+        return {}, f"Project {project_id} doesn't exist or it doesn't have any device data"
+    # id should be in a snapshot and fc name should exist
+    found_device = licco_db["device_history"].find_one({"_id": {"$in": snapshot["devices"]}, "fc": fc_name})
+    if not found_device:
+        return {}, f"Device {fc_name} was not found in a project {project_id}"
+
+    return found_device, ""
 
 
 def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, device_id: str, comment: str):
@@ -239,7 +248,7 @@ def insert_comment_db(licco_db: MongoDb, project_id: str, device_id: str, commen
 
 
 def delete_fft_comment(licco_db: MongoDb, user_id, project_id: str, device_id: str, comment_id):
-    device = get_one_device_from_snapshot(licco_db, projectid=project_id, device_id=device_id)
+    device = get_device(licco_db, device_id=device_id)
     if not device:
         return False, f"Device with id {device_id} does not exist"
 
@@ -420,7 +429,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         # NOTE: current_project_attributes should be provided when lots of ffts are updated at the same time, e.g.:
         # for 100 ffts, we shouldn't query the entire project attributes 100 times as that is very slow
         # (cca 150-300 ms per query).
-        current_attrs = get_project_attributes(licco_db, ObjectId(prjid), fftid=fftid)
+        current_attrs = get_latest_project_data(licco_db, ObjectId(prjid), device_id=fftid)
 
     # Format the dictionary in the way that we expect   
     if ("fc" in fcupdate) and fcupdate["fc"] in current_attrs:
@@ -627,31 +636,23 @@ def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], u
     return
 
 
-def create_imp_msg(fft, status, errormsg=None):
-    """
-    Creates a message to be logged for the import report.
-    """
-    if status is None:
-        res = "IGNORED"
-    elif status is True:
-        res = "SUCCESS"
-    else:
-        res = "FAIL"
-    if 'fc' not in fft:
-        fft['fc'] = "NO VALID FC"
-    msg = f"{res}: {fft['fc']} - {errormsg}"
-    return msg
-
-def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrnames, userid):
+def copy_device_values_from_project(licco_db: MongoDb, srcprjid: str, destprjid: str, fftid: str, attrnames: List[str], userid: str):
     """
     Copy values for the fftid from srcprjid into destprjid for the specified attrnames
     """
-    srcprj = licco_db["projects"].find_one({"_id": ObjectId(srcprjid)})
+    srcprj = get_project(licco_db, srcprjid)
     if not srcprj:
         return False, f"Cannot find source project {srcprj}", None
-    destprj = licco_db["projects"].find_one({"_id": ObjectId(destprjid)})
+
+    destprj = get_project(licco_db, destprjid)
     if not destprj:
         return False, f"Cannot find destination project {destprjid}", None
+
+    # find fc devices for both projects
+    # find if attrnames are in both (if ALL is used, the devices should match their device types)
+    # ...
+    # @TODO: finish the implementation...
+    fc = fftid
 
     fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
     if not fft:
@@ -664,9 +665,9 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
         if modification_time < latest_changes[0]["time"].replace(tzinfo=pytz.utc):
             return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
 
-    current_attrs = get_project_attributes(licco_db, ObjectId(destprjid))
+    current_attrs = get_latest_project_data(licco_db, ObjectId(destprjid))
     fftattrs = current_attrs.get(fftid, {})
-    other_attrs = get_project_attributes(licco_db, ObjectId(srcprjid))
+    other_attrs = get_latest_project_data(licco_db, ObjectId(srcprjid))
     oattrs = other_attrs.get(fftid, {})
 
     all_inserts = []
@@ -690,7 +691,7 @@ def copy_ffts_from_project(licco_db: MongoDb, srcprjid, destprjid, fftid, attrna
             })
     licco_db["projects_history"].insert_many(all_inserts)
 
-    return True, "", get_project_attributes(licco_db, ObjectId(destprjid)).get(fftid, {})
+    return True, "", get_latest_project_data(licco_db, ObjectId(destprjid)).get(fftid, {})
 
 
 def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, device_ids_to_remove: List[str]) -> Tuple[bool, str]:
@@ -1055,51 +1056,6 @@ def __flatten__(obj, prefix=""):
     return ret
 
 
-def diff_project(licco_db: MongoDb, prjid, other_prjid, userid, approved=False):
-    """
-    Diff two projects
-    """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
-
-    otr = licco_db["projects"].find_one({"_id": ObjectId(other_prjid)})
-    if not otr:
-        return False, f"Cannot find project for {other_prjid}", None
-
-    # we don't want to diff comments, hence we filter them out by setting the timestamp far into the future
-    no_comment_timestamp = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365 * 100)
-    myfcs = get_project_attributes(licco_db, prjid, commentAfterTimestamp=no_comment_timestamp)
-    thfcs = get_project_attributes(licco_db, other_prjid, commentAfterTimestamp=no_comment_timestamp)
-
-    myflat = __flatten__(myfcs)
-    thflat = __flatten__(thfcs)
-
-
-    mydict = {x[0]: x[1] for x in myflat}
-    thdict = {x[0]: x[1] for x in thflat}
-    mykeys = set(mydict.keys())
-    thkeys = set(thdict.keys())
-    keys_u = mykeys.union(thkeys)
-    keys_i = mykeys.intersection(thkeys)
-    keys_l = mykeys - thkeys
-    keys_r = thkeys - mykeys
-
-    diff = []
-    for k in keys_u:
-        # skip keys that exist in the approved project, but not in submitted project
-        if approved and (k in keys_r):
-            continue
-        if k in keys_i and mydict[k] == thdict[k]:
-            diff.append({"diff": False, "key": k,
-                        "my": mydict[k], "ot": thdict[k]})
-        else:
-            diff.append({"diff": True, "key": k, "my": mydict.get(
-                k, None), "ot": thdict.get(k, None)})
-
-    return True, "", sorted(diff, key=lambda x: x["key"])
-
-
 def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):
     """
     Clone the existing project specified by prjid as a new project with the name and description.
@@ -1124,11 +1080,12 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
         return False, f"Failed to create a new project: {err}", None
 
     # we are cloning an existing project
-    #myfcs = get_project_attributes(licco_db, prjid)
     ok, original_project = get_recent_snapshot(licco_db, prjid)
     if not ok:
         return False, f"Project {prjid} to clone from is not found, or has no values to copy", None
 
+    # @TODO: we should probably make a deep copy, otherwise the comment threads will be shared between original and
+    # a new project...
     create_new_snapshot(licco_db, projectid=created_project["_id"], devices=original_project["devices"], userid=userid)
 
     if editors:

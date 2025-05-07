@@ -2,7 +2,6 @@
 Web service endpoints for licco
 """
 import datetime
-import fnmatch
 import os
 from io import BytesIO
 import tempfile
@@ -13,6 +12,8 @@ from http import HTTPStatus
 import pytz
 import logging
 import json
+
+
 import context
 from context import licco_db
 from flask import Blueprint, request, Response, send_file
@@ -217,6 +218,7 @@ def svc_delete_project(prjid):
 def svc_get_project_ffts(prjid):
     """
     Get the project's FFT's given a project id.
+    @REFACTOR:
     """
     showallentries = json.loads(request.args.get("showallentries", "true"))
     asoftimestampstr = request.args.get("asoftimestamp", None)
@@ -237,15 +239,37 @@ def svc_get_project_changes(prjid):
     changes = mcd_model.get_all_project_changes(licco_db, prjid)
     return json_response(changes)
 
+
 # @TODO: rename endpoint at some point (we no longer use ffts, only fcs as strings)
 @licco_ws_blueprint.route("/ffts/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_fcs():
     """
-    Get a list of FC strings from a master project
+    Get a list of FC strings from a master project. This is generally used for autocompletion of FCs
+    (when creating or updating an existing device)
     """
     ffts = mcd_model.get_fcs(licco_db)
     return json_response(ffts)
+
+
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/<fc>", methods=["GET"])
+@context.security.authentication_required
+def get_latest_project_device_data(prjid, fc):
+    # NOTE: fc could be either id or a FC name of a device
+    # This is controlled by the '?name=true' flag
+    name = request.args.get("name", False)
+    if name:
+        device, err = mcd_model.get_device_by_fc_name(licco_db, prjid, fc)
+        if err:
+            return json_error(err, ret_status=404)
+        return json_response(device)
+
+    # fc is an id
+    device = mcd_model.get_device(licco_db, fc)
+    if not device:
+        return json_error(f"Device {fc} does not exist", ret_status=404)
+    return device
+
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
@@ -347,10 +371,13 @@ def svc_sync_fc_from_approved_in_project(prjid, fftid):
     userid = context.security.get_current_user_id()
     reqparams = request.json
     logger.info(reqparams)
-    status, errormsg, fc = mcd_model.copy_ffts_from_project(licco_db,
-                                                            destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
+
+    # @TODO: what happens if MCD device is of a different type and the user tries to copy over a field that doesn't exist
+    # in the destination device?
+    status, errormsg, fc = mcd_model.copy_device_values_from_project(licco_db,
+                                                                     destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
         x["name"] for x in mcd_datatypes.FC_ATTRS] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
-                                                            userid=userid)
+                                                                     userid=userid)
     if errormsg:
         return json_error(errormsg)
     return json_response(fc)
@@ -529,24 +556,6 @@ def svc_reject_project(prjid):
     if errormsg:
         return json_error(errormsg)
     return json_response(prj)
-
-
-@licco_ws_blueprint.route("/projects/<prjid>/diff_with", methods=["GET"])
-@context.security.authentication_required
-def svc_project_diff(prjid):
-    """
-    Get a list of diff between this project and the specified project.
-    """
-    userid = context.security.get_current_user_id()
-    other_prjid = request.args.get("other_id", None)
-    approved = request.args.get("approved", None)
-
-    if not other_prjid:
-        return json_error("Please specify the other project id using the parameter other_id")
-    status, err, diff = mcd_model.diff_project(licco_db, prjid, other_prjid, userid, approved=approved)
-    if err:
-        return json_error(err)
-    return json_response(diff)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/clone/", methods=["POST"])

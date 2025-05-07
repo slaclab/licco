@@ -319,53 +319,6 @@ def test_change_of_fft_in_a_project(db):
     assert discussion[1]["comment"] == "Initial discussion comment"
 
 
-def test_diff_project(db):
-    """Diff two projects and check if changes are detected"""
-    a = create_test_project(db, "test_user", "test_diff_project", "")
-    b = create_test_project(db, "test_user", "test_diff_project_2", "")
-
-    # update a with some values
-    fc = "TESTFC"
-    fg = "TESTFG"
-    fft_update_a = {'fc':fc, 'fg':fg, 'comments': 'some comment', 'nom_ang_x': 1.23}
-    _, err, changelog, a_dev_id = mcd_model.update_fft_in_project(db, "test_user", a["_id"], fft_update_a)
-    assert err == ""
-    mcd_model.create_new_snapshot(db, projectid=a["_id"], devices=[a_dev_id], userid='test_user')
-
-    # update b with different values
-    fft_update_b = {'fc':fc, 'fg':fg, 'comments': 'some comment', 'nom_ang_y': 2.56, 'nom_ang_x': 0.51}
-    _, err, changelog, b_dev_id = mcd_model.update_fft_in_project(db, "test_user", b["_id"], fft_update_b)
-    assert err == ""
-    mcd_model.create_new_snapshot(db, projectid=b["_id"], devices=[b_dev_id], userid='test_user')
-
-
-    # check the diff algorithm
-    ok, err, diff = mcd_model.diff_project(db, a["_id"], b["_id"], "test_user")
-    assert err == ""
-    diff_elements = [d for d in diff if d['diff'] is True]
-
-    # 3 entries are metadata: prjid, creation time, and object ids. Other 2 are our vals
-    assert len(diff_elements) == 5, "there should only be 5 diff elements"
-    ignored_keys = ['created', 'prjid', '_id']
-
-    for el in diff_elements:
-        # key = <fftid>.<field_name>
-        if 'nom_ang_x' in el['key']:
-            a_val = el['my']
-            b_val = el['ot']
-            assert a_val == 1.23
-            assert b_val == 0.51
-        elif 'nom_ang_y' in el['key']:
-            a_val = el['my']
-            b_val = el['ot']
-            assert a_val is None
-            assert b_val == 2.56
-        else:
-            if any(substring in el['key'] for substring in ignored_keys):
-                continue
-            assert False, "unhandled diff element:\n{el}"
-
-
 def test_project_filter_for_owner(db):
     """Checking if the project filtering is correct for a specific non-admin project owner"""
     # create project that should appear in the result
@@ -751,7 +704,7 @@ def test_project_approval_workflow(db):
 
     # the changed fft data should reflect in the master project
     master_project = mcd_model.get_master_project(db)
-    ffts = mcd_model.get_project_attributes(db, projectid=master_project['_id'])
+    ffts = mcd_model.get_latest_project_data(db, projectid=master_project['_id'])
     fft = ffts[fft_update['fc']]
     assert fft['tc_part_no'] == "PART 123"
 
