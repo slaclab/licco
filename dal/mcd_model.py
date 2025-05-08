@@ -12,8 +12,10 @@ import pytz
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from notifications.notifier import Notifier, NoOpNotifier
-from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS
+from . import mcd_validate
+from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, FC_ATTRS, McdDevice
 from .mcd_db import get_latest_project_data, get_all_project_changes, get_recent_snapshot, get_device
+from .mcd_validate import common_component_fields
 from .utils import ImportCounter, empty_string_or_none, diff_arrays
 
 logger = logging.getLogger(__name__)
@@ -148,12 +150,11 @@ def get_projects_for_user(licco_db: MongoDb, username):
     return owned_projects + editable_projects
 
 
-def get_project(licco_db: MongoDb, id) -> Optional[McdProject]:
+def get_project(licco_db: MongoDb, id: str) -> Optional[McdProject]:
     """
     Get the details for the project given its id.
     """
-    oid = ObjectId(id)
-    prj = licco_db["projects"].find_one({"_id": oid})
+    prj = licco_db["projects"].find_one({"_id": (ObjectId(id))})
     if prj:
         latest_edit = get_project_last_edit_time(licco_db, prj["_id"])
         if latest_edit:
@@ -187,7 +188,8 @@ def get_fcs(licco_db: MongoDb) -> List[str]:
     fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
     return [doc['fc'] for doc in fc_names]
 
-def get_device_by_fc_name(licco_db: MongoDb, project_id: str, fc_name: str) -> Tuple[Dict[str, any], str]:
+
+def get_device_by_fc_name(licco_db: MongoDb, project_id: str, fc_name: str) -> Tuple[McdDevice, str]:
     ok, snapshot = get_recent_snapshot(licco_db, project_id)
     if not ok:
         return {}, f"Project {project_id} doesn't exist or it doesn't have any device data"
@@ -317,7 +319,7 @@ def create_new_project(licco_db: MongoDb, userid: str, name: str, description: s
         if err:
             return err, {}
 
-    create_new_snapshot(licco_db, projectid=newprjid, devices=[], userid=userid)
+    create_new_snapshot(licco_db, userid=userid, projectid=newprjid, devices=[])
     prj = get_project(licco_db, newprjid)
     return "", prj
 
@@ -374,13 +376,18 @@ def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdat
     new_devices = snapshot["devices"]
     new_devices.remove(ObjectId(fftid))
     new_devices.append(ObjectId(device_id))
-    create_new_snapshot(licco_db, prjid, devices=new_devices, userid=userid, changelog=changelog)
+    create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=new_devices, changelog=changelog)
     return ok, err, device_id
 
 def create_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any], modification_time=None,
                       current_project_attributes=None) -> Tuple[bool, str, ObjectId]:
-    if "prjid" not in values:
-        values["prjid"] = ObjectId(prjid)
+
+    # if device has "_id" field, we have to remove it, otherwise mongodb will raise a duplicate id exception.
+    # When updating an existing device, this _id already exists in mongo (hence we remove it to get a new one)
+    values.pop("_id", None)
+
+    if "project_id" not in values:
+        values["project_id"] = ObjectId(prjid)
     if "discussion" not in values:
         values["discussion"] = []
     if "state" not in values:
@@ -396,6 +403,8 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     """
     Update the value(s) of an FFT in a project
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and newly created device_id
+
+    @REFACTOR: this method should be refactored
     """
 
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
@@ -616,11 +625,11 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     for remain_dev in project_devices:
         new_ids.append(project_devices[remain_dev]["_id"])
 
-    create_new_snapshot(licco_db, prjid, devices=new_ids, userid=userid, changelog=changes)
+    create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=new_ids, changelog=changes)
     return True, "", insert_counter
 
 
-def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], userid, changelog=None, snapshot_name=None):
+def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str], changelog=None, snapshot_name=None):
     modification_time = datetime.datetime.now(datetime.UTC)
     inserts = {
         "project_id": ObjectId(projectid),
@@ -628,70 +637,97 @@ def create_new_snapshot(licco_db: MongoDb, projectid: str, devices: List[str], u
         "created": modification_time,
         "devices": [ObjectId(device) for device in devices],
     }
+
     if changelog:
-        inserts["made_changes"] = changelog
+        inserts["changelog"] = changelog
+
     if snapshot_name:
         inserts["snapshot_name"] = snapshot_name
+
     licco_db["project_snapshots"].insert_one(inserts)
     return
 
 
-def copy_device_values_from_project(licco_db: MongoDb, srcprjid: str, destprjid: str, fftid: str, attrnames: List[str], userid: str):
+def copy_device_values_from_project(licco_db: MongoDb, userid: str, from_prjid: str, to_prjid: str, device_fc: str, attrnames: List[str]) -> Tuple[McdDevice, str]:
     """
-    Copy values for the fftid from srcprjid into destprjid for the specified attrnames
+    Copy device values from src_prj to dest_prj for the specified attrnames. If attrnames[0] == ALL, then all
+    non-metadata fields will be copied over.
     """
-    srcprj = get_project(licco_db, srcprjid)
-    if not srcprj:
-        return False, f"Cannot find source project {srcprj}", None
+    if not attrnames:
+        return {}, f"at least one attribute was expected"
 
-    destprj = get_project(licco_db, destprjid)
-    if not destprj:
-        return False, f"Cannot find destination project {destprjid}", None
+    from_device, err = get_device_by_fc_name(licco_db, from_prjid, device_fc)
+    if err:
+        return {}, f"can't copy a value from a source device: {err}"
 
-    # find fc devices for both projects
-    # find if attrnames are in both (if ALL is used, the devices should match their device types)
-    # ...
-    # @TODO: finish the implementation...
-    fc = fftid
+    # verify if user has edit permissions for this project
+    prj = get_project(licco_db, to_prjid)
+    if not prj:
+        return {}, f"destination project {to_prjid} was not found"
 
-    fft = licco_db["ffts"].find_one({"_id": ObjectId(fftid)})
-    if not fft:
-        return False, f"Cannot find FFT for {fftid}", None
+    if not is_user_allowed_to_edit_project(licco_db, userid, prj):
+        prj_name = prj["name"]
+        return {}, f"insufficient permission for copying device values to a destination project '{prj_name}'"
 
-    modification_time = datetime.datetime.now(datetime.UTC)
-    # Make sure the timestamp on this server is monotonically increasing.
-    latest_changes = list(licco_db["projects_history"].find({}).sort([("time", -1)]).limit(1))
-    if latest_changes:
-        if modification_time < latest_changes[0]["time"].replace(tzinfo=pytz.utc):
-            return False, f"The time on this server {modification_time.isoformat()} is before the most recent change from the server {latest_changes[0]['time'].isoformat()}", None
+    to_device, err = get_device_by_fc_name(licco_db, to_prjid, device_fc)
+    if err:
+        return {}, f"can't copy a value from a destination device: {err}"
 
-    current_attrs = get_latest_project_data(licco_db, ObjectId(destprjid))
-    fftattrs = current_attrs.get(fftid, {})
-    other_attrs = get_latest_project_data(licco_db, ObjectId(srcprjid))
-    oattrs = other_attrs.get(fftid, {})
+    if attrnames[0] == "ALL":
+        # TODO: copy all non-metadata fields from src device
+        raise NotImplementedError("'ALL' copy function is not yet supported: please specify all fields manually")
+        pass
 
-    all_inserts = []
-    for attrname, cnvattrval in oattrs.items():
-        if not attrname in attrnames:
-            continue
-        attrmeta = FC_ATTRS[attrname]
-        if attrmeta["required"] and not cnvattrval:
-            return False, f"Parameter {attrname} is a required attribute", None
-        cnvattrval = attrmeta["fromstr"](cnvattrval)
-        if fftattrs.get(attrname) != cnvattrval:
-            logger.debug("Updating %s in prj %s to %s",
-                         attrname, destprjid, cnvattrval)
-            all_inserts.append({
-                "prj": ObjectId(destprjid),
-                "fft": ObjectId(fftid),
-                "key": attrname,
-                "val": cnvattrval,
-                "user": userid,
-                "time": modification_time
-            })
-    licco_db["projects_history"].insert_many(all_inserts)
+    # copy chosen device values from source to destination
+    # if there is a value that is forbidden to copy (e.g., a metadata field) an error should be raised
+    fields_to_copy = set(attrnames)
+    if len(fields_to_copy) == 0:
+        return {}, f"there are no attribute names to copy"
 
-    return True, "", get_latest_project_data(licco_db, ObjectId(destprjid)).get(fftid, {})
+    found_invalid_keys = []
+    invalid_keys = set(common_component_fields.keys())
+    for key in invalid_keys:
+        if key in fields_to_copy:
+            found_invalid_keys.append(key)
+    if len(found_invalid_keys) > 0:
+        return {}, f"found invalid keys that should not be copied: {found_invalid_keys}"
+
+    # check if fields in attrnames actually exist in both devices?
+    changelog = {}
+    for key in fields_to_copy:
+        if key not in from_device:
+            return {}, f"invalid attribute '{key}': attribute does not exist in source device"
+
+        # copy field value from source device
+        old_val = to_device.get(key, '')  # it's possible that to_device will not have this field stored in db
+        new_val = from_device[key]
+        changelog[key] = f"{old_val} -> {new_val}"
+        to_device[key] = new_val
+
+    # validate destination device
+    err = mcd_validate.validate_device(to_device)
+    if err:
+        return {}, f"failed to copy values: destination device validation error: {err}"
+
+    # destination device was validated
+    # 1. store updated device
+    # 2. create a new snapshot
+    # 3. return an updated device data
+    ok, err, updated_device_id = create_new_device(licco_db, userid, to_prjid, to_device)
+    if not ok:
+        return {}, f"failed to create an updated device with new values: {err}"
+
+    # create a new snapshot (with updated src device)
+    ok, snapshot = get_recent_snapshot(licco_db, from_prjid)
+    if not ok:
+        return {}, f"failed to create a new project snapshot: snapshot does not exist for {from_prjid}: this should never happen unless someone has just deleted the project"
+
+    updated_devices = [device_id for device_id in snapshot["devices"] if device_id != to_device["_id"]]
+    updated_devices.append(updated_device_id)
+    create_new_snapshot(licco_db, userid, to_prjid, updated_devices, changelog={device_fc: changelog})
+
+    updated_device = licco_db["device_history"].find_one({"_id": updated_device_id})
+    return updated_device, ""
 
 
 def remove_ffts_from_project(licco_db: MongoDb, userid, prjid, device_ids_to_remove: List[str]) -> Tuple[bool, str]:

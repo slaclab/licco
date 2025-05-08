@@ -356,30 +356,37 @@ def svc_remove_fft_comment(prjid, fftid):
     return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/ffts/<fftid>/copy_from_project", methods=["POST"])
+@licco_ws_blueprint.route("/projects/copy_from_project", methods=["POST"])
 @context.security.authentication_required
-@project_writable
-def svc_sync_fc_from_approved_in_project(prjid, fftid):
+def svc_copy_fc_from_project():
     """
-    Update the values of an FFT in this project from the specified project.
-    Most of the time this is the currently approved project.
-    Pass in a JSON with
-    :param: other_id - Project id of the other project
-    :param: attrnames - List of attribute names to copy over. If this is a string "ALL", then all the attributes that
-    are set are copied over.
+    Copy values of a device from a different project. Most of the time, that would be 'master' project.
     """
     userid = context.security.get_current_user_id()
     reqparams = request.json
-    logger.info(reqparams)
 
-    # @TODO: what happens if MCD device is of a different type and the user tries to copy over a field that doesn't exist
-    # in the destination device?
-    status, errormsg, fc = mcd_model.copy_device_values_from_project(licco_db,
-                                                                     destprjid=prjid, srcprjid=reqparams["other_id"], fftid=fftid, attrnames=[
-        x["name"] for x in mcd_datatypes.FC_ATTRS] if reqparams["attrnames"] == "ALL" else reqparams["attrnames"],
-                                                                     userid=userid)
-    if errormsg:
-        return json_error(errormsg)
+    src_project_id = reqparams.get("src_project", None)
+    if not src_project_id:
+        return json_error(f"missing 'src_project' body parameter")
+
+    dest_project_id = reqparams.get("dest_project", None)
+    if not dest_project_id:
+        return json_error("missing 'dest_project' body parameter")
+
+    fc = reqparams.get("fc", None)
+    if not fc:
+        return json_error(f"missing 'fc' body parameter")
+
+    attr = reqparams.get("attrnames", None)
+    if not attr:
+        return json_error(f"missing 'attrnames' body parameter")
+
+    if not isinstance(attr, List):
+        return json_error(f"attrnames parameter should be an array of device fields, but got {type(attr).__name__}")
+
+    updated_device, err = mcd_model.copy_device_values_from_project(licco_db, userid, src_project_id, dest_project_id, fc, attr)
+    if err:
+        return json_error(err)
     return json_response(fc)
 
 

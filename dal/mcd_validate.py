@@ -275,6 +275,13 @@ discussion_thread_validator = Validator("Discussion", build_validator_fields([
 ]))
 
 common_component_fields = build_validator_fields([
+    # every stored device has an '_id' field, which is how we identify the device document within mongodb
+    # we mark it as optional field since new devices will not have this field, while the ones fetched from db
+    # will have it.
+    FieldValidator(name="_id", label="Mongo Document ID", data_type=FieldType.STRING, required=Required.OPTIONAL),
+    # project id to which a device belongs to: not sure if we need to keep track of that for now?
+    FieldValidator(name="project_id", label="Project ID", data_type=FieldType.STRING, required=Required.ALWAYS),
+    # device id (uuid) that is here just so we can keep track of which device that was
     FieldValidator(name="device_id", label="Device ID", data_type=FieldType.STRING, required=Required.ALWAYS),
     # marks device type (mcd, mirror, aperture, ...)
     FieldValidator(name="device_type", label="Device Type", data_type=FieldType.INT, allowed_values=[t.value for t in DeviceType], required=Required.ALWAYS),
@@ -492,5 +499,3 @@ def validate_project_devices(devices: List[McdDevice]) -> ValidationResult:
             continue
         results.ok.append(device)
     return results
-
-

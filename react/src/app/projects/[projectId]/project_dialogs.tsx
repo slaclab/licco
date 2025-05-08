@@ -151,8 +151,7 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
     const fcName = selectedDevice.fc;
     fetchDeviceDataByName(projectToCopyFrom._id, fcName)
       .then((deviceFromOtherProject) => {
-    // TODO: what if a device is of a different type? Do we care about that?
-
+        // TODO: what if a device is of a different type? Do we care about that?
         const diff = diffDeviceFields(selectedDevice, deviceFromOtherProject);
         setChangedFields(diff);
         setMissingFFTOnOtherProject(false);
@@ -209,19 +208,23 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
     const project = availableProjects.filter(p => p.name == selectedProject)[0];
     const projectIdToCopyFrom = project._id;
 
-    const attributeNamesToCopy = changedFields.filter((f, i) => {
-      if (fieldsToCopy[i]) {
-        // this field/value was selected for copying by the end user via a checkbox
+    const attributeNamesToCopy = changedFields.filter((_, i) => {
+      if (fieldsToCopy[i]) { // this field/value was selected for copying by the end user via a checkbox
         return true;
       }
       return false;
     }).map(diff => diff.fieldName);
-    let data = { 'other_id': projectIdToCopyFrom, 'attrnames': attributeNamesToCopy }
 
     const projectIdToCopyTo = currentProject._id;
     const deviceIdToCopyTo = selectedDevice._id;
+    const data = {
+      'src_project': projectIdToCopyFrom,
+      'dest_project': projectIdToCopyTo,
+      'fc': selectedDevice.fc,
+      'attrnames': attributeNamesToCopy
+    }
 
-    Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${deviceIdToCopyTo}/copy_from_project`,
+    Fetch.post<ProjectDeviceDetails>(`/ws/projects/copy_from_project`,
       { body: JSON.stringify(data) }
     ).then(updatedDeviceData => {
       onSubmit(deviceDetailsBackendToFrontend(updatedDeviceData));

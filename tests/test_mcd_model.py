@@ -1,6 +1,7 @@
 import datetime
 import io
 import logging
+import uuid
 from typing import List, Dict, Mapping, Any
 
 import mongomock.mongo_client
@@ -12,6 +13,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from dal import mcd_model, db_utils, mcd_import, mcd_datatypes
 from dal.mcd_model import initialize_collections
+from dal.mcd_validate import DeviceType
 from notifications.email_sender import EmailSenderInterface
 from notifications.notifier import Notifier, NoOpNotifier
 
@@ -249,29 +251,33 @@ def test_copy_fft_values(db):
     assert b
 
     # add fft to 'a'
-    fft_update = {'fc': 'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comments': 'project_a comment'}
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, user_id, a["_id"], fft_update)
+    fft_update = {'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comment': 'project_a comment', 'device_type': DeviceType.MCD.value, 'device_id': str(uuid.uuid4())}
+    ok, err, changelog, device_id = mcd_model.update_fft_in_project(db, user_id, a["_id"], fft_update)
     assert err == ""
     assert ok
     # create a snapshot with the new fft/device
-    mcd_model.create_new_snapshot(db, projectid=a["_id"], devices=[dev_id], userid=user_id)
-
+    mcd_model.create_new_snapshot(db, projectid=a["_id"], devices=[device_id], userid=user_id)
 
     # 'b' should have no fft
     b_ffts = mcd_model.get_project_ffts(db, b["_id"])
     assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
+    b_fft_update = {'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 0.51, 'device_type': DeviceType.MCD.value, 'device_id': str(uuid.uuid4())}
+    ok, err, changelog, b_device_id = mcd_model.update_fft_in_project(db, user_id, b["_id"], b_fft_update)
+    assert err == ""
+    assert ok
+    mcd_model.create_new_snapshot(db, projectid=b["_id"], devices=[b_device_id], userid=user_id)
 
-    # ok, err, updated_ffts = mcd_model.copy_ffts_from_project(db, a["_id"], b["_id"], dev_id, ['nom_ang_x', 'comments'], "test_user")
-    # assert err == ""
-    # assert ok
+    device_fc = fft_update['fc']
+    updated_ffts, err = mcd_model.copy_device_values_from_project(db, "test_user", a["_id"], b["_id"], device_fc, ['nom_ang_x', 'comment'])
+    assert err == ""
 
-    # # after copy there should be fft with the chosen fields within the 'b' project
-    # b_ffts = mcd_model.get_project_ffts(db, b["_id"])
-    # assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
-    # fft = list(b_ffts.values())[0]
-    # assert fft['comments'] == 'project_a comment'
-    # assert fft['nom_ang_x'] == 2.45
-    # assert fft.get('nom_ang_y', None) is None, "nom_ang_y should not exist in copied fft, because it wasn't selected for copying"
+    # after copy there should be fft with the chosen fields within the 'b' project
+    b_ffts = mcd_model.get_project_ffts(db, b["_id"])
+    assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
+    fft = list(b_ffts.values())[0]
+    assert fft['comment'] == 'project_a comment'
+    assert fft['nom_ang_x'] == 2.45
+    assert fft.get('nom_ang_y', None) is None, "nom_ang_y should not exist in copied fft, because it wasn't selected for copying"
 
 
 def test_change_of_fft_in_a_project(db):
@@ -535,9 +541,9 @@ def test_get_project_ffts(db):
     default_fields = 5
     # inserted fc, fg, nom_ang_x, nom_ang_y
     inserted_fields = 4
-    assert len(snapshot["made_changes"]) == (default_fields + inserted_fields), "we made 4 value changes, and have 5 defaults, totalling 9 in db"
+    assert len(snapshot["changelog"]) == (default_fields + inserted_fields), "we made 4 value changes, and have 5 defaults, totalling 9 in db"
     # verify the value of each change is correct
-    for change in snapshot["made_changes"]:
+    for change in snapshot["changelog"]:
         # verify the correct fc is named
         assert change['fc'] == fft_update['fc']
         assert str(change['prj']) == project["name"], f"wrong project name; change: {change}"

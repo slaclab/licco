@@ -2,6 +2,8 @@ import logging
 from typing import List, Dict, Tuple
 from bson import ObjectId
 
+from dal.mcd_datatypes import McdDevice
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,12 +37,12 @@ def get_all_project_changes(propdb, projectid):
         logger.error("No projects with project ID %s", projectid)
     changelist = []
     for snap in snapshots:
-        if "made_changes" in snap:
-            changelist += snap["made_changes"]
+        if "changelog" in snap:
+            changelist += snap["changelog"]
     return changelist
 
 
-def get_recent_snapshot(db, prjid: str) -> Tuple[bool, Dict[str, any]]:
+def get_recent_snapshot(db, prjid: str) -> Tuple[bool, McdDevice]:
     """
     Gets the newest snapshot for any one project
     """
@@ -51,7 +53,7 @@ def get_recent_snapshot(db, prjid: str) -> Tuple[bool, Dict[str, any]]:
     return True, snapshot
 
 
-def get_devices(db, device_ids: List[str]):
+def get_devices(db, device_ids: List[str]) -> Dict[str, McdDevice]:
     device_id_mapping = {}
     ids = [ObjectId(id) for id in device_ids]
     devices = db["device_history"].find({"_id": {"$in": ids}})
