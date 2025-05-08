@@ -44,7 +44,7 @@ export const StringSuggest: React.FC<StringSuggestProps> = (props) => {
             active={active}
             onClick={handleClick}
         />
-    ), [value])
+    ), [])
     
     const filter: ItemPredicate<string> = useCallback((query, item, _index, exactMatch) => {
         const normalizedItem = item.toLowerCase()
