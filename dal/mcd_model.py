@@ -81,7 +81,7 @@ def get_device_id_from_name(licco_db: MongoDb, prjid, fc):
     """
     Look up a device by its fc name and the project its affiliated with
     """
-    device = licco_db["device_history"].find_one({"prjid": prjid, "fc": fc})
+    device = licco_db["device_history"].find_one({"project_id": prjid, "fc": fc})
     if not device:
         return False, ""
     return True, str(device["_id"])

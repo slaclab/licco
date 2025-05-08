@@ -148,21 +148,21 @@ def test_create_delete_project_admin(db):
     user_id = "test_user"
 
     # add fft to the project
-    fft_update = {'fc': 'TESTFC', 'fg':'TESTFG', 'comments': 'some comment', 'nom_ang_x': 1.23}
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, user_id, prjid, fft_update)
+    fft_update = {'fc': 'TESTFC', 'fg':'TESTFG', 'project_id': prjid, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    ok, err, changelog, device_id = mcd_model.update_fft_in_project(db, user_id, prjid, fft_update)
     assert err == ""
     # create a snapshot with the new fft/device
-    mcd_model.create_new_snapshot(db, projectid=prjid, devices=[dev_id], userid=user_id)
+    mcd_model.create_new_snapshot(db, projectid=prjid, devices=[device_id], userid=user_id)
 
     # ensure device was added into database
     ok, insert_dev_id = mcd_model.get_device_id_from_name(db, prjid, fft_update['fc'])
     assert ok
     # Make sure we can lookup the device correctly 
-    assert dev_id == insert_dev_id
+    assert device_id == insert_dev_id
 
     # add a comment to an existing device 
     new_comment = "my comment"
-    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=dev_id, comment=new_comment)
+    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=device_id, comment=new_comment)
     assert err == ""
 
     # verify inserted ffts
@@ -287,16 +287,16 @@ def test_change_of_fft_in_a_project(db):
     assert err == ""
 
     # create fft device with some data
-    #fft_id = str(mcd_model.get_fft_id_by_names(db, "TESTFC", "TESTFG"))
-    #assert fft_id, "fft_id should exist"
-    fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20}
+    fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'project_id': prj["_id"], 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20}
     _, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prj["_id"], fft_update)
 
     # Create a snapshot for the new project
     mcd_model.create_new_snapshot(db, projectid=prj["_id"], devices=[dev_id], userid='test_user')
 
     # create a discussion comment for previous fft
-    mcd_model.add_fft_comment(db, "test_user", prj["_id"], dev_id, "Initial discussion comment")
+    ok, err = mcd_model.add_fft_comment(db, "test_user", prj["_id"], dev_id, "Initial discussion comment")
+    assert ok
+    assert err == ""
 
     # change the device fc
     new_fc = "TESTFC_2"
