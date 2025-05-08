@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchFcs, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
@@ -92,15 +92,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     /* @FUTURE: these two fields may come from backend in the future */
     const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
     const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
-    // @FUTURE: retrieve this data from the backend once the API is updated
-    const [functionalComponents, setFunctionalComponents] = useState([
-        'AT1L0', 'AT2L0',   'BS1L0', 'BS1L1', 'BS2L1',  'BS3L0',   'BS4L0',  'BT1L0',  'BT1L1', 'BT2L0', 
-        'BT2L1', 'BT3L0',   'BT3L1', 'BT4L0', 'BT5L0',  'BTM2',    'BTM3',   'EM1L0',  'EM2L0', 'EM3L0', 
-        'IM1L0', 'IM1L1',   'IM2L0', 'IM3L0', 'IM4L0',  'MBTMSFT', 'MBXPM1', 'MBXPM2', 'MR1L0', 'MR1L1', 
-        'MR2L0', 'MSFTDMP', 'ND1H',  'PA1L0', 'PC1L0',  'PC1L1',   'PC2L0',  'PC2L1',  'PC3L0', 'PC3L1', 
-        'PC4L0', 'PCPM2',   'PCPM3', 'PF1L0', 'RTDSL0', 'SL1L0',   'SL2L0',  'SL3L0',  'SP1L0', 'ST1L0', 
-        'ST1L1', 'TP',      'TV1L0', 'TV1L1', 'TV2L0',  'TV3L0'
-    ])
+    const [allFcs, setAllFcs] = useState<string[]>([]);
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -174,13 +166,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
 
         const loadInitialData = async () => {
-            const [data, fftData, keymapData, whoami] = await Promise.all([
+            const [data, fftData, keymapData, whoami, allFcs] = await Promise.all([
                 fetchProjectInfo(projectId),
                 fetchProjectFfts(projectId, showAllEntries, asOfTimestamp),
                 fetchKeymap(),
                 whoAmI(),
+                fetchFcs(),
             ])
-            return { data, fftData, keymapData, whoami };
+            return { data, fftData, keymapData, whoami, allFcs };
         }
 
         loadInitialData().then(d => {
@@ -188,6 +181,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setFftData(d.fftData);
             setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
+            setAllFcs(d.allFcs);
         }).catch((e: JsonErrorMsg) => {
             console.error("Failed to load required project data", e);
             setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -518,7 +512,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 availableFftStates={availableFftStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
-                                availableFcs={functionalComponents}
+                                availableFcs={allFcs}
+                                usedFcs={fftData.map(fft => fft.fc)}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -871,8 +866,9 @@ const DeviceDataEditTableRow: React.FC<{
     availableLocations: string[],
     availableBeamlines: string[],
     availableFcs:       string[],
+    usedFcs:            string[],
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
-}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, availableFcs, onEditDone }) => {
+}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, availableFcs, usedFcs, onEditDone }) => {
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -999,6 +995,12 @@ const DeviceDataEditTableRow: React.FC<{
             let msg = "Project that we want to sync our changes to does not exist: this is a programming bug that should never happen";
             console.error(msg);
             setEditError(msg)
+            return;
+        }
+
+        // ensure that fcs are unique within a project
+        if (usedFcs.includes(changes.fc)) {
+            setEditError(`${changes.fc} is already a part of the project: \"${project.name}\"`);
             return;
         }
 

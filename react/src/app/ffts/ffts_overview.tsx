@@ -1,11 +1,12 @@
 import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useState } from "react";
-import { FFTInfo, deleteFft, fetchFfts } from "../projects/project_model";
+import { FFTInfo, deleteFft, fetchFcs } from "../projects/project_model";
 import { JsonErrorMsg } from "../utils/fetching";
 import { sortString } from "../utils/sort_utils";
 import { StringSuggest } from "../components/suggestion_field";
 
 export const FFTOverviewTable: React.FC = () => {
+    const [fcs, setFcs] = useState<string[]>([]);
     const [data, setData] = useState<FFTInfo[]>([]);
     const [isFftDialogOpen, setIsFftDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -30,8 +31,8 @@ export const FFTOverviewTable: React.FC = () => {
 
     useEffect(() => {
         setIsLoading(true);
-        fetchFfts()
-            .then(data => setData(data))
+        fetchFcs()
+            .then(fcs => setFcs(fcs))
             .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch ffts data: " + e.error;
                 setLoadingError(msg);
@@ -86,7 +87,7 @@ export const FFTOverviewTable: React.FC = () => {
 
             <AddFftDialog isOpen={isFftDialogOpen}
                 dialogType="create"
-                ffts={data}
+                fcs={fcs}
                 currentProject=""
                 onClose={() => setIsFftDialogOpen(false)}
                 onSubmit={(fft) => {
@@ -123,56 +124,31 @@ export const FFTOverviewTable: React.FC = () => {
 
 
 
-export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, ffts, currentProject, dialogType, onClose, onSubmit }) => {
+export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
     const [fgName, setFgName] = useState('');
-    const [allFfts, setAllFfts] = useState<FFTInfo[]>([]);
+    const [allFcs, setAllFcs] = useState<string[]>([]);
 
     const [dialogError, setDialogError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const [fcNames, setFcNames] = useState(new Set<string>([
-        'AT1L0', 'AT2L0',   'BS1L0', 'BS1L1', 'BS2L1',  'BS3L0',   'BS4L0',  'BT1L0',  'BT1L1', 'BT2L0', 
-        'BT2L1', 'BT3L0',   'BT3L1', 'BT4L0', 'BT5L0',  'BTM2',    'BTM3',   'EM1L0',  'EM2L0', 'EM3L0', 
-        'IM1L0', 'IM1L1',   'IM2L0', 'IM3L0', 'IM4L0',  'MBTMSFT', 'MBXPM1', 'MBXPM2', 'MR1L0', 'MR1L1', 
-        'MR2L0', 'MSFTDMP', 'ND1H',  'PA1L0', 'PC1L0',  'PC1L1',   'PC2L0',  'PC2L1',  'PC3L0', 'PC3L1', 
-        'PC4L0', 'PCPM2',   'PCPM3', 'PF1L0', 'RTDSL0', 'SL1L0',   'SL2L0',  'SL3L0',  'SP1L0', 'ST1L0', 
-        'ST1L1', 'TP',      'TV1L0', 'TV1L1', 'TV2L0',  'TV3L0'
-    ]))
-
-    const createFgFcNames = (ffts: FFTInfo[]) => {
-        let fcSet = new Set<string>();
-
-        for (let fft of ffts) {
-            let fcName = fft.fc.name;
-            if (fcName != "") {
-                fcSet.add(fcName);
-            }
-        }
-
-        // setFcNames(fcSet);
-        setFgName('');
-    }
 
     useEffect(() => {
         if (!isOpen) {
             return;
         }
 
-        // ffts were provided, nothing to do
-        if (ffts != undefined) {
-            createFgFcNames(ffts);
-            setAllFfts(ffts);
+        // fcs were provided, nothing to do
+        if (fcs != undefined) {
+            setAllFcs(fcs);
             return;
         }
 
-        // ffts were not provided, download them on our own
+        // fcs were not provided, download them on our own
         setIsLoading(true);
-        fetchFfts()
-            .then(data => {
-                createFgFcNames(data);
-                setAllFfts(data);
+        fetchFcs()
+            .then(fcs => {
+                setAllFcs(fcs);
                 setDialogError('');
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch FFTs: " + e.error;
@@ -180,7 +156,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
             }).finally(() => {
                 setIsLoading(false)
             });
-    }, [ffts, isOpen])
+    }, [fcs, isOpen])
 
 
     const disableSubmit = fcName.trim() == "";
@@ -189,23 +165,24 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
         const fc = fcName.trim();
         const fg = fgName.trim();
 
-        if (dialogType === 'addToProject') {
-            // check if the chosen combination of fc-fg name already exists in provided data
-            // if it does, we simply return an existing fft. This is a special behavior
-            // when we are adding an fft to a project that doesn't already have such fft 
-            // assigned.
-            for (let fft of allFfts) {
-                if (fft.fc.name == fc) {
-                    // the chosen combination already exists, so there is nothing 
-                    // to create. Simply return
-                    onSubmit(fft)
-                    return;
-                }
-            }
+        // // TODO: is this still necessary in the new version? It doesn't seem to be
+        // if (dialogType === 'addToProject') {
+        //     // check if the chosen combination of fc-fg name already exists in provided data
+        //     // if it does, we simply return an existing fft. This is a special behavior
+        //     // when we are adding an fft to a project that doesn't already have such fft 
+        //     // assigned.
+        //     for (let fcOption of allFcs) {
+        //         if (fcOption == fc) {
+        //             // the chosen combination already exists, so there is nothing 
+        //             // to create. Simply return
+        //             onSubmit(fcOption)
+        //             return;
+        //         }
+        //     }
 
-            // chosen fc-fg name combination was not found, therefore we have to create
-            // a new one.
-        }
+        //     // chosen fc-fg name combination was not found, therefore we have to create
+        //     // a new one.
+        // }
 
         // TODO: refactor this, we are no longer using this
         let data: FFTInfo = {
@@ -231,7 +208,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
                     :
                     <FormGroup label="Functional Component:" labelFor="fc-name">
-                        <StringSuggest value={fcName} setValue={setFcName} items={Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false))} 
+                        <StringSuggest value={fcName} setValue={setFcName} items={Array.from(allFcs.values()).sort((a, b) => sortString(a, b, false))} 
                             inputProps={{ 
                                 id: "fc-name", 
                                 autoFocus: true,

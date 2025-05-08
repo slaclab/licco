@@ -550,8 +550,8 @@ interface FG {
     description: string;
 }
 
-export function fetchFfts(): Promise<FFTInfo[]> {
-    return Fetch.get<FFTInfo[]>("/ws/ffts/");
+export function fetchFcs(): Promise<string[]> {
+    return Fetch.get<string[]>("/ws/fcs/");
 }
 
 export function deleteFft(fftId: string): Promise<void> {
