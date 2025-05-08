@@ -132,7 +132,14 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [fcNames, setFcNames] = useState<Set<string>>(new Set());
+    const [fcNames, setFcNames] = useState(new Set<string>([
+        'AT1L0', 'AT2L0',   'BS1L0', 'BS1L1', 'BS2L1',  'BS3L0',   'BS4L0',  'BT1L0',  'BT1L1', 'BT2L0', 
+        'BT2L1', 'BT3L0',   'BT3L1', 'BT4L0', 'BT5L0',  'BTM2',    'BTM3',   'EM1L0',  'EM2L0', 'EM3L0', 
+        'IM1L0', 'IM1L1',   'IM2L0', 'IM3L0', 'IM4L0',  'MBTMSFT', 'MBXPM1', 'MBXPM2', 'MR1L0', 'MR1L1', 
+        'MR2L0', 'MSFTDMP', 'ND1H',  'PA1L0', 'PC1L0',  'PC1L1',   'PC2L0',  'PC2L1',  'PC3L0', 'PC3L1', 
+        'PC4L0', 'PCPM2',   'PCPM3', 'PF1L0', 'RTDSL0', 'SL1L0',   'SL2L0',  'SL3L0',  'SP1L0', 'ST1L0', 
+        'ST1L1', 'TP',      'TV1L0', 'TV1L1', 'TV2L0',  'TV3L0'
+    ]))
 
     const createFgFcNames = (ffts: FFTInfo[]) => {
         let fcSet = new Set<string>();
@@ -144,7 +151,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
             }
         }
 
-        setFcNames(fcSet);
+        // setFcNames(fcSet);
         setFgName('');
     }
 
@@ -210,6 +217,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
 
         setIsSubmitting(true);
         onSubmit(data);
+        setIsSubmitting(false);
     }
 
     return (
