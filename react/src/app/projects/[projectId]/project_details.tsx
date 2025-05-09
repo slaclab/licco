@@ -5,9 +5,9 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeFftsFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CopyFFTToProjectDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
+import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
 import { LoadingSpinner } from "@/app/components/loading";
 import { AddFftDialog } from "@/app/ffts/ffts_overview";
@@ -106,7 +106,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isFftCommentViewerOpen, setIsFftCommentViewerOpen] = useState(false);
     const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
 
-    const [currentFFT, setCurrentFFT] = useState<ProjectFFT>({ _id: "", fc: "", fg: "" });
+    const [selectedDevice, setSelectedDevice] = useState<ProjectDeviceDetails>();
     const [errorAlertMsg, setErrorAlertMsg] = useState<ReactNode>('');
 
     // filters to apply
@@ -488,11 +488,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     disabled={disableRow}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
-                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
+                                        setSelectedDevice(device);
                                         setIsCopyFFTDialogOpen(true);
                                     }}
                                     onDeleteFft={(device) => {
-                                        setCurrentFFT({ _id: device._id, fc: device.fc, fg: device.fg });
+                                        setSelectedDevice(device);
                                         setIsDeleteDialogOpen(true);
                                     }}
                                     onUserComment={(device) => {
@@ -570,11 +570,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 }}
             />
 
-            {project ?
-                <CopyFFTToProjectDialog
+            {project && selectedDevice && isCopyFFTDialogOpen ?
+                <CopyDeviceValuesDialog
                     isOpen={isCopyFFTDialogOpen}
-                    FFT={currentFFT}
                     currentProject={project}
+                    selectedDevice={selectedDevice}
                     onClose={() => setIsCopyFFTDialogOpen(false)}
                     onSubmit={(newDeviceDetails) => {
                         // find current fft and update device details
@@ -598,27 +598,31 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     confirmButtonText="Delete"
                     isOpen={isDeleteDialogOpen}
                     onClose={e => {
-                        setCurrentFFT({ _id: '', fc: '', fg: '' });
+                        setSelectedDevice(undefined);
                         setIsDeleteDialogOpen(false);
                     }}
                     onConfirm={(e) => {
-                        const fft = currentFFT
-                        removeFftsFromProject(project._id, [fft])
+                        const device = selectedDevice;
+                        if (!device) {
+                            return;
+                        }
+
+                        removeDevicesFromProject(project._id, [device._id])
                             .then(() => {
-                                setCurrentFFT({ _id: '', fc: '', fg: '' });
+                                setSelectedDevice(undefined);
                                 setIsDeleteDialogOpen(false);
 
                                 // update data 
-                                let updatedFftData = fftData.filter(d => d._id != fft._id);
+                                let updatedFftData = fftData.filter(d => d._id != device._id);
                                 setFftData(updatedFftData);
                             }).catch((e: JsonErrorMsg) => {
-                                let msg = `Failed to delete a device ${currentFFT.fc}-${currentFFT.fg}: ${e.error}`;
+                                let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
                                 setErrorAlertMsg(msg);
                             });
                     }}
                 >
-                    <h5 className="alert-title"><Icon icon="trash" />Delete {currentFFT.fc}?</h5>
-                    <p>Do you really want to delete a device <b>{currentFFT.fc}</b> from a project <b>{project.name}</b>?</p>
+                    <h5 className="alert-title"><Icon icon="trash" />Delete {selectedDevice?.fc ?? ''}?</h5>
+                    <p>Do you really want to delete a device <b>{selectedDevice?.fc ?? ''}</b> from a project <b>{project.name}</b>?</p>
                     <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
                 </Alert>
                 : null

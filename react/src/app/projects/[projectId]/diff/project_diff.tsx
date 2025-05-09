@@ -1,4 +1,4 @@
-import { Button, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
+import { Button, ButtonGroup, Collapse, Colors, NonIdealState, Spinner } from "@blueprintjs/core";
 import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, useWhoAmIHook } from "../../project_model";
@@ -107,7 +107,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
     }, [diff, type])
 
     const renderDiscussionButton = (device: ProjectDeviceDetails) => {
-        return <Button icon="chat" variant="minimal" onClick={e => setCommentDevice(device)}>({device.discussion.length})</Button>
+        return <Button icon="chat" variant="minimal" size="small" onClick={e => setCommentDevice(device)}>({device.discussion.length})</Button>
     }
 
     const renderDiffRows = (data: { a: ProjectDeviceDetails, b: ProjectDeviceDetails }[]) => {
@@ -187,7 +187,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
                 <td>{renderField(devices.a, devices.b, 'comments')}</td>
 
-                <td>{renderDiscussionButton(devices.a)}</td>
+                <td><ButtonGroup>{renderDiscussionButton(devices.a)}</ButtonGroup></td>
             </tr>
             )
         })
@@ -216,7 +216,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                     <td>{d.ray_trace}</td>
                     <td>{d.comments}</td>
 
-                    <td>{renderDiscussion ? renderDiscussionButton(d) : null}</td>
+                    <td>{renderDiscussion ? <ButtonGroup>{renderDiscussionButton(d)}</ButtonGroup> : null}</td>
                 </tr>
             )
         })

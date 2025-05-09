@@ -342,52 +342,16 @@ export interface ProjectFFT {
     fg: string;
 }
 
-export interface ProjectDevice {
-    fc: string;
-    prjid: string;
+
+export function fetchDeviceDataByName(projectId: string, deviceFcName: string): Promise<ProjectDeviceDetails> {
+    return Fetch.get<ProjectDeviceDetails>(`/ws/projects/${projectId}/fcs/${deviceFcName}?name=true`)
+        .then(d => {
+            transformProjectDeviceDetails(d);
+            return d;
+        }
+    );
 }
 
-export interface FFTDiff {
-    diff: boolean;      // true if there is difference between same fft of 2 projects
-    fftId: string;      // fft id (e.g, e321ads321d)
-    fieldName: string;  // name of the field (e.g., nom_loc_x)
-    my: string | number;
-    other: string | number;
-}
-
-export function fetchProjectDiff(currentProjectId: string, otherProjectId: string, approved?: boolean): Promise<FFTDiff[]> {
-    let params = new URLSearchParams();
-    params.set("other_id", otherProjectId);
-    if (approved != undefined) {
-        // TODO: inconsistent backend behavior: here backend expects 1/0, 
-        // on some other endpoints it expects true/false
-        let approvedValue = approved ? "1" : "0";
-        params.set("approved", approvedValue);
-    }
-
-    let url = `/ws/projects/${currentProjectId}/diff_with?` + params.toString();
-    return Fetch.get<fftDiffBackend[]>(url)
-        .then(data => {
-            return data.map(d => {
-                let { id, field } = parseFftFieldsFromDiff(d);
-                let fftDiff: FFTDiff = {
-                    diff: d.diff,
-                    fftId: id,
-                    fieldName: field,
-                    my: d.my,
-                    other: d.ot,
-                }
-                return fftDiff;
-            })
-        });
-}
-
-interface fftDiffBackend {
-    diff: boolean;
-    key: string;          // <fft_id>.<field_name>
-    my: string | number;  // our project value
-    ot: string | number;  // other's project value
-}
 
 export interface Tag {
     _id: string,
@@ -401,14 +365,6 @@ export interface ImportResult {
     status_str: string
 }
 
-function parseFftFieldsFromDiff(diff: fftDiffBackend): { id: string, field: string } {
-    let [id, ...rest] = diff.key.split(".",);
-    let nameOfField = rest.join(".");
-    if (!nameOfField) { // this should never happen
-        throw new Error(`Invalid diff key ${diff.key}: diff key should consist of "<fft_id>.<key>"`);
-    }
-    return { id: id, field: nameOfField }
-}
 
 // helper class for transforming status strings into enums and back
 export class DeviceState {
@@ -502,9 +458,8 @@ export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise
         })
 }
 
-export function removeFftsFromProject(projectId: string, fft: ProjectFFT[]): Promise<void> {
-    let ids = fft.map(fft => fft._id);
-    let data = { 'ids': ids };
+export function removeDevicesFromProject(projectId: string, device_ids: string[]): Promise<void> {
+    let data = { 'ids': device_ids };
     return Fetch.delete<void>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(data) })
 }
 

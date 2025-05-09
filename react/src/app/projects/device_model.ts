@@ -44,9 +44,7 @@ export function parseDevice(deviceObj: Record<string, any>): DeviceMcd {
 
     switch (deviceType) {
         case DeviceType.UNSET, DeviceType.UNKNOWN: {
-            let d = new DeviceMcd();
-            Object.assign(d, deviceObj);
-            return d
+            return Object.assign(new DeviceMcd(), deviceObj);
         }
         case DeviceType.MCD: {
             return Object.assign(new DeviceMcd(), deviceObj);

@@ -1,3 +1,4 @@
+import { isArrayEqual } from "@/app/utils/arr_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { useEffect, useState } from "react";
@@ -95,6 +96,62 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
 
     return fftDiff;
 }
+
+
+export interface DeviceValueDiff {
+    fieldName: string;
+    oldVal: any;
+    newVal: any;
+}
+
+const IGNORED_DEVICE_METADATA_FIELDS: Set<keyof ProjectDeviceDetails> = new Set(["_id", "device_id", "project_id", "created", "discussion"])
+
+export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetails, ignoredFields: Set<string> = IGNORED_DEVICE_METADATA_FIELDS): DeviceValueDiff[] => {
+    let diffs: Record<string, DeviceValueDiff> = {};
+
+    // We have to iterate over each device, since it's possible that a device field is missing from one
+    // device and is present in the other
+    for (const [key, valA] of Object.entries(a) as [keyof ProjectDeviceDetails, any][]) {
+        if (ignoredFields.has(key)) {
+            continue;
+        }
+
+        const valB = b[key];
+        if (valA === valB) {
+            continue;
+        }
+
+        if (valA === '' && valB === undefined || valA === undefined && valB === '') {
+            // empty fields should not be considered a diff
+            continue;
+        }
+
+        if (Array.isArray(valA)) {
+            if (isArrayEqual(valA as any[], valB as any[])) {
+                continue;
+            }
+        }
+
+        diffs[key] = { fieldName: key, oldVal: valA, newVal: valB };
+    }
+
+    // since 'a' and 'b' could be a different device, it's possible that 'a' does not have 
+    // all of the 'b' fields. For this reason we have to iterate over 'b' as well and report
+    // those missing fields
+    const objA = a as Record<any, any>;
+    for (const [key, valB] of Object.entries(b) as [keyof ProjectDeviceDetails, any][]) {
+        if (key in objA) {
+            continue;
+        }
+
+        // found the missing key (that is in 'b' but not in 'a')
+        diffs[key] = { fieldName: key, oldVal: '', newVal: valB }
+    }
+
+    const fieldDiff = [...Object.values(diffs)];
+    return fieldDiff;
+}
+
 
 export const loadProjectDiff = async (projectIdA: string, projectIdB: string): Promise<ProjectFftDiff> => {
     let projectAInfo = fetchProjectInfo(projectIdA);

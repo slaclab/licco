@@ -4,8 +4,10 @@ import { sortString } from "@/app/utils/sort_utils";
 import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, FFTDiff, ProjectDeviceDetails, ProjectFFT, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchHistoryOfChanges, fetchProjectDiff, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectHistoryChange, ProjectInfo, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchDeviceDataByName, fetchHistoryOfChanges, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
+import { renderTableField } from "../project_utils";
 import { CollapsibleProjectNotes } from "../projects_overview";
+import { DeviceValueDiff, diffDeviceFields } from "./diff/project_diff_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
@@ -92,8 +94,8 @@ export const FilterFFTDialog: React.FC<{
 };
 
 
-// this dialog is used to copy the fft setting to a different project
-export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, FFT: ProjectFFT, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, FFT, onClose, onSubmit }) => {
+// this dialog is used to copy the device values from a different project
+export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, selectedDevice: ProjectDeviceDetails, onClose: () => void, onSubmit: (updatedDeviceData: ProjectDeviceDetails) => void }> = ({ isOpen, currentProject, selectedDevice, onClose, onSubmit }) => {
   const DEFAULT_PROJECT = "Please select a project"
   const [availableProjects, setAvailableProjects] = useState<ProjectInfo[]>([]);
   const [projectNames, setProjectNames] = useState<string[]>([DEFAULT_PROJECT]);
@@ -101,11 +103,11 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
 
   const [dialogErr, setDialogErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const [missingFFTOnOtherProject, setMissingFFTOnOtherProject] = useState(false);
-  const [changedFFTs, setChangedFFTs] = useState<FFTDiff[]>([]);
   const [fetchingProjectDiff, setFetchingProjectDiff] = useState(false);
-  const [fftDiffSelection, setFftDiffSelection] = useState<boolean[]>([]);
+  const [missingFFTOnOtherProject, setMissingFFTOnOtherProject] = useState(false);
+
+  const [changedFields, setChangedFields] = useState<DeviceValueDiff[]>([]);
+  const [fieldsToCopy, setFieldsToCopy] = useState<boolean[]>([]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -136,58 +138,56 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
     }
 
     if (selectedProject === DEFAULT_PROJECT) {
-      setChangedFFTs([]);
+      setChangedFields([]);
       return;
     }
 
-    let newProject = availableProjects.filter(p => p.name === selectedProject)[0];
+    let projectToCopyFrom = availableProjects.filter(p => p.name === selectedProject)[0];
     // query if there is any change between fft of selected project 
     // and fft of a new project 
     // 
     // We should be able to abort the query if necessary 
     setFetchingProjectDiff(true);
-    fetchProjectDiff(currentProject._id, newProject._id)
-      .then(diff => {
-        let diffsToShow = diff.filter(d => d.diff === true && d.fftId === FFT._id);
-
-        // it's possible that the other project does not have this fftid; the backend does not
-        // throw an error in this case, and we have to handle this case manually. 
-        // It only happens if one of the names of fft field starts with "fft.<_id>|<fc>|<fg>"
-        let otherProjectDoesNotHaveFFT = diffsToShow.some(obj => obj.fieldName.startsWith("fft."))
-        if (otherProjectDoesNotHaveFFT) {
+    const fcName = selectedDevice.fc;
+    fetchDeviceDataByName(projectToCopyFrom._id, fcName)
+      .then((deviceFromOtherProject) => {
+        // TODO: what if a device is of a different type? Do we care about that?
+        const diff = diffDeviceFields(selectedDevice, deviceFromOtherProject);
+        setChangedFields(diff);
+        setMissingFFTOnOtherProject(false);
+        setDialogErr("");
+      }).catch((e: JsonErrorMsg) => {
+        // TODO: it's possible that the other device does not have this fc. 
+        // This will be returned as an error, which we should detect
+        if (e.code == 404) {
           setMissingFFTOnOtherProject(true);
-          setChangedFFTs([]);
           setDialogErr("");
           return;
         }
 
-        setMissingFFTOnOtherProject(false);
-        setChangedFFTs(diffsToShow);
-        setDialogErr("");
-      }).catch((e: JsonErrorMsg) => {
         let msg = "Failed to fetch project diff: " + e.error;
         setDialogErr(msg);
         console.error(msg, e);
       }).finally(() => {
         setFetchingProjectDiff(false);
       })
-  }, [selectedProject, FFT, isOpen, availableProjects, currentProject._id])
+  }, [selectedProject, selectedDevice, isOpen, availableProjects, currentProject._id])
 
   // clear the checkboxes whenever fft diff changes
   useEffect(() => {
-    let changed = changedFFTs.map(f => false);
-    setFftDiffSelection(changed);
-  }, [changedFFTs])
+    let changed = changedFields.map(f => false);
+    setFieldsToCopy(changed);
+  }, [changedFields])
 
   const numOfFFTChanges = useMemo(() => {
     let count = 0;
-    for (let selected of fftDiffSelection) {
+    for (let selected of fieldsToCopy) {
       if (selected) {
         count++;
       }
     }
     return count
-  }, [fftDiffSelection]);
+  }, [fieldsToCopy]);
 
 
   // button submit action
@@ -197,7 +197,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
       return;
     }
 
-    if (changedFFTs.length == 0) {
+    if (changedFields.length == 0) {
       // this should never happen
       setDialogErr("Can't copy from unknown changed ffts: this is a programming bug");
       return;
@@ -207,23 +207,29 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
 
     const project = availableProjects.filter(p => p.name == selectedProject)[0];
     const projectIdToCopyFrom = project._id;
-    const attributeNames = changedFFTs.filter((f, i) => {
-      if (fftDiffSelection[i]) {
-        // this field/value was selected for copying by the end user via a checkbox
+
+    const attributeNamesToCopy = changedFields.filter((_, i) => {
+      if (fieldsToCopy[i]) { // this field/value was selected for copying by the end user via a checkbox
         return true;
       }
       return false;
     }).map(diff => diff.fieldName);
-    let data = { 'other_id': projectIdToCopyFrom, 'attrnames': attributeNames }
 
     const projectIdToCopyTo = currentProject._id;
-    const fftIdToCopyTo = FFT._id;
-    Fetch.post<ProjectDeviceDetails>(`/ws/projects/${projectIdToCopyTo}/ffts/${fftIdToCopyTo}/copy_from_project`,
+    const deviceIdToCopyTo = selectedDevice._id;
+    const data = {
+      'src_project': projectIdToCopyFrom,
+      'dest_project': projectIdToCopyTo,
+      'fc': selectedDevice.fc,
+      'attrnames': attributeNamesToCopy
+    }
+
+    Fetch.post<ProjectDeviceDetails>(`/ws/projects/copy_from_project`,
       { body: JSON.stringify(data) }
     ).then(updatedDeviceData => {
       onSubmit(deviceDetailsBackendToFrontend(updatedDeviceData));
     }).catch((e: JsonErrorMsg) => {
-      let msg = `Failed to copy fft changes of ${FFT.fc}-${FFT.fg}: ${e.error}`;
+      let msg = `Failed to copy fft changes of ${selectedDevice.fc}-${selectedDevice.fg}: ${e.error}`;
       setDialogErr(msg);
       console.error(msg, e);
     }).finally(() => {
@@ -231,7 +237,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
     })
   }
 
-  const allChangesAreSelected = numOfFFTChanges == fftDiffSelection.length;
+  const allChangesAreSelected = numOfFFTChanges == fieldsToCopy.length;
 
   // render fft diff table
   const renderDiffTable = () => {
@@ -244,10 +250,10 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
     }
 
     if (missingFFTOnOtherProject) {
-      return <NonIdealState icon={'warning-sign'} title="Missing FFT" description={`${FFT.fc}-${FFT.fg} does not exist on selected project ${selectedProject}`} />
+      return <NonIdealState icon={'warning-sign'} title="Missing FFT" description={`${selectedDevice.fc}-${selectedDevice.fg} does not exist on selected project ${selectedProject}`} />
     }
 
-    if (changedFFTs.length == 0) {
+    if (changedFields.length == 0) {
       // there is no fft difference between projects
       return <NonIdealState icon={"clean"} title="No Changes" description={"All FFT values are equal between compared projects"} />
     }
@@ -267,11 +273,11 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
                   checked={allChangesAreSelected}
                   onChange={(e) => {
                     if (allChangesAreSelected) {
-                      let unselectAll = fftDiffSelection.map(_ => false);
-                      setFftDiffSelection(unselectAll);
+                      let unselectAll = fieldsToCopy.map(_ => false);
+                      setFieldsToCopy(unselectAll);
                     } else {
-                      let selectAll = fftDiffSelection.map(_ => true);
-                      setFftDiffSelection(selectAll);
+                      let selectAll = fieldsToCopy.map(_ => true);
+                      setFieldsToCopy(selectAll);
                     }
                   }
                   } />
@@ -279,23 +285,23 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
             </tr>
           </thead>
           <tbody>
-            {changedFFTs.map((change, i) => {
-              return (<tr key={`${change.fftId}-${change.fieldName}`}>
+            {changedFields.map((change, i) => {
+              return (<tr key={`${change.fieldName}`}>
                 <td>{change.fieldName}</td>
-                <td>{change.my}</td>
+                <td>{renderTableField(change.oldVal)}</td>
                 <td className="text-center"><Icon icon="arrow-right" color={Colors.GRAY1}></Icon></td>
-                <td>{change.other}</td>
+                <td>{renderTableField(change.newVal)}</td>
                 <td>
                   {/* note: leave the comparison === true, otherwise the React will complain about controlled
                       and uncontrolled components. I think this is a bug in the library and not the issue with our code,
                       since our usage of controlled component is correct here
                     */}
                   <Checkbox className="table-checkbox"
-                    checked={fftDiffSelection[i] === true} value={''}
+                    checked={fieldsToCopy[i] === true} value={''}
                     onChange={(e) => {
-                      let newSelection = [...fftDiffSelection];
-                      newSelection[i] = !fftDiffSelection[i];
-                      setFftDiffSelection(newSelection);
+                      let newSelection = [...fieldsToCopy];
+                      newSelection[i] = !fieldsToCopy[i];
+                      setFieldsToCopy(newSelection);
                     }
                     } />
                 </td>
@@ -309,7 +315,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={`Copy FFT Changes to "${currentProject.name}"`} autoFocus={true} style={{ width: "45rem" }}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Copy Device Changes to "${currentProject.name}"`} autoFocus={true} style={{ width: "45rem" }}>
       <DialogBody useOverflowScrollContainer>
         <table className="table table-sm table-borderless table-nohead table-nobg m-0 mb-2">
           <thead>
@@ -321,7 +327,7 @@ export const CopyFFTToProjectDialog: React.FC<{ isOpen: boolean, currentProject:
           <tbody>
             <tr>
               <td><Label className="text-end mb-1">FFT:</Label></td>
-              <td>{FFT.fc}-{FFT.fg}</td>
+              <td>{selectedDevice.fc}-{selectedDevice.fg}</td>
             </tr>
             <tr>
               <td><Label className="text-nowrap text-end mb-1" htmlFor="project-select">Copy From Project:</Label></td>
