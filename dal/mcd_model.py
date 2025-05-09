@@ -6,7 +6,6 @@ import logging
 import datetime
 import uuid
 from collections.abc import Mapping
-import math
 from typing import Dict, Tuple, List, Optional
 import pytz
 from bson import ObjectId
@@ -81,7 +80,7 @@ def get_device_id_from_name(licco_db: MongoDb, prjid, fc):
     """
     Look up a device by its fc name and the project its affiliated with
     """
-    device = licco_db["device_history"].find_one({"project_id": prjid, "fc": fc})
+    device = licco_db["device_history"].find_one({"project_id": ObjectId(prjid), "fc": fc})
     if not device:
         return False, ""
     return True, str(device["_id"])
@@ -343,6 +342,27 @@ def validate_editors(licco_db: MongoDb, editors: List[str], notifier: Notifier) 
         return f"Invalid editor emails/accounts: [{invalid_users}]"
     return ""
 
+
+def create_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any], modification_time=None,
+                      current_project_attributes=None) -> Tuple[ObjectId, str]:
+    # if device has "_id" field, we have to remove it, otherwise mongodb will raise a duplicate id exception.
+    # When updating an existing device, this _id already exists in mongo (hence we remove it to get a new one)
+    values.pop("_id", None)
+
+    if "project_id" not in values:
+        values["project_id"] = ObjectId(prjid)
+    if "discussion" not in values:
+        values["discussion"] = []
+    if "state" not in values:
+        values["state"] = "Conceptual"
+    if not modification_time:
+        modification_time = datetime.datetime.now(datetime.UTC)
+    values["created"] = modification_time
+
+    device_id = licco_db["device_history"].insert_one(values).inserted_id
+    return device_id, ""
+
+
 def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any]) -> Tuple[bool, str, str]:
     """
     FC field has changed.
@@ -379,24 +399,6 @@ def change_of_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdat
     create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=new_devices, changelog=changelog)
     return ok, err, device_id
 
-def create_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any], modification_time=None,
-                      current_project_attributes=None) -> Tuple[bool, str, ObjectId]:
-
-    # if device has "_id" field, we have to remove it, otherwise mongodb will raise a duplicate id exception.
-    # When updating an existing device, this _id already exists in mongo (hence we remove it to get a new one)
-    values.pop("_id", None)
-
-    if "project_id" not in values:
-        values["project_id"] = ObjectId(prjid)
-    if "discussion" not in values:
-        values["discussion"] = []
-    if "state" not in values:
-        values["state"] = "Conceptual"
-    if not modification_time:
-        modification_time = datetime.datetime.now(datetime.UTC)
-    values["created"] = modification_time
-    dev_id = licco_db["device_history"].insert_one(values).inserted_id
-    return True, "", dev_id
 
 def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any], modification_time=None, remove_discussion_comments=None,
                           current_project_attributes=None) -> Tuple[bool, str, List[Dict[str, any]], str]:
@@ -417,7 +419,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     changelog = []
 
     if ("_id" not in fcupdate):
-        ok, err, new_device_id = create_new_device(licco_db, userid, prjid, values=fcupdate, modification_time=modification_time)
+        new_device_id, err = create_new_device(licco_db, userid, prjid, values=fcupdate, modification_time=modification_time)
         for key in fcupdate:
             changelog.append({
                 "_id": '',
@@ -429,6 +431,11 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
                 "user": userid,
                 "time": modification_time
             })
+
+        # TODO: refactor (remove ok flag)
+        ok = True
+        if err:
+            ok = False
         return ok, err, changelog, str(new_device_id)
     else:
         fftid = fcupdate["_id"]
@@ -530,45 +537,15 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
         current_attrs = {key: value for key, value in current_attrs.items() if key not in ["_id", "created", "projectid", "prjid"]}
         current_attrs.update(fft_fields_to_insert)
         # we should create a new device based on old device
-        ok, err, new_device_id = create_new_device(licco_db, userid, prjid, values=current_attrs, modification_time=modification_time)
-        return True, "", changelog, str(new_device_id)
+        new_device_id, err = create_new_device(licco_db, userid, prjid, values=current_attrs, modification_time=modification_time)
+        # TODO: refactor
+        ok = True
+        if err:
+            ok = False
+        return ok, err, changelog, str(new_device_id)
 
     logger.debug("In update_fft_in_project, all_inserts is an empty list")
     return False, "", changelog, ''
-
-
-# @TODO: @REMOVE it's no longer used
-def validate_insert_range(attr, val) -> str:
-    """
-    Helper function to validate data prior to being saved in DB
-    Returns an error in case of invalid range
-    """
-    try:
-        if attr == "ray_trace":
-            if val == '' or val is None:
-                return ""
-            if int(val) < 0:
-                return f"invalid range of ray_trace: expected range [0,1], but got {int(val)}"
-
-        # empty strings valid for angles, catch before other verifications
-        if "nom" in attr:
-            if val == "":
-                return ""
-            if attr == "nom_loc_z":
-                v = float(val)
-                if v < 0 or v > 2000:
-                    return f"invalid range for {attr}: expected range [0,2000], but got {v}"
-            if "nom_ang_" in attr:
-                v = float(val)
-                if (v < -(math.pi)) or (v > math.pi):
-                    return f"invalid range for {attr}: expected range [-{math.pi:.2f}, {math.pi:.2f}], but got {v}"
-    except ValueError:
-        return f"value {val} is a wrong type for the attribute {attr}"
-    except TypeError:
-        return f"value {val} is not verified for attribute {attr}"
-
-    # there is no error with this range
-    return ""
 
 
 def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
@@ -629,9 +606,9 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     return True, "", insert_counter
 
 
-def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str], changelog=None, snapshot_name=None):
+def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str]|List[ObjectId], changelog=None, snapshot_name=None):
     modification_time = datetime.datetime.now(datetime.UTC)
-    inserts = {
+    snapshot = {
         "project_id": ObjectId(projectid),
         "author": userid,
         "created": modification_time,
@@ -639,12 +616,12 @@ def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices:
     }
 
     if changelog:
-        inserts["changelog"] = changelog
+        snapshot["changelog"] = changelog
 
     if snapshot_name:
-        inserts["snapshot_name"] = snapshot_name
+        snapshot["snapshot_name"] = snapshot_name
 
-    licco_db["project_snapshots"].insert_one(inserts)
+    licco_db["project_snapshots"].insert_one(snapshot)
     return
 
 
@@ -713,8 +690,8 @@ def copy_device_values_from_project(licco_db: MongoDb, userid: str, from_prjid: 
     # 1. store updated device
     # 2. create a new snapshot
     # 3. return an updated device data
-    ok, err, updated_device_id = create_new_device(licco_db, userid, to_prjid, to_device)
-    if not ok:
+    updated_device_id, err = create_new_device(licco_db, userid, to_prjid, to_device)
+    if err:
         return {}, f"failed to create an updated device with new values: {err}"
 
     # create a new snapshot (with updated src device)
@@ -1073,23 +1050,6 @@ def get_project_last_edit_time(licco_db: MongoDb, project_id: str) -> Optional[d
     if not ok:
         return None
     return snapshot["created"]
-
-
-def __flatten__(obj, prefix=""):
-    """
-    Flatten a dict into a list of key value pairs using dot notation.
-    """
-    ret = []
-    if isinstance(obj, Mapping):
-        for k, v in obj.items():
-            ret.extend(__flatten__(v, prefix + "." + k if prefix else k))
-    elif isinstance(obj, list):
-        for c, e in enumerate(obj):
-            ret.extend(__flatten__(
-                e, prefix + ".[" + str(c) + "]" if prefix else "[" + str(c) + "]"))
-    else:
-        ret.append((prefix, obj))
-    return ret
 
 
 def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, description: str, editors: List[str], notifier: Notifier):

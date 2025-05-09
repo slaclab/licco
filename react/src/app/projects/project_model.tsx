@@ -159,7 +159,7 @@ export function transformProjectForFrontendUse(project: ProjectInfo) {
     if (project.approved_time) {
         project.approved_time = new Date(project.approved_time);
     }
-    if (project.notes == undefined) {
+    if (project.notes === undefined) {
         project.notes = [];
     }
 }
@@ -189,20 +189,6 @@ export interface ProjectDeviceDetails extends deviceDetailFields {
     _id: string,
 }
 
-export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): ProjectDeviceDetails {
-    // remove fft field from object, but copy every other field
-    const { _id, ...copiedFields } = details;
-    let data: ProjectDeviceDetails = {
-        ...copiedFields,
-        _id: _id,
-    }
-    // turn dates into date objects
-    // turn any number strings into undefined fields
-    transformProjectDeviceDetails(data);
-
-    return data;
-}
-
 export interface deviceDetailFields {
     // device metadata
     device_id: string;
@@ -227,6 +213,13 @@ export interface deviceDetailFields {
     ray_trace?: number;
     discussion: ChangeComment[];
     project_id: string;
+}
+
+export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): ProjectDeviceDetails {
+    // turn dates into date objects
+    // turn any number strings into undefined fields
+    transformProjectDeviceDetails(details);
+    return details;
 }
 
 // used for displaying comment threads

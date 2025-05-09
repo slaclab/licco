@@ -11,7 +11,7 @@ from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-from dal import mcd_model, db_utils, mcd_import, mcd_datatypes
+from dal import mcd_model, db_utils, mcd_import, mcd_datatypes, mcd_db
 from dal.mcd_model import initialize_collections
 from dal.mcd_validate import DeviceType
 from notifications.email_sender import EmailSenderInterface
@@ -148,7 +148,7 @@ def test_create_delete_project_admin(db):
     user_id = "test_user"
 
     # add fft to the project
-    fft_update = {'fc': 'TESTFC', 'fg':'TESTFG', 'project_id': prjid, 'comments': 'some comment', 'nom_ang_x': 1.23}
+    fft_update = {'fc': 'TESTFC', 'fg': 'TESTFG', 'project_id': prjid, 'comments': 'some comment', 'nom_ang_x': 1.23}
     ok, err, changelog, device_id = mcd_model.update_fft_in_project(db, user_id, prjid, fft_update)
     assert err == ""
     # create a snapshot with the new fft/device
@@ -203,6 +203,53 @@ def test_delete_project_if_not_owner(db):
     verify_prj = mcd_model.get_project(db, prj["_id"])
     assert verify_prj is not None, "project should exist"
     assert verify_prj['status'] == 'development'
+
+
+def test_get_recent_snapshot(db):
+    """Testing if get_recent snapshot method call is actually returning the recent snapshot and correct values"""
+    project = create_test_project(db, "test_user", "test_get_recent_snapshot", "")
+    prjid = project["_id"]
+    device = {'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23, 'device_type': DeviceType.MCD.value}
+    device_id, err = mcd_model.create_new_device(db, "test_user", prjid, device)
+    assert err == ""
+    mcd_model.create_new_snapshot(db, "test_user", prjid, [device_id])
+
+    # compare the device values from recent snapshot to those of the get_latest_project_data
+    data = mcd_db.get_latest_project_data(db, prjid)
+    assert len(data) == 1
+    found_device = data["TESTFC"]
+
+    # compare device values (based on what we have inserted)
+    assert found_device["device_type"] == device["device_type"]
+    assert found_device["nom_ang_x"] == device["nom_ang_x"]
+    assert found_device.get("nom_ang_y", None) == device.get("nom_ang_y", None)
+
+    # change existing data and create a new device
+    device["nom_ang_x"] = 2.55
+    device["nom_ang_y"] = 1.88
+    new_device_id, err = mcd_model.create_new_device(db, "test_user", prjid, device)
+    assert err == ""
+    mcd_model.create_new_snapshot(db, "test_user", prjid, [new_device_id])
+
+    # compare data once again
+    data = mcd_db.get_latest_project_data(db, prjid)
+    assert len(data) == 1
+    updated_device = data["TESTFC"]
+    assert updated_device["_id"] != found_device["_id"], "ids should be different, since it's a different device"
+    assert updated_device["nom_ang_x"] == 2.55
+    assert updated_device["nom_ang_y"] == 1.88
+
+    # check if search by fc name returns the correct device (latest device from the latest snapshot)
+    device_by_fc, err = mcd_model.get_device_by_fc_name(db, prjid, "TESTFC")
+    assert err == ""
+    assert device_by_fc["_id"] == updated_device["_id"]
+    assert device_by_fc["nom_ang_x"] == updated_device["nom_ang_x"]
+    assert device_by_fc["nom_ang_y"] == updated_device["nom_ang_y"]
+    assert device_by_fc.get("nom_ang_z", None) == updated_device.get("nom_ang_z", None)
+
+
+# @TODO: TEST: when inserting or updating a device within a snapshot, we should test that FC is unique within
+# the device array. Write a test case for that
 
 
 def test_clone_project(db):

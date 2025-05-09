@@ -3,6 +3,7 @@ import datetime
 import io
 import logging
 import os
+import random
 import uuid
 from typing import List, Dict
 import pytest
@@ -187,7 +188,7 @@ def create_new_device_format(project_id, old_values, creation_time = None):
         'device_id': str(uuid.uuid4()),
         'device_type': MCD,
         'created': creation_time,
-        'project_id': str(project_id),  # TODO: not sure if we want a project id in device history or not?
+        'project_id': ObjectId(project_id),  # TODO: not sure if we want a project id in device history or not?
         'fc': old_values['fft']['fc'],
         'fg': old_values['fft']['fg'],
         'discussion': [],
@@ -202,12 +203,33 @@ def create_new_device_format(project_id, old_values, creation_time = None):
         values[key] = val
     return values
 
+def resolve_duplicated_fcs(latest_device_values: Dict[str, any]):
+    found_fc_names = set()
+    for _, device in latest_device_values.items():
+        fc = device["fft"]["fc"]
+        fg = device["fft"]["fg"]
+        if fc in found_fc_names:
+            new_fc_name = f"{fc}-{fg}"
+            device["fft"]["fc"] = new_fc_name
+            if new_fc_name in found_fc_names:   # this should never happen but doing it just in case
+                random_num = random.randint(1, 10000)
+                new_fc_name = f"{new_fc_name}_{random_num}"
+            found_fc_names.add(new_fc_name)
+        else:
+            # nothing to change, fc is unique for now
+            found_fc_names.add(fc)
+
+
 def migrate_project(old_db, new_db, project,  output_dir):
     project_name = project['name']
     project_id = project['_id']
     # store latest device values into a database
     created = datetime.datetime.now(datetime.UTC)
     latest_device_values = get_project_attributes(old_db, project_id)
+    # devices should have unique 'fc', (in the past fc-fg combination was unique, but now each device should have unique fc)
+    # for this reason we change duplicated fc names to fc-fg combination.
+    resolve_duplicated_fcs(latest_device_values)
+
     devices = []
     for _, old_device_format in latest_device_values.items():
         new_device = create_new_device_format(project_id, old_device_format, creation_time=created)
@@ -218,10 +240,10 @@ def migrate_project(old_db, new_db, project,  output_dir):
         out = new_db['device_history'].insert_many(devices)
         ids = list(out.inserted_ids)
         project_snapshot = {
-            'project_id': project_id,
+            'project_id': ObjectId(project_id),
             'name': '',                  # optional name (tag)
             'author': project['owner'],  # snapshot author
-            'created': datetime.datetime.now(datetime.UTC),  # created timestamp
+            'created': created,  # created timestamp
             'devices': ids,
             'description': "Migration from MCD 1.0",   # explanation if necessary
             'changelog': {},
@@ -266,7 +288,7 @@ if __name__ == '__main__':
     old_db = client[_db_id]
     new_db_id = _db_id
 
-    testing = True
+    testing = False
     if testing:
         new_db_id = "_TEST_MIGRATION_DB"
         try:
