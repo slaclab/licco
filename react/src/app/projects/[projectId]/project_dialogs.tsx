@@ -156,7 +156,6 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
         // * Fields that will be automatically removed: [field_names]
         const differentDevice = selectedDevice.device_type != deviceFromOtherProject.device_type;
 
-        console.log("XXX", deviceFromOtherProject)
         const diff = diffDeviceFields(selectedDevice, deviceFromOtherProject);
         setChangedFields(diff);
         setMissingFFTOnOtherProject(false);

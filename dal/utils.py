@@ -55,6 +55,8 @@ def escape_chars_for_mongo(attrname):
     '''
     return attrname.replace(".", u"\uFF0E").replace("$", u"\uFF04")
 
+def now_utc():
+    return datetime.datetime.now(datetime.UTC)
 
 @dataclass
 class ImportCounter:

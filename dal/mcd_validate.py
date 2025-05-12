@@ -7,7 +7,7 @@ from typing import Dict, Callable, Optional, List
 
 import pytz
 
-from .mcd_datatypes import FCState, McdDevice, MCD_LOCATIONS, MCD_BEAMLINES
+from .mcd_datatypes import DeviceState, McdDevice, MCD_LOCATIONS, MCD_BEAMLINES
 
 
 # the purpose of this file is to provide you with a common validators for MCD database
@@ -131,7 +131,7 @@ class Validator:
             # NOTE: if device state does not exist (is None), an error will be raised
             # anyway for missing "state" since it's an ALWAYS required field
             if device_state and validator.required & Required.DEVICE_DEPLOYED:
-                if device_state != FCState.Conceptual.value:
+                if device_state != DeviceState.Conceptual.value:
                     required_fields.add(name)
                     continue
 
@@ -295,7 +295,7 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='fc', label="FC", data_type=FieldType.STRING, required=Required.ALWAYS),
     FieldValidator(name='fg', label="FG", data_type=FieldType.STRING),
     FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.STRING),
-    FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in FCState], required=Required.ALWAYS),
+    FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in DeviceState], required=Required.ALWAYS),
     FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.STRING),
     FieldValidator(name='comment', label="Comment", data_type=FieldType.STRING),
     FieldValidator(name='location', label="Location", data_type=FieldType.STRING, allowed_values=MCD_LOCATIONS),

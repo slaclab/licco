@@ -1,14 +1,14 @@
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from bson import ObjectId
 
-from dal.mcd_datatypes import McdDevice
+from dal.mcd_datatypes import McdDevice, McdSnapshot
 
 logger = logging.getLogger(__name__)
 
 
 
-def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None):
+def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None) -> Dict[str, McdDevice]:
     # get correct project ID
     project = db["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
@@ -16,8 +16,8 @@ def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=Fal
         return {}
 
     # find most recent project snapshot
-    status, snapshot = get_recent_snapshot(db, projectid)
-    if not status:
+    snapshot = get_recent_snapshot(db, projectid)
+    if not snapshot:
         logger.debug(f"No recent snapshot found for project {projectid}")
         return {}
 
@@ -42,15 +42,14 @@ def get_all_project_changes(propdb, projectid):
     return changelist
 
 
-def get_recent_snapshot(db, prjid: str) -> Tuple[bool, McdDevice]:
+def get_recent_snapshot(db, prjid: str) -> Optional[McdSnapshot]:
     """
     Gets the newest snapshot for any one project
     """
     snapshot = db["project_snapshots"].find_one({"project_id": ObjectId(prjid)}, sort=[("created", -1)])
     if not snapshot:
-        logger.debug(f"No database entry for project ID: {prjid}")
-        return False, {}
-    return True, snapshot
+        return None
+    return snapshot
 
 
 def get_devices(db, device_ids: List[str]) -> Dict[str, McdDevice]:
@@ -61,6 +60,18 @@ def get_devices(db, device_ids: List[str]) -> Dict[str, McdDevice]:
         device_id_mapping[device["fc"]] = device
     return device_id_mapping
 
-def get_device(db, device_id):
+
+def get_device(db, device_id) -> Optional[McdDevice]:
     device = db["device_history"].find_one({"_id": ObjectId(device_id)})
     return device
+
+def get_recent_device(db, prjid, device_id) -> Tuple[McdDevice, str]:
+    """Get latest device values if they exist"""
+    snapshot = get_recent_snapshot(db, prjid)
+    if snapshot:
+        return {}, f"snapshot for {prjid} does not exist"
+    if ObjectId(device_id) in snapshot["devices"]:
+        return get_device(db, device_id), ""
+
+    # device was not found in the recent snapshot
+    return {}, f"device {device_id} was not found in the recent snapshot"

@@ -3,6 +3,7 @@ Web service endpoints for licco
 """
 import datetime
 import os
+import uuid
 from io import BytesIO
 import tempfile
 from functools import wraps
@@ -279,22 +280,23 @@ def svc_update_fc_in_project(prjid, fftid):
     Update the values of a functional component in a project
     """
     fcupdate = request.json
-
     fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
-    #status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
-    #if not status:
-    #    return json_error(msg)
 
-    discussion = fcupdate.get('discussion', '')
+    discussion = fcupdate.get('discussion', None)
     if discussion:
+        if not isinstance(discussion, str):
+            return json_error(f"discussion field should be a string, but got {type(discussion).__name__}")
+
         # our fft update expects an array of discussion comments hence the transform into an array of objects
         fcupdate['discussion'] = [{
+            'id': str(uuid.uuid4()),
             'author': userid,
-            'comment': discussion
+            'comment': discussion,
+            'created': datetime.datetime.now(datetime.UTC)
         }]
 
-    status, errormsg, device_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
+    status, errormsg, changelog, device_id = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
     if not status:
         return json_error(errormsg)
     fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=device_id)
