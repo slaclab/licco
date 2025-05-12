@@ -160,8 +160,8 @@ def test_create_delete_project_admin(db):
     user_id = "test_user"
 
     # add fft to the project
-    device_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'project_id': prjid, 'comment': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, device_id = mcd_model.update_fft_in_project(db, user_id, prjid, device_update)
+    device_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'project_id': prjid, 'comments': 'some comment', 'nom_ang_x': 1.23})
+    ok, err, changelog, device_id = mcd_model.update_device_in_project(db, user_id, prjid, device_update)
     assert err == ""
     # create a snapshot with the new fft/device
     mcd_model.create_new_snapshot(db, projectid=prjid, devices=[device_id], userid=user_id)
@@ -270,8 +270,8 @@ def test_clone_project(db):
     user_id = 'test_author'
 
     # add ffts to the project
-    device = create_test_device({'fc': "TESTFC", "fg": "TESTFG", 'comment': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prjid, device)
+    device = create_test_device({'fc': "TESTFC", "fg": "TESTFG", 'comments': 'some comment', 'nom_ang_x': 1.23})
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, device)
     assert err == ""
 
     # Create a snapshot for the new project
@@ -296,7 +296,7 @@ def test_clone_project(db):
     fft = list(ffts.values())[0]
     assert fft.get('nom_ang_y', None) is None, "nom_ang_y was not set and should be None"
     assert fft['nom_ang_x'] == 1.23
-    assert fft['comment'] == 'some comment'
+    assert fft['comments'] == 'some comment'
     assert len(fft['discussion']) == 1
     assert fft['discussion'][0]['comment'] == 'my comment'
 
@@ -310,8 +310,8 @@ def test_copy_fft_values(db):
     assert b
 
     # add fft to 'a'
-    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comment': 'project_a comment'})
-    ok, err, changelog, device_id = mcd_model.update_fft_in_project(db, user_id, a["_id"], fft_update)
+    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comments': 'project_a comment'})
+    ok, err, changelog, device_id = mcd_model.update_device_in_project(db, user_id, a["_id"], fft_update)
     assert err == ""
     assert ok
     # create a snapshot with the new fft/device
@@ -321,20 +321,20 @@ def test_copy_fft_values(db):
     b_ffts = mcd_model.get_project_ffts(db, b["_id"])
     assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
     b_fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 0.51})
-    ok, err, changelog, b_device_id = mcd_model.update_fft_in_project(db, user_id, b["_id"], b_fft_update)
+    ok, err, changelog, b_device_id = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=b["_id"], devices=[b_device_id], userid=user_id)
 
     device_fc = fft_update['fc']
-    updated_ffts, err = mcd_model.copy_device_values_from_project(db, "test_user", a["_id"], b["_id"], device_fc, ['nom_ang_x', 'comment'])
+    updated_ffts, err = mcd_model.copy_device_values_from_project(db, "test_user", a["_id"], b["_id"], device_fc, ['nom_ang_x', 'comments'])
     assert err == ""
 
     # after copy there should be fft with the chosen fields within the 'b' project
     b_ffts = mcd_model.get_project_ffts(db, b["_id"])
     assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
     fft = list(b_ffts.values())[0]
-    assert fft['comment'] == 'project_a comment'
+    assert fft['comments'] == 'project_a comment'
     assert fft['nom_ang_x'] == 2.45
     assert fft.get('nom_ang_y', None) is None, "nom_ang_y should not exist in copied fft, because it wasn't selected for copying"
 
@@ -346,8 +346,8 @@ def test_change_of_fft_in_a_project(db):
     assert err == ""
 
     # create fft device with some data
-    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'comment': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20})
-    _, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prj["_id"], fft_update)
+    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20})
+    _, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prj["_id"], fft_update)
     assert err == ""
 
     # Create a snapshot for the new project
@@ -362,7 +362,7 @@ def test_change_of_fft_in_a_project(db):
     new_fc = "TESTFC_2"
     update = {"_id": dev_id, "fc": new_fc, "nom_ang_y": 1.40, "discussion": [{"author": "editor_user", "created": datetime.datetime.now(datetime.UTC), "comment": "Editor comment", "id": str(uuid.uuid4())}]}
 
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "editor_user", prj["_id"], update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "editor_user", prj["_id"], update)
     assert err == ""
     assert ok
     assert len(changelog) > 0
@@ -373,7 +373,7 @@ def test_change_of_fft_in_a_project(db):
     ffts = mcd_model.get_project_ffts(db, prj["_id"])
     assert len(ffts) == 1, "there should be only 1 fft stored"
     fft = list(ffts.values())[0]
-    assert fft["comment"] == "initial comment"
+    assert fft["comments"] == "initial comment"
     assert fft["nom_ang_x"] == 2.45
     assert fft["nom_ang_y"] == 1.40, "nom_ang_y did not change but it should"
 
@@ -481,8 +481,8 @@ def test_add_device_to_project(db):
     assert len(project_ffts) == 0, "there should be no ffts in a new project"
 
     # add fft change
-    fft_update = create_test_device({'fc': 'TESTFC', 'fg':'TESTFG', 'comment': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    fft_update = create_test_device({'fc': 'TESTFC', 'fg':'TESTFG', 'comments': 'some comment', 'nom_ang_x': 1.23})
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert err == "", "there should be no error"
     assert ok, "fft should be inserted"
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], userid='test_user')
@@ -493,7 +493,7 @@ def test_add_device_to_project(db):
     inserted_fft = project_ffts['TESTFC']
     # str conversion is to handle pymongo ObjectIDs
     assert str(inserted_fft["_id"]) == str(dev_id)
-    assert inserted_fft["comment"] == fft_update["comment"]
+    assert inserted_fft["comments"] == fft_update["comments"]
     assert inserted_fft["nom_ang_x"] == pytest.approx(fft_update["nom_ang_x"], "0.001")
     assert len(inserted_fft["discussion"]) == 0, "there should be no discussion comments"
 
@@ -503,12 +503,12 @@ def test_add_unchanged_fft_to_project(db):
     project = create_test_project(db, "test_user", "test_add_unchanged_fft_to_project", "")
 
     fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23, 'nom_ang_y': 2.54})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert err == ""
     assert ok
     assert len(changelog) > 0
 
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert len(changelog) == 0
     assert err == ""
     assert ok
@@ -520,7 +520,7 @@ def test_invalid_fft_due_to_missing_attributes(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_missing_attributes", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'state': 'Installed', 'nom_ang_x': 123}
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "FFTs should remain in the Conceptual state while the dimensions are still being determined."
 
@@ -531,7 +531,7 @@ def test_invalid_fft_due_to_invalid_value(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_value", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 123}
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "invalid range for nom_ang_x: expected range [-3.14, 3.14], but got 123.0"
 
@@ -541,7 +541,7 @@ def test_invalid_fft_due_to_invalid_type(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_type", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 'this is a string'}
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "Wrong type - nom_ang_x, ('this is a string')"
 
@@ -552,7 +552,7 @@ def test_remove_fft_from_project(db):
 
     # insert new fft
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], userid='test_user')
@@ -577,7 +577,7 @@ def test_get_project_ffts(db):
 
     # insert new fft
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], changelog=changelog, userid='test_user')
@@ -631,7 +631,7 @@ def test_get_project_ffts_after_timestamp(db):
     # insert new fft
     timestamp = datetime.datetime.now(tz=pytz.UTC) - datetime.timedelta(seconds=1)
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", prjid, fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], userid='test_user')
@@ -659,7 +659,7 @@ def test_create_delete_comment(db):
     # insert and verify a comment insertion
 
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "test_user", project["_id"], fft_update)
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], userid='test_user')
@@ -708,8 +708,8 @@ def test_project_approval_workflow(db):
     email_sender.clear()
 
     # an editor user should be able to save an fft
-    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', "tc_part_no": "PART 123"})
-    ok, err, changelog, dev_id = mcd_model.update_fft_in_project(db, "editor_user", project["_id"], fft_update)
+    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', "tc_part_no": "PART 123"})
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "editor_user", project["_id"], fft_update)
     assert err == ""
     assert ok
     mcd_model.create_new_snapshot(db, projectid=project["_id"], devices=[dev_id], userid='editor_user')
@@ -957,6 +957,8 @@ AT2L0,GAS,3213221,,,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
         assert err == ""
         assert ok
         assert counter.success == 2
+        assert counter.fail == 0
+        assert counter.ignored == 0
 
     ok, err, csv = mcd_import.export_project(db, prjid)
     assert ok

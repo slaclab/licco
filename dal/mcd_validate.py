@@ -18,6 +18,7 @@ class FieldType(enum.Enum):
     STRING = auto()
     BOOL = auto()
     ISO_DATE = auto()
+    STRING_ARRAY = auto()
     CUSTOM_VALIDATOR = auto()
 
 
@@ -70,18 +71,28 @@ class FieldValidator:
     @staticmethod
     def default_fromstr(field_type: FieldType, value: any):
         if field_type == FieldType.FLOAT:
+            if value == '':
+                return None
             return float(value)
         if field_type == FieldType.INT:
+            if value == '':
+                return None
             return int(value)
         if field_type == FieldType.STRING:
             return str(value)
+        if field_type == FieldType.STRING_ARRAY:
+            if isinstance(value, str):
+                return [e.strip() for e in value.split(",")]
+            if isinstance(value, List):
+                return [str(e).strip() for e in value]
+            raise Exception(f"expected an array of strings, but got {type(value).__name__}")
         if field_type == FieldType.ISO_DATE:
             return str2date(value)
         if field_type == FieldType.BOOL:
             return bool(value)
         raise Exception(f"Unhandled field type {field_type.name} value from_str converter")
 
-    def validate(self, value: any) -> str:
+    def validate(self, value: any, value_should_exist: bool = True) -> str:
         try:
             if self.data_type == FieldType.CUSTOM_VALIDATOR and not self.validator:
                 return f"field {self.name} demands a custom validator, but found none: this is a programming bug"
@@ -95,16 +106,36 @@ class FieldValidator:
             else:
                 val = self.default_fromstr(self.data_type, value)
 
+            # some fields can be empty in certain state, unless the outside validator determined otherwise
+            if val is None:
+                if self.required.value & Required.ALWAYS.value > 0:
+                    # empty field is not an error, unless the field is required
+                    return f"invalid '{self.name}' value: value should be present"
+
+                if value_should_exist:
+                    return f"invalid '{self.name}' value: value should be present"
+
+                # value doesn't have to exist, hence we don't further validate it
+                return ""
+
             # validate range if possible
             if self.range and self.data_type in [FieldType.INT, FieldType.FLOAT]:
                 if val < self.range[0] or val > self.range[1]:
                     return f"invalid range of '{self.name}' value: expected value range [{self.range[0]}, {self.range[1]}], but got {val}"
 
             if self.allowed_values:
-                if val not in self.allowed_values:
-                    return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
+                if self.data_type == FieldType.STRING_ARRAY:
+                    invalid_values = []
+                    for e in val:
+                        if e not in self.allowed_values:
+                            invalid_values.append(e)
+                    if invalid_values:
+                        return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
+                else:
+                    if val not in self.allowed_values:
+                        return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
 
-            if self.data_type == FieldType.STRING and self.required & Required.ALWAYS:
+            if self.data_type == FieldType.STRING and self.required.value & Required.ALWAYS.value != 0:
                 if not val:
                     return f"invalid '{self.name}' value: value can't be empty"
 
@@ -124,13 +155,13 @@ class Validator:
         device_state = device_fields.get("state", None)
 
         for name, validator in self.fields.items():
-            if validator.required & Required.ALWAYS:
+            if validator.required.value & Required.ALWAYS.value > 0:
                 required_fields.add(name)
                 continue
 
             # NOTE: if device state does not exist (is None), an error will be raised
             # anyway for missing "state" since it's an ALWAYS required field
-            if device_state and validator.required & Required.DEVICE_DEPLOYED:
+            if device_state and validator.required.value & Required.DEVICE_DEPLOYED.value > 0:
                 if device_state != DeviceState.Conceptual.value:
                     required_fields.add(name)
                     continue
@@ -154,9 +185,10 @@ class Validator:
         errors = []
         for field_name, field_val in device_fields.items():
             # remove field from required fields, so we know whether all required fields were present
+            value_should_exist = field_name in required_fields
             required_fields.discard(field_name)
 
-            err = self.validate_field(field_name, field_val)
+            err = self.validate_field(field_name, field_val, value_should_exist)
             if err:
                 errors.append(err)
 
@@ -187,13 +219,12 @@ class Validator:
         # successful device validation
         return ""
 
-
-    def validate_field(self, field: str, val: any) -> str:
+    def validate_field(self, field: str, val: any, value_should_exist: bool = True) -> str:
         validator = self.fields.get(field, None)
         if validator is None:
             return f"unexpected field '{field}'"
 
-        err = validator.validate(val)
+        err = validator.validate(val, value_should_exist)
         return err
 
 
@@ -203,7 +234,7 @@ class NoOpValidator(Validator):
     def validate_device(self, component_fields: Dict[str, any]):
         return ""
 
-    def validate_field(self, field: str, val: any) -> str:
+    def validate_field(self, field: str, val: any, value_should_exist: bool = True) -> str:
         return ""
 
 class UnsetDeviceValidator(Validator):
@@ -213,7 +244,7 @@ class UnsetDeviceValidator(Validator):
     def validate_device(self, component_fields: Dict[str, any]):
         return f"invalid device type {DeviceType.UNSET} (unset device): you have probably forgot to set a valid device type"
 
-    def validate_field(self, field: str, val: any) -> str:
+    def validate_field(self, field: str, val: any, value_should_exist: bool = True) -> str:
         return f"invalid device type {DeviceType.UNSET} (unset device): you have probably forgot to set a valid device type"
 
 
@@ -297,9 +328,9 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='tc_part_no', label="TC Part No.", data_type=FieldType.STRING),
     FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in DeviceState], required=Required.ALWAYS),
     FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.STRING),
-    FieldValidator(name='comment', label="Comment", data_type=FieldType.STRING),
-    FieldValidator(name='location', label="Location", data_type=FieldType.STRING, allowed_values=MCD_LOCATIONS),
-    FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING, allowed_values=MCD_BEAMLINES),
+    FieldValidator(name='comments', label="Comments", data_type=FieldType.STRING),
+    FieldValidator(name='area', label="Area", data_type=FieldType.STRING, allowed_values=MCD_LOCATIONS),
+    FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING_ARRAY, allowed_values=MCD_BEAMLINES),
 
     FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
     FieldValidator(name='nom_loc_y', label='Nom Loc Y', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),
@@ -455,7 +486,7 @@ class DeviceValidator(Validator):
         self.name = "Device Validator"
         self.fields = {}
 
-    def validate_field(self, field: str, val: any) -> str:
+    def validate_field(self, field: str, val: any, value_should_exist: bool = True) -> str:
         raise Exception("this method should never be called on device validator: this is a programming bug")
 
     def validate_device(self, device: McdDevice):

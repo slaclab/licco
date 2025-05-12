@@ -296,7 +296,7 @@ def svc_update_fc_in_project(prjid, fftid):
             'created': datetime.datetime.now(datetime.UTC)
         }]
 
-    status, errormsg, changelog, device_id = mcd_model.update_fft_in_project(licco_db, userid, prjid, fcupdate)
+    status, errormsg, changelog, device_id = mcd_model.update_device_in_project(licco_db, userid, prjid, fcupdate)
     if not status:
         return json_error(errormsg)
     fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=device_id)

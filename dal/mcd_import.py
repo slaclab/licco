@@ -7,6 +7,7 @@ import re
 
 from dal import mcd_model, mcd_datatypes
 from dal.mcd_datatypes import MongoDb
+from dal.mcd_validate import DeviceType
 from dal.utils import ImportCounter
 
 @dataclass
@@ -86,6 +87,7 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     # Pull out columns we define in keymap
     for nm, fc_list in fcs.items():
         for fc in fc_list:
+            # TODO: use validators to parse the data out???
             fcupload = {}
             for k, v in mcd_datatypes.KEYMAP.items():
                 if k not in fc:
@@ -93,8 +95,18 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
                 fcupload[v] = fc[k]
             fcuploads.append(fcupload)
 
-    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid=userid, prjid=prjid, devices=fcuploads, def_logger=imp_log )
+    # in mcd 1.0 we didn't have device type specified, therefore we fallback to mcd device type
+    for fc in fcuploads:
+        device_type = fc.get('device_type', None)
+        if device_type is None:
+            fc['device_type'] = DeviceType.MCD.value
 
+    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid=userid, prjid=prjid, devices=fcuploads, def_logger=imp_log )
+    if errormsg:
+        print(errormsg)
+
+    # TODO: handle the error somehow...
+    #
     # Include imports failed from bad FC/FGs
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     if update_status:

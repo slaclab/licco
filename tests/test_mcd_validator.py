@@ -17,6 +17,32 @@ def test_validate_field__unknown_value():
     err = validator_mcd.validate_field("state", "XXXX")
     assert err == "invalid 'state' value 'XXXX': expected values are ['Conceptual', 'Planned', 'Commissioned', 'ReadyForInstallation', 'Installed', 'Operational', 'NonOperational', 'Decommissioned', 'Removed']"
 
+def test_validate_field__empty_number_field():
+    err = validator_mcd.validate_field("nom_ang_x", "1.0")
+    assert err == "", "string field should not return an error"
+
+    # empty values are not allowed by default
+    err = validator_mcd.validate_field("nom_ang_x", "")
+    assert err == "invalid 'nom_ang_x' value: value should be present"
+
+    # no error if field is not required
+    err = validator_mcd.validate_field("nom_ang_x", "", value_should_exist=False)
+    assert err == ""
+
+def test_validate_beamline_field():
+    err = validator_mcd.validate_field("beamline", "TMO, RIX")
+    assert err == ""
+
+    err = validator_mcd.validate_field("beamline", ["TMO", "RIX"])
+    assert err == ""
+
+def test_validate_invalid_beamline_field():
+    err = validator_mcd.validate_field("beamline", "YYY, ZZZ")
+    assert f"invalid 'beamline' value '['YYY', 'ZZZ']': expected values are" in err
+
+    err = validator_mcd.validate_field("beamline", ["YYY", "ZZZ"])
+    assert f"invalid 'beamline' value '['YYY', 'ZZZ']': expected values are" in err
+
 def test_validate_device__missing_always_required_fields():
     now = datetime.datetime.now()
     partial_device_data = {'fc': 'AA10', 'created': now, 'project_id': 'aa', 'device_type': DeviceType.MCD.value, 'nom_ang_x': 1.23}

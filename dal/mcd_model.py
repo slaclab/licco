@@ -373,12 +373,15 @@ def create_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[s
     return device_id, ""
 
 
-def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any],
-                          snapshot_fcs: List[str] = None,
-                          modification_time=None, remove_discussion_comments=None,
-                          current_project_attributes=None) -> Tuple[bool, str, Dict[str, any], str]:
+def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: Dict[str, any],
+                             snapshot_fcs: List[str] = None,
+                             modification_time=None, remove_discussion_comments=None,
+                             current_project_attributes=None) -> Tuple[bool, str, Dict[str, any], str]:
     """
-    Update the value(s) of an FFT in a project
+    Update the value(s) of a device in a project. In case of any changes (or if it's a new device) it will be saved
+    in a db, but the callee has to persist it to snapshot manually. Without persisting it in a project snapshot
+    this device will not be visible as a project device.
+
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and newly created device_id
     """
     # this is an internal method and at this stage we already know that the user is allowed to edit the project
@@ -487,7 +490,7 @@ def update_fft_in_project(licco_db: MongoDb, userid: str, prjid: str, fcupdate: 
     return True, "", changelog, ""
 
 
-def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, def_logger=None, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
+def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, def_logger=None, keep_going_on_error=False, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
     """
     Insert multiple FFTs into a project
     """
@@ -514,24 +517,23 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         if not allowed_to_update:
             return False, f"user '{userid}' is not allowed to update a project {project['name']}", ImportCounter()
 
-    # TODO: ROBUSTNESS: we should validate devices before insertion: right now it's possible that only some of the
-    #       devices will be inserted, while the ones with errors will not. This leaves the db in an inconsistent state.
-    #
-
     project_devices = get_project_ffts(licco_db, prjid)
 
     new_ids = []
     changes = []
     # Try to add each device/fft to project
     for dev in devices:
-        status, errormsg, changelog, device_id = update_fft_in_project(licco_db, userid, prjid, dev,
-                                                           current_project_attributes=project_devices,
-                                                           remove_discussion_comments=remove_discussion_comments)
+        status, errormsg, changelog, device_id = update_device_in_project(licco_db, userid, prjid, dev,
+                                                                          current_project_attributes=project_devices,
+                                                                          remove_discussion_comments=remove_discussion_comments)
         def_logger.info(f"Import happened for {dev}. ID number {device_id}")
 
         if not status: # failed to insert a device
             insert_counter.fail += 1
-            return False, errormsg, insert_counter
+            if keep_going_on_error:
+                continue
+            else:
+                return False, errormsg, insert_counter
 
         if len(changelog) == 0:
             # there were no changes
