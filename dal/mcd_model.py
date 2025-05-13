@@ -159,7 +159,7 @@ def get_project(licco_db: MongoDb, id: str) -> Optional[McdProject]:
     return prj
 
 
-def get_project_ffts(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None, fftid=None):
+def get_project_devices(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None, fftid=None):
     """
     Get the current devices with their data from a project id
     """
@@ -578,23 +578,26 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         if not allowed_to_update:
             return False, f"user '{userid}' is not allowed to update a project {project['name']}", ImportCounter()
 
-    project_devices = get_project_ffts(licco_db, prjid)
+    project_devices = get_project_devices(licco_db, prjid)
 
     new_ids = []
     changes = []
+    errors = []
     # Try to add each device/fft to project
     for dev in devices:
         status, errormsg, changelog, device_id = update_device_in_project(licco_db, userid, prjid, dev,
                                                                           current_project_attributes=project_devices,
                                                                           remove_discussion_comments=remove_discussion_comments,
                                                                           create_snapshot=False)
-        def_logger.info(f"Import happened for {dev}. ID number {device_id}")
+        def_logger.info(f"Import happened for {dev.get('fc', '')}. ID number {device_id}")
+        if errormsg:
+            errors.append(errormsg)
 
         if not status: # failed to insert a device
             insert_counter.fail += 1
             terminate = not keep_going_on_error
             if terminate:
-                return False, errormsg, insert_counter
+                return False, "\n".join(errors), insert_counter
             continue
 
         if len(changelog) == 0:
@@ -611,7 +614,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         new_ids.append(project_devices[remain_dev]["_id"])
 
     create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=new_ids, changelog=changes)
-    return True, "", insert_counter
+    return True, "\n".join(errors), insert_counter
 
 
 def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str]|List[ObjectId], changelog=None, snapshot_name=None):
@@ -927,7 +930,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     # master project should not inherit old discussion comments from a submitted project, hence the removal flag
     status, errormsg, update_status = update_ffts_in_project(licco_db, userid,
                                                              master_project["_id"],
-                                                             get_project_ffts(licco_db, prjid),
+                                                             get_project_devices(licco_db, prjid),
                                                              remove_discussion_comments=True,
                                                              ignore_user_permission_check=True)
     if not status:

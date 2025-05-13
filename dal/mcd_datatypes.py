@@ -45,7 +45,7 @@ class McdSnapshot(TypedDict):
 MCD_LOCATIONS = ["EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]
 MCD_BEAMLINES = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]
 
-KEYMAP = {
+MCD_KEYMAP = {
     # Column names defined in confluence
     "FC": "fc",
     "Fungible": "fg",
@@ -63,7 +63,7 @@ KEYMAP = {
     "Must_Ray_Trace": "ray_trace",
     "Comments": "comments"
 }
-KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
+MCD_KEYMAP_REVERSE = {value: key for key, value in MCD_KEYMAP.items()}
 
 
 class DeviceState(Enum):

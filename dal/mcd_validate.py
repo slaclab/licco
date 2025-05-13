@@ -3,7 +3,7 @@ import enum
 from enum import auto
 import math
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional, List
+from typing import Dict, Callable, Optional, List, Tuple
 
 import pytz
 
@@ -69,24 +69,58 @@ class FieldValidator:
     validator: Optional[Callable[[any], str]] = None  # custom validator if necessary
 
     @staticmethod
+    def parse_fromstr(field_type: FieldType, value: any):
+        """Parse the value into its right type. This method should be used when parsing user input (e.g., csv file
+        import) into the right type of each field.
+        """
+        if field_type == field_type.ISO_DATE:
+            return str2date(value)
+
+        if field_type == field_type.STRING_ARRAY:
+            if isinstance(value, str):
+                if value.strip() == '':
+                    return []
+                return [e.strip() for e in value.split(",")]
+            else:
+                return FieldValidator.default_fromstr(field_type, value)
+
+        # for most fields we simply cast the value (and use a default python parser)
+        return FieldValidator.default_fromstr(field_type, value)
+
+    def parse_value(self, value) -> Tuple[any, str]:
+        try:
+            parsed_value = FieldValidator.parse_fromstr(self.data_type, value)
+            return parsed_value, ""
+        except Exception as e:
+            return None, str(e)
+
+
+    @staticmethod
     def default_fromstr(field_type: FieldType, value: any):
+        """
+        Cast value into the right type or throw an exception if the value is not of the right type:
+        this exception will be caught by the validator in order to generate a nice error message.
+
+        NOTE: anything passed to this method should be of the right type.
+        """
         if field_type == FieldType.FLOAT:
-            if value == '':
+            if value == '' or value is None:
                 return None
             return float(value)
         if field_type == FieldType.INT:
-            if value == '':
+            if value == '' or value is None:
                 return None
             return int(value)
         if field_type == FieldType.STRING:
             return str(value)
         if field_type == FieldType.STRING_ARRAY:
-            if isinstance(value, str):
-                return [e.strip() for e in value.split(",")]
+            if value is None or isinstance(value, str) and value.strip() == '':
+                return []
             if isinstance(value, List):
                 return [str(e).strip() for e in value]
-            raise Exception(f"expected an array of strings, but got {type(value).__name__}")
+            raise Exception(f"expected an array of strings, but got {type(value).__name__}: '{value}'", )
         if field_type == FieldType.ISO_DATE:
+            # TODO: we should probably enforce datetimes here... (instead of parsing from string)
             return str2date(value)
         if field_type == FieldType.BOOL:
             return bool(value)
@@ -171,6 +205,7 @@ class Validator:
             # Such validators should override the validation method and add additional fields...
         return required_fields
 
+
     def validate_device(self, device_fields: McdDevice):
         """Validate all fields of a component (e.g., a flat mirror)."""
         if not isinstance(device_fields, dict):
@@ -226,6 +261,16 @@ class Validator:
 
         err = validator.validate(val, value_should_exist)
         return err
+
+    def parse_field(self, field: str, val: any, value_should_exist: bool = True) -> Tuple[any, str]:
+        validator = self.fields.get(field, None)
+        if validator is None:
+            return None, f"unexpected field '{field}'"
+
+        parsed_value, err = validator.parse_value(val)
+        if err:
+            return None, f"invalid field '{field}' value: {err}"
+        return parsed_value, ""
 
 
 class NoOpValidator(Validator):
@@ -312,6 +357,7 @@ common_component_fields = build_validator_fields([
     FieldValidator(name="_id", label="Mongo Document ID", data_type=FieldType.STRING, required=Required.OPTIONAL),
     # project id to which a device belongs to: not sure if we need to keep track of that for now?
     FieldValidator(name="project_id", label="Project ID", data_type=FieldType.STRING, required=Required.ALWAYS),
+    # TODO: do we really need device_id?
     # device id (uuid) that is here just so we can keep track of which device that was
     FieldValidator(name="device_id", label="Device ID", data_type=FieldType.STRING, required=Required.ALWAYS),
     # marks device type (mcd, mirror, aperture, ...)

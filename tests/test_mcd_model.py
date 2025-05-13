@@ -176,7 +176,7 @@ def test_create_delete_project_admin(db):
     assert err == ""
 
     # verify inserted ffts
-    project_ffts = mcd_model.get_project_ffts(db, prjid)
+    project_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
     assert len(project_ffts[device_update['fc']]['discussion']) == 1, "there should be only 1 comment there"
     comment = project_ffts[device_update['fc']]['discussion'][0]
@@ -190,7 +190,7 @@ def test_create_delete_project_admin(db):
     assert project_after_delete is None, "project should not be found after an admin has deleted it"
 
     # there should be no ffts for a deleted project
-    out = mcd_model.get_project_ffts(db, prjid)
+    out = mcd_model.get_project_devices(db, prjid)
     assert len(out) == 0, "there should be no ffts for the deleted project"
 
 
@@ -286,7 +286,7 @@ def test_clone_project(db):
     assert project['description'] != cloned_project['description']
 
     # in cloned project, there should be 1 fft with the same fields and same discussion comments
-    ffts = mcd_model.get_project_ffts(db, cloned_project["_id"])
+    ffts = mcd_model.get_project_devices(db, cloned_project["_id"])
     assert len(ffts) == 1
     fft = list(ffts.values())[0]
     assert fft.get('nom_ang_y', None) is None, "nom_ang_y was not set and should be None"
@@ -311,7 +311,7 @@ def test_copy_fft_values(db):
     assert ok
 
     # 'b' should have no fft
-    b_ffts = mcd_model.get_project_ffts(db, b["_id"])
+    b_ffts = mcd_model.get_project_devices(db, b["_id"])
     assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
     b_fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 0.51})
     ok, err, changelog, b_device_id = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
@@ -323,7 +323,7 @@ def test_copy_fft_values(db):
     assert err == ""
 
     # after copy there should be fft with the chosen fields within the 'b' project
-    b_ffts = mcd_model.get_project_ffts(db, b["_id"])
+    b_ffts = mcd_model.get_project_devices(db, b["_id"])
     assert len(b_ffts) == 1, "there should be 1 fft present in 'b' after copy"
     fft = list(b_ffts.values())[0]
     assert fft['comments'] == 'project_a comment'
@@ -356,7 +356,7 @@ def test_change_of_fft_in_a_project(db):
     assert err == ""
 
     # verify that changes were applied and 'fc' has changed
-    ffts = mcd_model.get_project_ffts(db, prj["_id"])
+    ffts = mcd_model.get_project_devices(db, prj["_id"])
     assert len(ffts) == 1, "there should be only 1 fft stored"
     fft = list(ffts.values())[0]
     assert fft["comments"] == "initial comment"
@@ -463,7 +463,7 @@ def test_add_device_to_project(db):
     project = create_test_project(db, "test_user", "test_add_device_to_project", "")
 
     # get ffts for project, there should be none
-    project_ffts = mcd_model.get_project_ffts(db, project["_id"])
+    project_ffts = mcd_model.get_project_devices(db, project["_id"])
     assert len(project_ffts) == 0, "there should be no ffts in a new project"
 
     # add fft change
@@ -472,7 +472,7 @@ def test_add_device_to_project(db):
     assert err == "", "there should be no error"
     assert ok, "fft should be inserted"
 
-    project_ffts = mcd_model.get_project_ffts(db, project["_id"])
+    project_ffts = mcd_model.get_project_devices(db, project["_id"])
     assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
 
     inserted_fft = project_ffts['TESTFC']
@@ -548,7 +548,7 @@ def test_remove_fft_from_project(db):
     assert err == ""
     assert ok
 
-    inserted_ffts = mcd_model.get_project_ffts(db, prjid)
+    inserted_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(inserted_ffts) == 1
     inserted_fft = inserted_ffts[fft_update['fc']]
     assert str(inserted_fft["_id"]) == str(dev_id)
@@ -558,7 +558,7 @@ def test_remove_fft_from_project(db):
     assert err == ""
     assert ok
 
-    project_ffts = mcd_model.get_project_ffts(db, prjid)
+    project_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
 
 
@@ -572,7 +572,7 @@ def test_get_project_ffts(db):
     assert err == ""
     assert ok
 
-    inserted_ffts = mcd_model.get_project_ffts(db, prjid)
+    inserted_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(inserted_ffts) == 1
 
     fft = inserted_ffts[fft_update['fc']]
@@ -626,11 +626,11 @@ def test_get_project_ffts_after_timestamp(db):
     assert ok
 
 
-    ffts = mcd_model.get_project_ffts(db, prjid, asoftimestamp=timestamp)
+    ffts = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
     #assert len(ffts) == 0, "there should be no fft before insertion"
 
     timestamp = datetime.datetime.now(tz=pytz.UTC)
-    ffts = mcd_model.get_project_ffts(db, prjid, asoftimestamp=timestamp)
+    ffts = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
     #assert len(ffts) == 1, "there should be 1 fft insert"
 
     #fft = ffts[fft_id]
@@ -657,7 +657,7 @@ def test_create_delete_comment(db):
     assert err == ""
     assert ok
 
-    ffts = mcd_model.get_project_ffts(db, project["_id"])
+    ffts = mcd_model.get_project_devices(db, project["_id"])
     assert len(ffts) == 1
     fft = ffts[fft_update['fc']]
     assert len(fft["discussion"]) == 1
@@ -671,7 +671,7 @@ def test_create_delete_comment(db):
     assert ok
 
     # verify that comment was deleted
-    ffts = mcd_model.get_project_ffts(db, project["_id"])
+    ffts = mcd_model.get_project_devices(db, project["_id"])
     assert len(ffts) == 1
     fft = ffts[fft_update['fc']]
     assert len(fft['discussion']) == 0, "fft comment should be deleted"
@@ -869,16 +869,16 @@ def test_import_csv_into_a_project(db):
     project = create_test_project(db, "test_user", "test_import_csv_into_a_project", "")
     prjid = project["_id"]
 
-    ffts = mcd_model.get_project_ffts(db, prjid)
+    ffts = mcd_model.get_project_devices(db, prjid)
     assert len(ffts) == 0, "There should be no project ffts for a freshly created project"
 
     # import via csv endpoint
     import_csv = """
 Machine Config Database,,,
 
-FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
-AT1L0,COMBO,12324,SOME_TEST_STAND,Conceptual,TEST,1.21,0.21,2.213,1.231,,,
-AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
+FC,Fungible,TC_part_no,Stand,Area,Beamline,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace
+AT1L0,COMBO,12324,SOME_TEST_STAND,my area,"RIX, TMO",Conceptual,TEST,1.21,0.21,2.213,1.231,,,
+AT2L0,GAS,3213221,,,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
 """
 
     with io.StringIO() as stream:
@@ -890,45 +890,45 @@ AT2L0,GAS,3213221,,Conceptual,GAS ATTENUATOR,,,,1.23,-1.25,-0.895304,1
         assert counter.success == 2
         assert counter.fail == 0
         assert counter.ignored == 0
-        headers = "FC,Fungible,TC_part_no,Stand,State,Comments,LCLS_Z_loc,LCLS_X_loc,LCLS_Y_loc,LCLS_Z_roll,LCLS_X_pitch,LCLS_Y_yaw,Must_Ray_Trace"
+
+        headers = "FC, Fungible, TC_part_no, Stand, Area, Beamline, State, Comments, LCLS_Z_loc, LCLS_X_loc, LCLS_Y_loc, LCLS_Z_roll, LCLS_X_pitch, LCLS_Y_yaw, Must_Ray_Trace"
         assert counter.headers == len(headers.split(",")), "wrong number of csv fields"
 
-        log = stream.getvalue()
         # validate export log?
+        log = stream.getvalue()
 
         # check if fields were actually inserted in the db
-        got_ffts = mcd_model.get_project_ffts(db, prjid)
+        got_ffts = mcd_model.get_project_devices(db, prjid)
         assert len(got_ffts) == 2, "There should be 2 ffts inserted into a project"
 
-        expected_ffts = {
-            'COMBO': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
+        expected_device = {
+            'AT1L0': {'fc': 'AT1L0', 'fg': 'COMBO', 'tc_part_no': '12324', 'stand': 'SOME_TEST_STAND',
                       'state': 'Conceptual', 'comments': 'TEST',
+                      'area': 'my area', 'beamline': ['RIX', 'TMO'],
                       'nom_loc_z': 1.21, 'nom_loc_x': 0.21, 'nom_loc_y': 2.213, 'nom_ang_z': 1.231},
-            'GAS': {'fc': 'AT2L0', 'fg': 'GAS', 'tc_part_no': '3213221',
-                    'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
-                    'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
+            'AT2L0': {'fc': 'AT2L0', 'fg': 'GAS', 'tc_part_no': '3213221', 'stand': '',
+                      'state': 'Conceptual', 'comments': 'GAS ATTENUATOR',
+                      'area': '', 'beamline': [],
+                      'nom_ang_z': 1.23, 'nom_ang_x': -1.25, 'nom_ang_y': -0.895304, 'ray_trace': 1},
         }
 
         # assert fft values
-        for expected in expected_ffts.values():
+        for expected in expected_device.values():
             fc = expected['fc']
             assert fc in got_ffts, f"{expected['fc']} fc was not found in ffts: fft was not inserted correctly"
             got = got_ffts[fc]
 
-            for field in mcd_datatypes.KEYMAP.values():
-                #TODO: some of these are breaking because of a lack of type validation. 
-                #TODO: for now, converting both to strings to make sure value is the same.
-                # empty fields are by default set to '' (not None) even if they are numeric fields. Is this okay?
-                assert str(got.get(field, '')) == str(expected.get(field, '')), f"{fc}: invalid field value '{field}'"
+            for field in mcd_datatypes.MCD_KEYMAP.values():
+                assert got.get(field, None) == expected.get(field, None), f"{fc}: invalid field value '{field}'"
 
-        assert len(got_ffts) == len(expected_ffts), "wrong number of fft fetched from db"
+        assert len(got_ffts) == len(expected_device), "wrong number of fft fetched from db"
 
 
 def test_export_csv_from_a_project(db):
     project = create_test_project(db, "test_user", "test_export_from_a_project", "")
     prjid = project["_id"]
 
-    ffts = mcd_model.get_project_ffts(db, prjid)
+    ffts = mcd_model.get_project_devices(db, prjid)
     assert len(ffts) == 0, "There should be no project ffts for a freshly created project"
 
     # import via csv endpoint (import should be possible in any order of columns)

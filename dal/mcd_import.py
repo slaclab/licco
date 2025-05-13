@@ -1,11 +1,12 @@
 import csv
+import uuid
 from dataclasses import dataclass
 from io import StringIO
 from logging import Logger
-from typing import Tuple
+from typing import Tuple, List
 import re
 
-from dal import mcd_model, mcd_datatypes
+from dal import mcd_model, mcd_datatypes, mcd_validate
 from dal.mcd_datatypes import MongoDb
 from dal.mcd_validate import DeviceType
 from dal.utils import ImportCounter
@@ -35,9 +36,11 @@ def create_status_update(prj_name, status: ImportCounter):
     ])
     return status_str
 
-def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str, imp_log: Logger) -> Tuple[bool, str, ImportCounter]:
+
+def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str, import_logger: Logger) -> Tuple[bool, str, ImportCounter]:
     import_counter = ImportCounter()
 
+    devices = {}
     with StringIO(csv_content) as fp:
         fp.seek(0)
         # Find the header row
@@ -59,85 +62,108 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
         # Set reader at beginning of header row
         fp.seek(loc)
         reader = csv.DictReader(fp)
-        fcs = {}
         # Add each valid line of data to import dictionary
         for line in reader:
             # No FC present in the data line
             if not line["FC"]:
                 import_counter.fail += 1
                 continue
-            if line["FC"] in fcs.keys():
-                fcs[line["FC"]].append(line)
-            else:
-                # Sanitize/replace unicode quotes
-                clean_line = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
-                if not clean_line:
-                    import_counter.fail += 1
-                    continue
-                fcs[clean_line] = [line]
-        if not fcs:
+
+            # NOTE: if fc already exists, we will simply overwrite values with the later values
+            # Sanitize/replace unicode quotes
+            clean_fc = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
+            if not clean_fc:
+                import_counter.fail += 1
+                continue
+            devices[clean_fc] = line
+
+        if not devices:
             err = "Import Error: No data detected in import file."
             return False, err, import_counter
 
     if import_counter.fail > 0:
-        imp_log.debug(f"FAIL: {import_counter.fail} FCs malformed. (FC values likely missing)")
+        import_logger.debug(f"FAIL: {import_counter.fail} FCs malformed. (FC values likely missing)")
 
-
-    fcuploads = []
+    device_changes = []
     # Pull out columns we define in keymap
-    for nm, fc_list in fcs.items():
-        for fc in fc_list:
-            # TODO: use validators to parse the data out???
-            fcupload = {}
-            for k, v in mcd_datatypes.KEYMAP.items():
-                if k not in fc:
-                    continue
-                fcupload[v] = fc[k]
-            fcuploads.append(fcupload)
+    for _, device in devices.items():
+        # TODO: use validators to parse the data out???
+        #
+        # NOTE: if the user wanted to import changes for every valid field (regardless if there are any invalid
+        # fields), we would have to validate each found field separately, before adding it to fcupload.
+        # Empty fields would also be skipped.
+        fcupload = {}
+        for csv_col_name, db_col_name in mcd_datatypes.MCD_KEYMAP.items():
+            if csv_col_name not in device:
+                continue
 
-    # in mcd 1.0 we didn't have device type specified, therefore we fallback to mcd device type
-    for fc in fcuploads:
+            # we need to parse each field, since fields from csv are strings (beamline string should be parsed into an array)
+            # in order to be inserted into a database; datetimes should be parsed into datetimes as well)
+            field_value = device[csv_col_name]
+            parsed_field_value, err = mcd_validate.validator_mcd.parse_field(db_col_name, field_value)
+            if err:
+                print("Failed to parse a field", err)
+                # TODO: how do we handle such an error
+                # for now fields with errors are simply not imported
+                pass
+            else:
+                fcupload[db_col_name] = parsed_field_value
+
+        device_changes.append(fcupload)
+        import_counter.headers = len(fcupload)
+
+
+    # in mcd 1.0 csv files we don't have device_type field, therefore we use a default mcd_device type
+    # this may have to change, for MCD 2.0, but we still don't have a defined csv format.
+    for fc in device_changes:
         device_type = fc.get('device_type', None)
         if device_type is None:
             fc['device_type'] = DeviceType.MCD.value
 
-    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid=userid, prjid=prjid, devices=fcuploads, def_logger=imp_log )
-    if errormsg:
-        print(errormsg)
+        device_id = fc.get('device_id', None)
+        if device_id is None:
+            # importing csv file does not have a device_id (that is internal), so we create one on our own
+            # to pass the validation test. This id will only be used if the device is new.
+            fc['device_id'] = str(uuid.uuid4())
 
-    # TODO: handle the error somehow...
-    #
+    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid=userid, prjid=prjid, devices=device_changes,
+                                                                       keep_going_on_error=True,
+                                                                       def_logger=import_logger)
+    if errormsg:
+        import_logger.error(errormsg)
+        print("ERRORS:", errormsg)
+
     # Include imports failed from bad FC/FGs
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]
     if update_status:
         import_counter.add(update_status)
 
-    # number of recognized headers minus the DB reference entries
-    # _id, prjid, discussion, created 
-    import_counter.headers = len(fcuploads[0].keys())-4
-
     status_str = create_status_update(prj_name, import_counter)
-    imp_log.info(status_str)
+    import_logger.info(status_str)
     return True, "", import_counter
 
 
 def export_project(licco_db: MongoDb, prjid: str) -> Tuple[bool, str, str]:
     with StringIO() as stream:
         # Write column names for data we provide for users to download
-        download_fields = [key for key in mcd_datatypes.KEYMAP.keys() if key != "FG"]
+        download_fields = [key for key in mcd_datatypes.MCD_KEYMAP.keys() if key != "FG"]
         writer = csv.DictWriter(stream, fieldnames=download_fields)
         writer.writeheader()
-        prj_ffts = mcd_model.get_project_ffts(licco_db, prjid)
-        ignore = ["_id", "discussion", "project_id", "created"]
+        devices = mcd_model.get_project_devices(licco_db, prjid)
+        ignore_fields = ["_id", "discussion", "project_id", "created"]
 
-        for device in prj_ffts:
+        for fc, device in devices.items():
             row_dict = {}
-            dev_info = prj_ffts[device]
-            for key in dev_info:
+            for key in device:
                 # Check for keys we handle later, or don't want the end user downloading
-                if (key in ignore) or (key not in mcd_datatypes.KEYMAP_REVERSE):
+                if (key in ignore_fields) or (key not in mcd_datatypes.MCD_KEYMAP_REVERSE):
                     continue
-                row_dict[mcd_datatypes.KEYMAP_REVERSE[key]] = dev_info[key]
+
+                value = device[key]
+                if isinstance(value, List):
+                    # list values should be serialized as "A, B" without '[]' symbols
+                    value = ", ".join(value)
+                row_dict[mcd_datatypes.MCD_KEYMAP_REVERSE[key]] = value
 
             # Download file will have column order of KEYMAP var
             writer.writerow(row_dict)

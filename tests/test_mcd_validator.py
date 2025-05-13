@@ -31,17 +31,15 @@ def test_validate_field__empty_number_field():
 
 def test_validate_beamline_field():
     err = validator_mcd.validate_field("beamline", "TMO, RIX")
-    assert err == ""
+    assert err == "invalid 'beamline' value: expected an array of strings, but got str: 'TMO, RIX'"
 
+    # beamline field stored in db should always be an array
     err = validator_mcd.validate_field("beamline", ["TMO", "RIX"])
     assert err == ""
 
 def test_validate_invalid_beamline_field():
-    err = validator_mcd.validate_field("beamline", "YYY, ZZZ")
-    assert f"invalid 'beamline' value '['YYY', 'ZZZ']': expected values are" in err
-
-    err = validator_mcd.validate_field("beamline", ["YYY", "ZZZ"])
-    assert f"invalid 'beamline' value '['YYY', 'ZZZ']': expected values are" in err
+    err = validator_mcd.validate_field("beamline", ["TMO", "ZZZ"])
+    assert f"invalid 'beamline' value '['TMO', 'ZZZ']': expected values are" in err
 
 def test_validate_device__missing_always_required_fields():
     now = datetime.datetime.now()

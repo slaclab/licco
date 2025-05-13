@@ -68,7 +68,7 @@ def svc_get_keymap():
     """
     return json_response(dict(
         discussion="Discussion",
-        **mcd_datatypes.KEYMAP_REVERSE,
+        **mcd_datatypes.MCD_KEYMAP_REVERSE,
     ))
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -148,7 +148,7 @@ def svc_get_currently_approved_project():
          # no currently approved project (this can happen when the project is submitted for the first time)
         return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
-    prj_ffts = mcd_model.get_project_ffts(licco_db, prj["_id"])
+    prj_ffts = mcd_model.get_project_devices(licco_db, prj["_id"])
     prj["ffts"] = prj_ffts
     return json_response(prj)
 
@@ -227,7 +227,7 @@ def svc_get_project_ffts(prjid):
         asoftimestamp = datetime.datetime.strptime(asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
     else:
         asoftimestamp = None
-    project_fcs = mcd_model.get_project_ffts(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
+    project_fcs = mcd_model.get_project_devices(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
     return json_response(project_fcs)
 
 
@@ -299,7 +299,7 @@ def svc_update_fc_in_project(prjid, fftid):
     device_id, err = mcd_model.change_device_fc(licco_db, userid, prjid, fcupdate)
     if err:
         return json_error(err)
-    updated_device = mcd_model.get_project_ffts(licco_db, prjid, fftid=device_id)
+    updated_device = mcd_model.get_project_devices(licco_db, prjid, fftid=device_id)
     return json_response(updated_device)
 
 
@@ -323,7 +323,7 @@ def svc_add_fft_comment(prjid, fftid):
     if not status:
         return json_error(errormsg)
 
-    data = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)
+    data = mcd_model.get_project_devices(licco_db, prjid, fftid=fftid)
     return json_response(data)
 
 
@@ -403,9 +403,12 @@ def svc_update_ffts_in_project(prjid):
     if isinstance(ffts, dict):
         ffts = [ffts]
 
+    # TODO: verify that device id does not already exist in the project snapshot
+    # The user should select a device_type: MCD (at least)
+
     userid = context.security.get_current_user_id()
     status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
-    fft = mcd_model.get_project_ffts(licco_db, prjid)
+    fft = mcd_model.get_project_devices(licco_db, prjid)
     if errormsg:
         return json_error(errormsg)
     return json_response(fft)
