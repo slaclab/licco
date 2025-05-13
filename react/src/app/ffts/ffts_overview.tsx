@@ -1,4 +1,4 @@
-import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
+import { Alert, Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useState } from "react";
 import { FFTInfo, deleteFft, fetchFcs } from "../projects/project_model";
 import { JsonErrorMsg } from "../utils/fetching";
@@ -212,7 +212,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
                             inputProps={{ 
                                 id: "fc-name", 
                                 autoFocus: true,
-                                rightElement: <Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} /> 
                             }} 
                         />
                     </FormGroup>
