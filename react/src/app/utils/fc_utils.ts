@@ -6,7 +6,7 @@ Calculates FCs that are valid choices for adding an FC to the project of modifyi
 export function calculateValidFcs(allFcs: string[], usedFcs: string[], currentFc?: string): string[] {
     
     // remove all used FCs (duplicates are not allowed)
-    var set = new Set(allFcs).difference(new Set(usedFcs));
+    const set = new Set(allFcs).difference(new Set(usedFcs));
     
     // current FC was removed as it is used, but keeping the value as-is is a valid option
     if (currentFc !== undefined) {

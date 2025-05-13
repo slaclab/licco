@@ -149,11 +149,11 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
         // fcs were not provided, download them on our own
         setIsLoading(true);
 
-        var p1 = fetchProjectFfts(currentProject)
+        const p1 = fetchProjectFfts(currentProject)
             .then(ffts => 
                 setUsedFcs(ffts.map(fft => fft.fc))
             );
-        var p2 = fetchFcs()
+        const p2 = fetchFcs()
             .then(fcs => {
                 setAllFcs(fcs);
                 setDialogError('');
@@ -165,7 +165,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
             }).finally(() => {
                 setIsLoading(false)
             });
-    }, [isOpen])
+    }, [isOpen, currentProject, fcs])
 
 
     const disableSubmit = fcName.trim() == "";
