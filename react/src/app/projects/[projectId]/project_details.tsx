@@ -1098,7 +1098,7 @@ const SelectEditField: React.FC<{ value: string, setter: any, options: string[],
 
 const SuggestEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
-        return <StringSuggest value={value} setValue={setter} items={options} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
+        return <StringSuggest value={value} setValue={setter} items={Array.from(options.values()).sort((a, b) => sortString(a, b, false))} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
     }, [value, options, setter])
 }
 
