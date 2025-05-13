@@ -166,25 +166,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
         const fc = fcName.trim();
         const fg = fgName.trim();
 
-        // // TODO: is this still necessary in the new version? It doesn't seem to be
-        // if (dialogType === 'addToProject') {
-        //     // check if the chosen combination of fc-fg name already exists in provided data
-        //     // if it does, we simply return an existing fft. This is a special behavior
-        //     // when we are adding an fft to a project that doesn't already have such fft 
-        //     // assigned.
-        //     for (let fcOption of allFcs) {
-        //         if (fcOption == fc) {
-        //             // the chosen combination already exists, so there is nothing 
-        //             // to create. Simply return
-        //             onSubmit(fcOption)
-        //             return;
-        //         }
-        //     }
-
-        //     // chosen fc-fg name combination was not found, therefore we have to create
-        //     // a new one.
-        // }
-
         // TODO: refactor this, we are no longer using this
         let data: FFTInfo = {
             fc: { _id: '', name: fc, description: '' },
