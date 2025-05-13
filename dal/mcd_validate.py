@@ -329,7 +329,7 @@ validator_mcd = Validator("MCD", fields=common_component_fields | build_validato
     FieldValidator(name='state', label="State", data_type=FieldType.STRING, fromstr=str, allowed_values=[v.value for v in DeviceState], required=Required.ALWAYS),
     FieldValidator(name='stand', label="Stand/Nearest Stand", data_type=FieldType.STRING),
     FieldValidator(name='comments', label="Comments", data_type=FieldType.STRING),
-    FieldValidator(name='area', label="Area", data_type=FieldType.STRING, allowed_values=MCD_LOCATIONS),
+    FieldValidator(name='area', label="Area", data_type=FieldType.STRING),
     FieldValidator(name='beamline', label="Beamline", data_type=FieldType.STRING_ARRAY, allowed_values=MCD_BEAMLINES),
 
     FieldValidator(name='nom_loc_x', label='Nom Loc X', data_type=FieldType.FLOAT, required=Required.DEVICE_DEPLOYED),

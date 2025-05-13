@@ -52,7 +52,7 @@ def get_recent_snapshot(db, prjid: str) -> Optional[McdSnapshot]:
     return snapshot
 
 
-def get_devices(db, device_ids: List[str]) -> Dict[str, McdDevice]:
+def get_devices(db, device_ids: List[str | ObjectId]) -> Dict[str, McdDevice]:
     device_id_mapping = {}
     ids = [ObjectId(id) for id in device_ids]
     devices = db["device_history"].find({"_id": {"$in": ids}})
