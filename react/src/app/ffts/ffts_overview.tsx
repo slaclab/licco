@@ -135,6 +135,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
 
     useEffect(() => {
         if (!isOpen) {
+            setFcName('');
             return;
         }
 
