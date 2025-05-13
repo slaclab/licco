@@ -19,6 +19,7 @@ import { FFTInfo } from "../project_model";
 import { renderTableField } from "../project_utils";
 import styles from './project_details.module.css';
 import { StringSuggest } from "@/app/components/suggestion_field";
+import { calculateValidFcs } from "@/app/utils/fc_utils";
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
@@ -889,8 +890,12 @@ const DeviceDataEditTableRow: React.FC<{
         return availableFftStates.map(s => s.name);
     }, [availableFftStates])
 
+    let fcList = useMemo(() => {
+        return calculateValidFcs(availableFcs, usedFcs, device.fc)
+    }, [availableFcs, usedFcs, device.fc])
+
     const editableDeviceFields: EditField[] = [
-        { key: 'fc', type: "suggest", valueOptions: availableFcs, value: useState<string>(), err: useState(false) },
+        { key: 'fc', type: "suggest", valueOptions: fcList, value: useState<string>(), err: useState(false) },
         { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
@@ -1098,7 +1103,7 @@ const SelectEditField: React.FC<{ value: string, setter: any, options: string[],
 
 const SuggestEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
-        return <StringSuggest value={value} setValue={setter} items={Array.from(options.values()).sort((a, b) => sortString(a, b, false))} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
+        return <StringSuggest value={value} setValue={setter} items={options} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
     }, [value, options, setter])
 }
 

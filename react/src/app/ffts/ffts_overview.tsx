@@ -1,9 +1,9 @@
 import { Alert, Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, NonIdealState, Spinner } from "@blueprintjs/core";
-import React, { useEffect, useState } from "react";
-import { FFTInfo, deleteFft, fetchFcs } from "../projects/project_model";
+import React, { useEffect, useMemo, useState } from "react";
+import { FFTInfo, deleteFft, fetchFcs, fetchProjectFfts } from "../projects/project_model";
 import { JsonErrorMsg } from "../utils/fetching";
-import { sortString } from "../utils/sort_utils";
 import { StringSuggest } from "../components/suggestion_field";
+import { calculateValidFcs } from "../utils/fc_utils";
 
 export const FFTOverviewTable: React.FC = () => {
     const [fcs, setFcs] = useState<string[]>([]);
@@ -128,6 +128,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
     const [fcName, setFcName] = useState('');
     const [fgName, setFgName] = useState('');
     const [allFcs, setAllFcs] = useState<string[]>([]);
+    const [usedFcs, setUsedFcs] = useState<string[]>([]);
 
     const [dialogError, setDialogError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -147,17 +148,24 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
 
         // fcs were not provided, download them on our own
         setIsLoading(true);
-        fetchFcs()
+
+        var p1 = fetchProjectFfts(currentProject)
+            .then(ffts => 
+                setUsedFcs(ffts.map(fft => fft.fc))
+            );
+        var p2 = fetchFcs()
             .then(fcs => {
                 setAllFcs(fcs);
                 setDialogError('');
-            }).catch((e: JsonErrorMsg) => {
+            });
+        Promise.all([p1, p2])
+            .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch FFTs: " + e.error;
                 setDialogError(msg);
             }).finally(() => {
                 setIsLoading(false)
             });
-    }, [fcs, isOpen])
+    }, [isOpen])
 
 
     const disableSubmit = fcName.trim() == "";
@@ -179,6 +187,10 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
         setIsSubmitting(false);
     }
 
+    const fcList = useMemo(() => {
+        return calculateValidFcs(allFcs, usedFcs)
+    }, [allFcs, usedFcs])
+
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Add a New FC" autoFocus={true} style={{ width: "70ch" }}>
             <DialogBody useOverflowScrollContainer>
@@ -190,7 +202,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
                     :
                     <FormGroup label="Functional Component:" labelFor="fc-name">
-                        <StringSuggest value={fcName} setValue={setFcName} items={Array.from(allFcs.values()).sort((a, b) => sortString(a, b, false))} 
+                        <StringSuggest value={fcName} setValue={setFcName} items={fcList} 
                             inputProps={{ 
                                 id: "fc-name", 
                                 autoFocus: true,
