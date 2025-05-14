@@ -3,6 +3,7 @@ Web service endpoints for licco
 """
 import datetime
 import os
+import uuid
 from io import BytesIO
 import tempfile
 from functools import wraps
@@ -67,7 +68,7 @@ def svc_get_keymap():
     """
     return json_response(dict(
         discussion="Discussion",
-        **mcd_datatypes.KEYMAP_REVERSE,
+        **mcd_datatypes.MCD_KEYMAP_REVERSE,
     ))
 
 @licco_ws_blueprint.route("/users/", methods=["GET"])
@@ -147,7 +148,7 @@ def svc_get_currently_approved_project():
          # no currently approved project (this can happen when the project is submitted for the first time)
         return json_response({}, ret_status=HTTPStatus.NO_CONTENT)
 
-    prj_ffts = mcd_model.get_project_ffts(licco_db, prj["_id"])
+    prj_ffts = mcd_model.get_project_devices(licco_db, prj["_id"])
     prj["ffts"] = prj_ffts
     return json_response(prj)
 
@@ -226,7 +227,7 @@ def svc_get_project_ffts(prjid):
         asoftimestamp = datetime.datetime.strptime(asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
     else:
         asoftimestamp = None
-    project_fcs = mcd_model.get_project_ffts(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
+    project_fcs = mcd_model.get_project_devices(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
     return json_response(project_fcs)
 
 
@@ -259,7 +260,7 @@ def get_latest_project_device_data(prjid, fc):
     # This is controlled by the '?name=true' flag
     name = request.args.get("name", False)
     if name:
-        device, err = mcd_model.get_device_by_fc_name(licco_db, prjid, fc)
+        device, err = mcd_model.get_recent_device_by_fc_name(licco_db, prjid, fc)
         if err:
             return json_error(err, ret_status=404)
         return json_response(device)
@@ -279,26 +280,27 @@ def svc_update_fc_in_project(prjid, fftid):
     Update the values of a functional component in a project
     """
     fcupdate = request.json
-
     fcupdate["_id"] = fftid
     userid = context.security.get_current_user_id()
-    #status, msg = mcd_model.validate_import_headers(licco_db, fcupdate, prjid)
-    #if not status:
-    #    return json_error(msg)
 
-    discussion = fcupdate.get('discussion', '')
+    discussion = fcupdate.get('discussion', None)
     if discussion:
+        if not isinstance(discussion, str):
+            return json_error(f"discussion field should be a string, but got {type(discussion).__name__}")
+
         # our fft update expects an array of discussion comments hence the transform into an array of objects
         fcupdate['discussion'] = [{
+            'id': str(uuid.uuid4()),
             'author': userid,
-            'comment': discussion
+            'comment': discussion,
+            'created': datetime.datetime.now(datetime.UTC)
         }]
 
-    status, errormsg, device_id = mcd_model.change_of_fft_in_project(licco_db, userid, prjid, fcupdate)
-    if not status:
-        return json_error(errormsg)
-    fc = mcd_model.get_project_ffts(licco_db, prjid, fftid=device_id)
-    return json_response(fc)
+    device_id, err = mcd_model.change_device_fc(licco_db, userid, prjid, fcupdate)
+    if err:
+        return json_error(err)
+    updated_device = mcd_model.get_project_devices(licco_db, prjid, fftid=device_id)
+    return json_response(updated_device)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
@@ -321,7 +323,7 @@ def svc_add_fft_comment(prjid, fftid):
     if not status:
         return json_error(errormsg)
 
-    data = mcd_model.get_project_ffts(licco_db, prjid, fftid=fftid)
+    data = mcd_model.get_project_devices(licco_db, prjid, fftid=fftid)
     return json_response(data)
 
 
@@ -401,9 +403,12 @@ def svc_update_ffts_in_project(prjid):
     if isinstance(ffts, dict):
         ffts = [ffts]
 
+    # TODO: verify that device id does not already exist in the project snapshot
+    # The user should select a device_type: MCD (at least)
+
     userid = context.security.get_current_user_id()
     status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
-    fft = mcd_model.get_project_ffts(licco_db, prjid)
+    fft = mcd_model.get_project_devices(licco_db, prjid)
     if errormsg:
         return json_error(errormsg)
     return json_response(fft)
@@ -412,13 +417,13 @@ def svc_update_ffts_in_project(prjid):
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])
 @project_writable
 @context.security.authentication_required
-def svc_remove_ffts_from_project(prjid):
+def svc_remove_devices_from_project(prjid):
     """
     Remove multiple ffts/devices from a project
     """
     userid = context.security.get_current_user_id()
     fft_ids = request.json.get('ids', [])
-    status, errormsg = mcd_model.remove_ffts_from_project(licco_db, userid, prjid, fft_ids)
+    status, errormsg = mcd_model.delete_devices_from_project(licco_db, userid, prjid, fft_ids)
     if errormsg:
         return json_error(errormsg)
     return json_response({}, ret_status=HTTPStatus.NO_CONTENT)

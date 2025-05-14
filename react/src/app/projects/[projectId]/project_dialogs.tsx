@@ -148,18 +148,21 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
     // 
     // We should be able to abort the query if necessary 
     setFetchingProjectDiff(true);
-    const fcName = selectedDevice.fc;
-    fetchDeviceDataByName(projectToCopyFrom._id, fcName)
+    fetchDeviceDataByName(projectToCopyFrom._id, selectedDevice.fc)
       .then((deviceFromOtherProject) => {
-        // TODO: what if a device is of a different type? Do we care about that?
+        // TODO: if device is of a different type, we should show the warning before the table
+        // (device is of a different type: Mirror -> Aperture)
+        // * Fields that will be automatically copied: [field_names]
+        // * Fields that will be automatically removed: [field_names]
+        const differentDevice = selectedDevice.device_type != deviceFromOtherProject.device_type;
+
         const diff = diffDeviceFields(selectedDevice, deviceFromOtherProject);
         setChangedFields(diff);
         setMissingFFTOnOtherProject(false);
         setDialogErr("");
       }).catch((e: JsonErrorMsg) => {
-        // TODO: it's possible that the other device does not have this fc. 
-        // This will be returned as an error, which we should detect
         if (e.code == 404) {
+          // this device does not exist in the other project, show the missing fft icon
           setMissingFFTOnOtherProject(true);
           setDialogErr("");
           return;
@@ -216,7 +219,6 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
     }).map(diff => diff.fieldName);
 
     const projectIdToCopyTo = currentProject._id;
-    const deviceIdToCopyTo = selectedDevice._id;
     const data = {
       'src_project': projectIdToCopyFrom,
       'dest_project': projectIdToCopyTo,

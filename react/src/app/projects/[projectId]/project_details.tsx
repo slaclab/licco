@@ -334,8 +334,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
     return (
         <HtmlPage>
-            {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped */}
-            <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 130px)' }}>
+            {/* NOTE: horizontally scrollable table with sticky header only works if it's max height is capped: 
+               we remove the size of the navbar that is always shown 
+            */}
+            <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 55px)' }}>
                 <table className={`table table-bordered table-sm table-sticky ${styles.detailsTable} ${isProjectInDevelopment ? "dev" : ""}`}>
                     <thead>
                         <tr>

@@ -1,8 +1,10 @@
+import datetime
 import json
-import types
+from dataclasses import dataclass
 from enum import Enum
-from typing import TypeAlias, Dict
+from typing import TypeAlias, Dict, TypedDict, List
 
+from bson import ObjectId
 from pymongo.synchronous.database import Database
 
 # This file will contain shared mcd datatypes. The main purpose of having a separate file instead of
@@ -11,13 +13,88 @@ from pymongo.synchronous.database import Database
 
 MASTER_PROJECT_NAME = 'LCLS Machine Configuration Database'
 MongoDb: TypeAlias = Database[Dict[str, any]]
-McdProject: TypeAlias = Dict[str, any]
+class McdProject(TypedDict):
+    _id: ObjectId
+    name: str
+    description: str
+    owner: str
+    status: str
+    creation_time: datetime.datetime
+    editors: List[str]
+    approved_time: datetime.datetime
+    approvers: List[str]
+    approved_by: List[str]
+    notes: List[str]
+    submitted_time: datetime.datetime
+    submitter: str
+
 McdDevice: TypeAlias = Dict[str, any]
+
+@dataclass
+class Changelog:
+    """Class for storing user modification changelog (names of devices that have changed)"""
+    created: List[str]
+    updated: List[str]
+    deleted: List[str]
+
+    def __init__(self):
+        self.created = []
+        self.updated = []
+        self.deleted = []
+
+    def add_created(self, fc: str):
+        self._add_el(self.created, fc)
+
+    def add_updated(self, fc: str):
+        self._add_el(self.updated, fc)
+
+    def add_deleted(self, fc: str):
+        self._add_el(self.deleted, fc)
+
+    def _add_el(self, arr, el):
+        if el not in arr:
+            arr.append(el)
+
+    def join(self, change: 'Changelog'):
+        for dev in change.created:
+            self.add_updated(dev)
+
+        for dev in change.updated:
+            self.add_updated(dev)
+
+        for dev in change.deleted:
+            self.add_deleted(dev)
+
+    def sort(self):
+        # sort device names in A-Z order
+        self.created.sort()
+        self.updated.sort()
+        self.deleted.sort()
+
+    def to_dict(self):
+        return {
+            "created": self.created,
+            "updated": self.updated,
+            "deleted": self.deleted,
+        }
+
+
+class McdSnapshot(TypedDict):
+    _id: ObjectId
+    project_id: ObjectId
+    author: str    # username of the user who created this snapshot (e.g., updated a device)
+    created: datetime.datetime
+    devices: List[ObjectId]
+    changelog: Dict[str, any]
+    name: str      # if the user creates a permanent snapshot to go back in time, this name field will be set
+    description: str
+
+
 
 MCD_LOCATIONS = ["EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]
 MCD_BEAMLINES = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]
 
-KEYMAP = {
+MCD_KEYMAP = {
     # Column names defined in confluence
     "FC": "fc",
     "Fungible": "fg",
@@ -35,10 +112,10 @@ KEYMAP = {
     "Must_Ray_Trace": "ray_trace",
     "Comments": "comments"
 }
-KEYMAP_REVERSE = {value: key for key, value in KEYMAP.items()}
+MCD_KEYMAP_REVERSE = {value: key for key, value in MCD_KEYMAP.items()}
 
 
-class FCState(Enum):
+class DeviceState(Enum):
     Conceptual = "Conceptual"
     Planned = "Planned"
     Commissioned = "Commissioned"
@@ -56,15 +133,15 @@ class FCState(Enum):
     @classmethod
     def descriptions(cls):
         return {
-            FCState.Conceptual: {"sortorder": 0, "label": "Conceptual", "description": "There are no firm plans to proceed with applying this configuration, it is still under heavy development. Configuration changes are frequent."},
-            FCState.Planned: {"sortorder": 1, "label": "Planned", "description": "A planned configuration, installation planning is underway. Configuration changes are less frequent."},
-            FCState.ReadyForInstallation: {"sortorder": 2, "label": "Ready for installation", "description": "Configuration is designated as ready for installation. Installation is imminent. Installation effort is planned and components may be fully assembled and bench-tested."},
-            FCState.Installed: {"sortorder": 3, "label": "Installed", "description": "Component is physically installed but not fully operational"},
-            FCState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
-            FCState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
-            FCState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
-            FCState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
-            FCState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
+            DeviceState.Conceptual: {"sortorder": 0, "label": "Conceptual", "description": "There are no firm plans to proceed with applying this configuration, it is still under heavy development. Configuration changes are frequent."},
+            DeviceState.Planned: {"sortorder": 1, "label": "Planned", "description": "A planned configuration, installation planning is underway. Configuration changes are less frequent."},
+            DeviceState.ReadyForInstallation: {"sortorder": 2, "label": "Ready for installation", "description": "Configuration is designated as ready for installation. Installation is imminent. Installation effort is planned and components may be fully assembled and bench-tested."},
+            DeviceState.Installed: {"sortorder": 3, "label": "Installed", "description": "Component is physically installed but not fully operational"},
+            DeviceState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
+            DeviceState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
+            DeviceState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
+            DeviceState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
+            DeviceState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
         }
 
 
@@ -87,185 +164,3 @@ def str2float(val):
 
 def str2int(val):
     return int(val)
-
-
-def _verify_beamline_locations(arr):
-    for e in arr:
-        if e not in MCD_BEAMLINES:
-            raise Exception(f"{e} is not a valid beamline location")
-
-
-def beamline_locations(arr):
-    if not arr:
-        return
-
-    if isinstance(arr, str):
-        arr = [field.strip() for field in arr.split(",")]
-        _verify_beamline_locations(arr)
-        return arr
-
-    if not isinstance(arr, list):
-        raise Exception(f"beamline locations should be an array, but got {arr}")
-
-    _verify_beamline_locations(arr)
-    return arr
-
-
-# mcd 1.0 data types. This should be removed in favor of Validator routines
-FC_ATTRS = types.MappingProxyType({
- "fc": {
-        "name": "fc",
-        "type": "text",
-        "fromstr": str,
-        "label": "FC",
-        "desc": "FC_user",
-        "required": False
-    },
-    "fg": {
-        "name": "fg",
-        "type": "text",
-        "fromstr": str,
-        "label": "Fungible",
-        "desc": "Fungible_user",
-        "required": False
-    },
-    "tc_part_no": {
-        "name": "tc_part_no",
-        "type": "text",
-        "fromstr": str,
-        "label": "TC Part No.",
-        "desc": "TC_part_no",
-        "required": False
-    },
-    "area": {
-        "name": "area",
-        "type": "enum",
-        "fromstr": str,
-        "enumvals": MCD_LOCATIONS,
-        "label": "Area",
-        "desc": "Device location",
-        "required": False,
-        "default": ""
-    },
-    "beamline": {
-        "name": "beamline",
-        "type": "enum",
-        "fromstr": beamline_locations,
-        "enumvals": MCD_BEAMLINES,
-        "label": "Beamline",
-        "desc": "Device beamline location",
-        "required": False,
-        "default": ""
-    },
-    "state": {
-        "name": "state",
-        "type": "enum",
-        "fromstr": lambda x: FCState[x].value,
-        "enumvals": [name for (name, _) in FCState.__members__.items()],
-        "label": "State",
-        "desc": "The current state of the functional component",
-        "required": True,
-        "default": "Conceptual"
-    },
-    "stand": {
-        "name": "stand",
-        "type": "text",
-        "fromstr": str,
-        "label": "Stand/Nearest Stand",
-        "desc": "Stand/Nearest Stand",
-        "required": False,
-    },
-    "comments": {
-        "name": "comments",
-        "type": "text",
-        "fromstr": str,
-        "label": "Comments",
-        "desc": "Comments",
-        "required": False
-    },
-    "nom_loc_z": {
-        "name": "nom_loc_z",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Z",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)", "span": 3},
-        "desc": "Nominal Location Z",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_loc_x": {
-        "name": "nom_loc_x",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "X",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
-        "desc": "Nominal Location X",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_loc_y": {
-        "name": "nom_loc_y",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Y",
-        "category": {"label": "Nominal Location (meters in LCLS coordinates)"},
-        "desc": "Nominal Location Y",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_z": {
-        "name": "nom_ang_z",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Z",
-        "category": {"label": "Nominal Angle (radians)", "span": 3},
-        "desc": "Nominal Angle Z",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_x": {
-        "name": "nom_ang_x",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "X",
-        "category": {"label": "Nominal Angle (radians)"},
-        "desc": "Nominal Angle X",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "nom_ang_y": {
-        "name": "nom_ang_y",
-        "type": "text",
-        "fromstr": default_wrapper(str2float, ""),
-        "rendermacro": "prec7float",
-        "label": "Y",
-        "category": {"label": "Nominal Angle (radians)"},
-        "desc": "Nominal Angle Y",
-        "required": False,
-        "is_required_dimension": True
-    },
-    "ray_trace": {
-        "name": "ray_trace",
-        "type": "text",
-        "fromstr": default_wrapper(str2int, None),
-        "label": "Must Ray Trace",
-        "desc": "Must Ray Trace",
-        "required": False
-    },
-    "discussion": {
-        # NOTE: everytime the user changes a device value, a discussion comment is added to the database
-        # as a separate document. On load, however, we have to parse all the comments into a structured
-        # array of all comments for that specific device.
-        "name": "discussion",
-        "type": "text",
-        "fromstr": str,
-        "label": "Discussion",
-        "desc": "User discussion about the device value change",
-        "required": False,
-    }
-})
