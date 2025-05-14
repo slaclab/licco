@@ -1,6 +1,6 @@
 import datetime
 import json
-import types
+from dataclasses import dataclass
 from enum import Enum
 from typing import TypeAlias, Dict, TypedDict, List
 
@@ -29,6 +29,55 @@ class McdProject(TypedDict):
     submitter: str
 
 McdDevice: TypeAlias = Dict[str, any]
+
+@dataclass
+class Changelog:
+    """Class for storing user modification changelog (names of devices that have changed)"""
+    created: List[str]
+    updated: List[str]
+    deleted: List[str]
+
+    def __init__(self):
+        self.created = []
+        self.updated = []
+        self.deleted = []
+
+    def add_created(self, fc: str):
+        self._add_el(self.created, fc)
+
+    def add_updated(self, fc: str):
+        self._add_el(self.updated, fc)
+
+    def add_deleted(self, fc: str):
+        self._add_el(self.deleted, fc)
+
+    def _add_el(self, arr, el):
+        if el not in arr:
+            arr.append(el)
+
+    def join(self, change: 'Changelog'):
+        for dev in change.created:
+            self.add_updated(dev)
+
+        for dev in change.updated:
+            self.add_updated(dev)
+
+        for dev in change.deleted:
+            self.add_deleted(dev)
+
+    def sort(self):
+        # sort device names in A-Z order
+        self.created.sort()
+        self.updated.sort()
+        self.deleted.sort()
+
+    def to_dict(self):
+        return {
+            "created": self.created,
+            "updated": self.updated,
+            "deleted": self.deleted,
+        }
+
 
 class McdSnapshot(TypedDict):
     _id: ObjectId
@@ -115,25 +164,3 @@ def str2float(val):
 
 def str2int(val):
     return int(val)
-
-
-def _verify_beamline_locations(arr):
-    for e in arr:
-        if e not in MCD_BEAMLINES:
-            raise Exception(f"{e} is not a valid beamline location")
-
-
-def beamline_locations(arr):
-    if not arr:
-        return
-
-    if isinstance(arr, str):
-        arr = [field.strip() for field in arr.split(",")]
-        _verify_beamline_locations(arr)
-        return arr
-
-    if not isinstance(arr, list):
-        raise Exception(f"beamline locations should be an array, but got {arr}")
-
-    _verify_beamline_locations(arr)
-    return arr

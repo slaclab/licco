@@ -417,13 +417,13 @@ def svc_update_ffts_in_project(prjid):
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])
 @project_writable
 @context.security.authentication_required
-def svc_remove_ffts_from_project(prjid):
+def svc_remove_devices_from_project(prjid):
     """
     Remove multiple ffts/devices from a project
     """
     userid = context.security.get_current_user_id()
     fft_ids = request.json.get('ids', [])
-    status, errormsg = mcd_model.remove_ffts_from_project(licco_db, userid, prjid, fft_ids)
+    status, errormsg = mcd_model.delete_devices_from_project(licco_db, userid, prjid, fft_ids)
     if errormsg:
         return json_error(errormsg)
     return json_response({}, ret_status=HTTPStatus.NO_CONTENT)

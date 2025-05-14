@@ -60,6 +60,10 @@ def get_devices(db, device_ids: List[str | ObjectId]) -> Dict[str, McdDevice]:
         device_id_mapping[device["fc"]] = device
     return device_id_mapping
 
+def get_device_fcs(db, device_ids: List[str|ObjectId]) -> List[str]:
+    devices = db["device_history"].find({"_id": {"$in": [ObjectId(x) for x in device_ids]}}, projection={"_id": 0, "fc": 1})
+    fcs = [dev['fc'] for dev in devices]
+    return fcs
 
 def get_device(db, device_id) -> Optional[McdDevice]:
     device = db["device_history"].find_one({"_id": ObjectId(device_id)})

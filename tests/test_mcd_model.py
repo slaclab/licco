@@ -262,10 +262,26 @@ def test_get_recent_snapshot(db):
 # the device array. Write a test case for that
 
 
+def test_store_retrieve_changelog(db):
+    # test checks if changelog is written in the right format
+    project = create_test_project(db, "test_user", 'test_store_retrieve_changelog', "original_description")
+    prjid = project["_id"]
+    device = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23})
+    ok, err, changes, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], device)
+
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    assert snapshot
+    assert snapshot["devices"] == [ObjectId(dev_id)]
+    changelog = snapshot["changelog"]
+    assert changelog
+    assert changelog['created'] == ['TESTFC']
+    assert changelog['updated'] == []
+    assert changelog['deleted'] == []
+
+
 def test_clone_project(db):
     project = create_test_project(db, "test_user", 'test_clone_project', "original_description")
     prjid = project["_id"]
-    user_id = 'test_author'
 
     # add ffts to the project
     device = create_test_device({'fc': "TESTFC", "fg": "TESTFG", 'comments': 'some comment', 'nom_ang_x': 1.23})
@@ -306,7 +322,7 @@ def test_copy_fft_values(db):
 
     # add fft to 'a'
     fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comments': 'project_a comment'})
-    ok, err, changelog, device_id = mcd_model.update_device_in_project(db, user_id, a["_id"], fft_update)
+    ok, err, field_changes, device_id = mcd_model.update_device_in_project(db, user_id, a["_id"], fft_update)
     assert err == ""
     assert ok
 
@@ -314,9 +330,11 @@ def test_copy_fft_values(db):
     b_ffts = mcd_model.get_project_devices(db, b["_id"])
     assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
     b_fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 0.51})
-    ok, err, changelog, b_device_id = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
+    ok, err, field_changes, b_device_id = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
     assert err == ""
     assert ok
+
+    snapshot_before_copy = mcd_model.get_recent_snapshot(db, b["_id"])
 
     device_fc = fft_update['fc']
     updated_ffts, err = mcd_model.copy_device_values_from_project(db, "test_user", a["_id"], b["_id"], device_fc, ['nom_ang_x', 'comments'])
@@ -329,6 +347,13 @@ def test_copy_fft_values(db):
     assert fft['comments'] == 'project_a comment'
     assert fft['nom_ang_x'] == 2.45
     assert fft.get('nom_ang_y', None) is None, "nom_ang_y should not exist in copied fft, because it wasn't selected for copying"
+
+    snapshot_after_copy = mcd_model.get_recent_snapshot(db, b["_id"])
+    assert snapshot_before_copy["created"] < snapshot_after_copy["created"]
+    changelog = snapshot_after_copy["changelog"]
+    changelog["updated"] = ["TESTFC"]
+    changelog["deleted"] = [""]
+    changelog["created"] = [""]
 
 
 def test_change_of_fft_in_a_project(db):
@@ -544,9 +569,14 @@ def test_remove_fft_from_project(db):
 
     # insert new fft
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    ok, err, field_changes, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
     assert ok
+
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    assert snapshot["changelog"]["deleted"] == []
+    assert snapshot["changelog"]["created"] == ["TESTFC"]
+    assert snapshot["changelog"]["updated"] == []
 
     inserted_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(inserted_ffts) == 1
@@ -554,9 +584,15 @@ def test_remove_fft_from_project(db):
     assert str(inserted_fft["_id"]) == str(dev_id)
 
     # remove inserted fft
-    ok, err = mcd_model.remove_ffts_from_project(db, "test_user", prjid, [dev_id])
+    ok, err = mcd_model.delete_devices_from_project(db, "test_user", prjid, [dev_id])
     assert err == ""
     assert ok
+
+    # check is snapshot changelog was correctly stored
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    assert snapshot["changelog"]["deleted"] == ["TESTFC"]
+    assert snapshot["changelog"]["created"] == []
+    assert snapshot["changelog"]["updated"] == []
 
     project_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
