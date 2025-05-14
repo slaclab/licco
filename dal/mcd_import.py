@@ -82,33 +82,37 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
             return False, err, import_counter
 
     if import_counter.fail > 0:
-        import_logger.debug(f"FAIL: {import_counter.fail} FCs malformed. (FC values likely missing)")
+        import_logger.error(f"FAIL: {import_counter.fail} FCs malformed. (FC values likely missing)")
 
     device_changes = []
     # Pull out columns we define in keymap
     for _, device in devices.items():
-        # TODO: use validators to parse the data out???
-        #
-        # NOTE: if the user wanted to import changes for every valid field (regardless if there are any invalid
-        # fields), we would have to validate each found field separately, before adding it to fcupload.
-        # Empty fields would also be skipped.
+        # We have to parse every known field into their correct type first (e.g., beamline csv string turned into an array of strings)
+        # If one field is invalid, an entire device (csv row) will be marked as invalid and won't be inserted.
         fcupload = {}
+        parse_errors = []
         for csv_col_name, db_col_name in mcd_datatypes.MCD_KEYMAP.items():
             if csv_col_name not in device:
                 continue
 
             # we need to parse each field, since fields from csv are strings (beamline string should be parsed into an array)
-            # in order to be inserted into a database; datetimes should be parsed into datetimes as well)
+            # in order to be inserted into a database; datetimes should be parsed into datetime objects as well)
             field_value = device[csv_col_name]
             parsed_field_value, err = mcd_validate.validator_mcd.parse_field(db_col_name, field_value)
             if err:
-                print("Failed to parse a field", err)
-                # TODO: how do we handle such an error
-                # for now fields with errors are simply not imported
-                pass
-            else:
-                fcupload[db_col_name] = parsed_field_value
+                parse_errors.append(err)
+                continue
 
+            # field was parsed successfully
+            fcupload[db_col_name] = parsed_field_value
+
+        if parse_errors:
+            import_counter.fail += 1
+            errors = "\n".join(parse_errors)
+            import_logger.error(f"FAIL: device '{device['FC']}' field parse errors:\n{errors}\n")
+            continue
+
+        # device fields were parsed successfully, add them to the list
         device_changes.append(fcupload)
         import_counter.headers = len(fcupload)
 
@@ -131,7 +135,6 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
                                                                        def_logger=import_logger)
     if errormsg:
         import_logger.error(errormsg)
-        print("ERRORS:", errormsg)
 
     # Include imports failed from bad FC/FGs
     prj_name = mcd_model.get_project(licco_db, prjid)["name"]

@@ -38,8 +38,8 @@ def test_validate_beamline_field():
     assert err == ""
 
 def test_validate_invalid_beamline_field():
-    err = validator_mcd.validate_field("beamline", ["TMO", "ZZZ"])
-    assert f"invalid 'beamline' value '['TMO', 'ZZZ']': expected values are" in err
+    err = validator_mcd.validate_field("beamline", ["XXX", "TMO", "ZZZ"])
+    assert f"invalid 'beamline' value '['XXX', 'TMO', 'ZZZ']': invalid values ['XXX', 'ZZZ']: expected values are" in err
 
 def test_validate_device__missing_always_required_fields():
     now = datetime.datetime.now()

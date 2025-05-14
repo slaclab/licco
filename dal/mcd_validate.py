@@ -164,7 +164,7 @@ class FieldValidator:
                         if e not in self.allowed_values:
                             invalid_values.append(e)
                     if invalid_values:
-                        return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
+                        return f"invalid '{self.name}' value '{val}': invalid values {invalid_values}: expected values are {self.allowed_values}"
                 else:
                     if val not in self.allowed_values:
                         return f"invalid '{self.name}' value '{val}': expected values are {self.allowed_values}"
