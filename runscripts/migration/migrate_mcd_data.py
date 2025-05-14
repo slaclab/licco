@@ -246,7 +246,11 @@ def migrate_project(old_db, new_db, project,  output_dir):
             'created': created,  # created timestamp
             'devices': ids,
             'description': "Migration from MCD 1.0",   # explanation if necessary
-            'changelog': {},
+            'changelog': {
+                "created": [],
+                "updated": [],
+                "deleted": [],
+            },
         }
         new_db['project_snapshots'].insert_one(project_snapshot)
 

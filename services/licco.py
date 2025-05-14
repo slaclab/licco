@@ -219,15 +219,16 @@ def svc_delete_project(prjid):
 def svc_get_project_ffts(prjid):
     """
     Get the project's FFT's given a project id.
-    @REFACTOR:
     """
+    # TODO: decide what to do with showallentries flag
     showallentries = json.loads(request.args.get("showallentries", "true"))
+
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
         asoftimestamp = datetime.datetime.strptime(asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
     else:
         asoftimestamp = None
-    project_fcs = mcd_model.get_project_devices(licco_db, prjid, showallentries=showallentries, asoftimestamp=asoftimestamp)
+    project_fcs = mcd_model.get_project_devices(licco_db, prjid, asoftimestamp=asoftimestamp)
     return json_response(project_fcs)
 
 
@@ -237,8 +238,10 @@ def svc_get_project_changes(prjid):
     """
     Get the functional component objects
     """
-    changes = mcd_model.get_all_project_changes(licco_db, prjid)
-    return json_response(changes)
+    snapshots, err = mcd_model.get_project_history(licco_db, prjid, limit=100)
+    if err:
+        return json_error(err)
+    return json_response(snapshots)
 
 
 # @TODO: rename endpoint at some point (we no longer use ffts, only fcs as strings)
@@ -299,7 +302,7 @@ def svc_update_fc_in_project(prjid, fftid):
     device_id, err = mcd_model.change_device_fc(licco_db, userid, prjid, fcupdate)
     if err:
         return json_error(err)
-    updated_device = mcd_model.get_project_devices(licco_db, prjid, fftid=device_id)
+    updated_device = mcd_model.get_project_devices(licco_db, prjid, device_id=device_id)
     return json_response(updated_device)
 
 
@@ -323,7 +326,7 @@ def svc_add_fft_comment(prjid, fftid):
     if not status:
         return json_error(errormsg)
 
-    data = mcd_model.get_project_devices(licco_db, prjid, fftid=fftid)
+    data = mcd_model.get_project_devices(licco_db, prjid, device_id=fftid)
     return json_response(data)
 
 

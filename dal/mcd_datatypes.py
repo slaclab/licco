@@ -90,6 +90,14 @@ class McdSnapshot(TypedDict):
     description: str
 
 
+@dataclass
+class McdProjectHistory:
+    project_id: str
+    created: datetime.datetime
+    changelog: Changelog
+    name: str
+    author: str
+
 
 MCD_LOCATIONS = ["EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]
 MCD_BEAMLINES = ["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]
@@ -143,24 +151,3 @@ class DeviceState(Enum):
             DeviceState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
             DeviceState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
         }
-
-
-def default_wrapper(func, default):
-    def wrapped_func(val):
-        if val == '':
-            return default
-        else:
-            return func(val)
-    return wrapped_func
-
-
-def str2bool(val):
-    return json.loads(str(val).lower())
-
-
-def str2float(val):
-    return float(val)
-
-
-def str2int(val):
-    return int(val)

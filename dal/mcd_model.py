@@ -10,7 +10,7 @@ from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
 from notifications.notifier import Notifier, NoOpNotifier
 from . import mcd_validate, mcd_db
-from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, McdDevice, Changelog
+from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, McdDevice, Changelog, McdSnapshot
 from .mcd_db import get_latest_project_data, get_recent_snapshot, get_device
 from .mcd_validate import common_component_fields
 from .utils import ImportCounter, diff_arrays, empty_string_or_none
@@ -159,11 +159,11 @@ def get_project(licco_db: MongoDb, id: str) -> Optional[McdProject]:
     return prj
 
 
-def get_project_devices(licco_db: MongoDb, prjid, showallentries=True, asoftimestamp=None, fftid=None):
+def get_project_devices(licco_db: MongoDb, prjid, asoftimestamp=None, device_id=None):
     """
     Get the current devices with their data from a project id
     """
-    return get_latest_project_data(licco_db, prjid, skipClonedEntries=False if showallentries else True, asoftimestamp=asoftimestamp, device_id=fftid)
+    return get_latest_project_data(licco_db, prjid, asoftimestamp=asoftimestamp, device_id=device_id)
 
 
 def get_fcs(licco_db: MongoDb) -> List[str]:
@@ -1267,3 +1267,16 @@ def add_project_tag(licco_db: MongoDb, prjid, tagname, asoftimestamp):
     licco_db["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
     tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
     return True, "", tags
+
+
+def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tuple[List[McdSnapshot], str]:
+    # mongo returns an empty list if the project_id is not find, hence the check for project before that
+    prj = get_project(licco_db, prjid)
+    if not prj:
+        return [], f"Project {prjid} does not exist"
+    snapshots = list(licco_db["project_snapshots"].find({"project_id": ObjectId(prjid)}).sort("created", -1).limit(limit))
+    for snap in snapshots:
+        if "changelog" not in snap:
+            changelog = Changelog()
+            snap["changelog"] = changelog.to_dict()
+    return snapshots, ""

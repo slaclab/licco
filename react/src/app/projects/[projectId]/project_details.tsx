@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
@@ -134,7 +134,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
         setFftDataLoadingError('');
-        return fetchProjectFfts(projectId, showAllEntries, sinceTime)
+        return fetchProjectDevices(projectId, showAllEntries, sinceTime)
             .then(devices => {
                 setFftData(devices);
                 return devices;
@@ -166,7 +166,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         const loadInitialData = async () => {
             const [data, fftData, keymapData, whoami] = await Promise.all([
                 fetchProjectInfo(projectId),
-                fetchProjectFfts(projectId, showAllEntries, asOfTimestamp),
+                fetchProjectDevices(projectId, showAllEntries, asOfTimestamp),
                 fetchKeymap(),
                 whoAmI(),
             ])

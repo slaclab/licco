@@ -2,7 +2,7 @@ import { isArrayEqual } from "@/app/utils/arr_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { useEffect, useState } from "react";
-import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchMasterProjectInfo, fetchProjectFfts, fetchProjectInfo } from "../../project_model";
+import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchMasterProjectInfo, fetchProjectDevices, fetchProjectInfo } from "../../project_model";
 import { sortDeviceDataByColumn } from "../project_details";
 
 export interface ProjectFftDiff {
@@ -158,8 +158,8 @@ export const loadProjectDiff = async (projectIdA: string, projectIdB: string): P
     let projectBInfo = fetchProjectInfo(projectIdB);
 
     // get ffts for both projects
-    let projectAFfts = fetchProjectFfts(projectIdA);
-    let projectBFfts = fetchProjectFfts(projectIdB);
+    let projectAFfts = fetchProjectDevices(projectIdA);
+    let projectBFfts = fetchProjectDevices(projectIdB);
 
     return Promise.all([projectAInfo, projectBInfo, projectAFfts, projectBFfts])
         .then((values) => {

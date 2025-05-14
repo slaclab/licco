@@ -276,7 +276,7 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
     return false;
 }
 
-export async function fetchProjectFfts(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
+export async function fetchProjectDevices(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
     queryParams.set('showallentries', showAllEntries.toString());
     if (sinceTime != undefined) {
@@ -424,11 +424,27 @@ export interface ProjectHistoryChange {
     time: Date;
 }
 
-export function fetchHistoryOfChanges(projectId: string): Promise<ProjectHistoryChange[]> {
-    return Fetch.get<ProjectHistoryChange[]>(`/ws/projects/${projectId}/changes/`)
+export interface Changelog {
+    updated: string[];
+    created: string[];
+    deleted: string[];
+}
+
+export interface ProjectSnapshot {
+    _id: string;
+    project_id: string;
+    author: string;
+    created: Date;
+    devices: string[];  // device_ids
+    name: string;       // snapshot name if any
+    changelog: Changelog;
+}
+
+export function fetchHistoryOfChanges(projectId: string): Promise<ProjectSnapshot[]> {
+    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/changes/`)
         .then((data) => {
             // create date objects from given date
-            data.forEach(d => d.time = new Date(d.time));
+            data.forEach(d => d.created = new Date(d.created));
             return data;
         });
 }

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=False, asoftimestamp=None, commentAfterTimestamp=None) -> Dict[str, McdDevice]:
+def get_latest_project_data(db, projectid, device_id=None, asoftimestamp=None, commentAfterTimestamp=None) -> Dict[str, McdDevice]:
     # get correct project ID
     project = db["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
@@ -16,7 +16,7 @@ def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=Fal
         return {}
 
     # find most recent project snapshot
-    snapshot = get_recent_snapshot(db, projectid)
+    snapshot = get_recent_snapshot(db, projectid, asoftimestamp=asoftimestamp)
     if not snapshot:
         logger.debug(f"No recent snapshot found for project {projectid}")
         return {}
@@ -31,22 +31,15 @@ def get_latest_project_data(db, projectid, device_id=None, skipClonedEntries=Fal
     return device_information
 
 
-def get_all_project_changes(propdb, projectid):
-    snapshots = propdb["project_snapshots"].find({"project_id": ObjectId(projectid)})
-    if not snapshots:
-        logger.error("No projects with project ID %s", projectid)
-    changelist = []
-    for snap in snapshots:
-        if "changelog" in snap:
-            changelist += snap["changelog"]
-    return changelist
-
-
-def get_recent_snapshot(db, prjid: str) -> Optional[McdSnapshot]:
+def get_recent_snapshot(db, prjid: str, asoftimestamp=None) -> Optional[McdSnapshot]:
     """
     Gets the newest snapshot for any one project
     """
-    snapshot = db["project_snapshots"].find_one({"project_id": ObjectId(prjid)}, sort=[("created", -1)])
+    query = {"project_id": ObjectId(prjid)}
+    if asoftimestamp:
+        query["created"] = {"$lte": asoftimestamp}
+
+    snapshot = db["project_snapshots"].find_one(query, sort=[("created", -1)])
     if not snapshot:
         return None
     return snapshot
