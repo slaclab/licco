@@ -356,9 +356,9 @@ def test_copy_fft_values(db):
     changelog["created"] = [""]
 
 
-def test_change_of_fft_in_a_project(db):
+def test_change_of_device_fc_in_a_project(db):
     """Change fft device in a project: device should be correctly changed"""
-    prj = create_test_project(db, "test_user", "test_change_of_fft_in_a_project", "")
+    prj = create_test_project(db, "test_user", "test_change_of_device_fc_in_a_project", "")
     _, err = mcd_model.update_project_details(db, "test_user", prj["_id"], {"editors": ["editor_user"]}, notifier=NoOpNotifier())
     assert err == ""
 
@@ -379,6 +379,13 @@ def test_change_of_fft_in_a_project(db):
     # change method creates a new snapshot already
     new_device, err = mcd_model.change_device_fc(db, "editor_user", prj["_id"], update)
     assert err == ""
+
+    # old fc is in deleted, new fc is in created so that the user can find it in the history dialog
+    snapshot = mcd_model.get_recent_snapshot(db, prj["_id"])
+    changelog = snapshot["changelog"]
+    assert changelog["updated"] == []
+    assert changelog["deleted"] == ["TESTFC"]
+    assert changelog["created"] == ["TESTFC_2"]
 
     # verify that changes were applied and 'fc' has changed
     ffts = mcd_model.get_project_devices(db, prj["_id"])

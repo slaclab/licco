@@ -11,7 +11,7 @@ from pymongo import ASCENDING, DESCENDING
 from notifications.notifier import Notifier, NoOpNotifier
 from . import mcd_validate, mcd_db
 from .mcd_datatypes import MASTER_PROJECT_NAME, MongoDb, McdProject, McdDevice, Changelog
-from .mcd_db import get_latest_project_data, get_all_project_changes, get_recent_snapshot, get_device
+from .mcd_db import get_latest_project_data, get_recent_snapshot, get_device
 from .mcd_validate import common_component_fields
 from .utils import ImportCounter, diff_arrays, empty_string_or_none
 
@@ -407,6 +407,17 @@ def change_device_fc(licco_db: MongoDb, userid: str, prjid: str, update: Dict[st
     err, device_changes, new_device_id = _overwrite_device_data(licco_db, userid, prjid, old_data, update, create_snapshot=True)
     if err:
         return "", f"Failed to update a device data: {err}"
+
+    devices = [ObjectId(new_device_id)]
+    devices.extend([ObjectId(x) for x in snapshot["devices"] if x != ObjectId(device_id)])
+
+    # We mark new fc as created and old as deleted eventhough we only change a field. The main reason for this behavior
+    # is that when someone is reviewing history, they can find out when the fc ceased to exist.
+    changelog = Changelog()
+    changelog.add_created(update['fc'])
+    changelog.add_deleted(old_data['fc'])
+    create_new_snapshot(licco_db, userid, prjid, devices, changelog=changelog)
+
     return str(new_device_id), ""
 
 
