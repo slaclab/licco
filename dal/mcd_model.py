@@ -404,7 +404,7 @@ def change_device_fc(licco_db: MongoDb, userid: str, prjid: str, update: Dict[st
         # this should never happen
         return "", "Can't change a device fc: old device data was not found in db: this is a programming bug"
 
-    err, device_changes, new_device_id = _overwrite_device_data(licco_db, userid, prjid, old_data, update, create_snapshot=True)
+    err, device_changes, new_device_id = _overwrite_device_data(licco_db, userid, prjid, old_data, update, create_snapshot=False)
     if err:
         return "", f"Failed to update a device data: {err}"
 
@@ -921,7 +921,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     Approve a submitted project.
     Set the status to approved
     """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
+    prj = get_project(licco_db, prjid)
     if not prj:
         return False, False, f"Cannot find project for {prjid}", {}
     if prj["status"] != "submitted":
@@ -950,7 +950,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     all_assigned_approvers_approved = set(assigned_approvers).issubset(set(approved_by))
     still_waiting_for_approval = not all_assigned_approvers_approved
     if still_waiting_for_approval:
-        updated_project = get_project(licco_db, prj["_id"])
+        updated_project = get_project(licco_db, str(prj["_id"]))
         return True, all_assigned_approvers_approved, "", updated_project
 
     # all assigned approvers have approved the project
@@ -965,7 +965,8 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     }})
 
     # master project should not inherit old discussion comments from a submitted project, hence the removal flag
-    status, errormsg, update_status = update_ffts_in_project(licco_db, userid,
+    userid_who_merged_changes = prj["owner"]
+    status, errormsg, update_status = update_ffts_in_project(licco_db, userid_who_merged_changes,
                                                              master_project["_id"],
                                                              get_project_devices(licco_db, prjid),
                                                              remove_discussion_comments=True,
@@ -992,7 +993,7 @@ def approve_project(licco_db: MongoDb, prjid: str, userid: str, notifier: Notifi
     updated_project_data["approved_by"] = []
     updated_project_data['notes'] = []
     licco_db["projects"].update_one({"_id": prj["_id"]}, {"$set": updated_project_data})
-    updated_project = get_project(licco_db, prj["_id"])
+    updated_project = get_project(licco_db, str(prj["_id"]))
 
     return True, all_assigned_approvers_approved, "", updated_project
 

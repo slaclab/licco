@@ -114,7 +114,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fgFilter, setFgFilter] = useState("");
     const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
-    const [showFftSinceCreationFilter, setShowFftSinceCreationFilter] = useState(false);
     const [asOfTimestampFilter, setAsOfTimestampFilter] = useState("");
 
     // tag creation
@@ -328,7 +327,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
     const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
-    const isRemoveFilterEnabled = isFilterApplied || showFftSinceCreationFilter || asOfTimestampFilter;
+    const isRemoveFilterEnabled = isFilterApplied || asOfTimestampFilter;
     const isEditedTable = editedDevice != undefined;
     const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
 
@@ -390,31 +389,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             setStateFilter('');
                                             let timestampFilter = asOfTimestampFilter;
                                             setAsOfTimestampFilter('');
-
-                                            if (showFftSinceCreationFilter) {
-                                                setShowFftSinceCreationFilter(false);
-                                                loadFFTData(project._id, true);
-                                            } else if (timestampFilter) {
+                                            if (timestampFilter) {
                                                 // timestamp filter was applied and now we have to load original data
                                                 loadFFTData(project._id, true);
                                             }
                                             updateQueryParams('', '', '', '');
-                                        }}
-                                    />
-
-                                    <Button icon="filter-open" variant="minimal" size="small" intent={showFftSinceCreationFilter ? "warning" : "none"}
-                                        title="Show only FCs with changes after the project was created"
-                                        onClick={(e) => {
-                                            if (showFftSinceCreationFilter) {
-                                                // filter is applied, therefore we have to toggle it off and show all entries
-                                                loadFFTData(projectId, true);
-                                            } else {
-                                                // filter is not applied, therefore we have to display changes after project was created
-                                                loadFFTData(projectId, false);
-                                            }
-
-                                            // toggle the filter flag 
-                                            setShowFftSinceCreationFilter(show => !show);
                                         }}
                                     />
 
@@ -705,7 +684,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             setFgFilter('');
                             setStateFilter('');
                             setAsOfTimestampFilter('');
-                            setShowFftSinceCreationFilter(false);
                             updateQueryParams('', '', '', '');
                             const showAllEntries = true;
                             loadFFTData(projectId, showAllEntries);

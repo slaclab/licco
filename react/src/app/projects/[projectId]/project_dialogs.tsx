@@ -390,7 +390,6 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
       })
   }, [isOpen, currentProject._id]);
 
-
   const projectHistoryTable = useMemo(() => {
     if (isLoading) {
       return <NonIdealState icon={<Spinner />} title="Loading Project History" description="Please wait..." />
@@ -403,6 +402,11 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
     if (data.length == 0) {
       return <NonIdealState icon="clean" title="No Project History Exists" description={`Project ${currentProject.name} does not have any changes since creation`} />
     }
+
+    const changedDeviceColStyle = {
+      "width": "100%",
+      "maxWidth": "20%",
+    };
 
     return (
       <table className="table table-sm table-bordered table-striped">
@@ -426,10 +430,10 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
                     onClick={(e) => displayProjectSince(change.created)}
                   />
                 </td>
-                <td>{renderTableField(change.changelog?.updated ?? [])}</td>
-                <td>{renderTableField(change.changelog?.created ?? [])}</td>
-                <td>{renderTableField(change.changelog?.deleted ?? [])}</td>
-                <td>{change.author}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.updated ?? [])}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.created ?? [])}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.deleted ?? [])}</td>
+                <td className="text-nowrap">{change.author}</td>
                 <td>{formatToLiccoDateTime(change.created)}</td>
               </tr>
             )
@@ -440,13 +444,13 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
   }, [data, dialogErr, isLoading, currentProject.name, displayProjectSince, keymap])
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "70rem", maxWidth: "95%" }}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
         {projectHistoryTable}
       </DialogBody>
       <DialogFooter actions={
         <>
-          <Button onClick={onClose}>Close</Button>
+          <Button autoFocus={true} onClick={onClose}>Close</Button>
         </>
       }>
       </DialogFooter>

@@ -1,6 +1,7 @@
 import datetime
 import io
 import logging
+import time
 import uuid
 from typing import List, Dict, Mapping, Any
 
@@ -364,8 +365,12 @@ def test_change_of_device_fc_in_a_project(db):
 
     # create fft device with some data
     fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20})
-    _, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prj["_id"], fft_update)
+    _, err, _, dev_id = mcd_model.update_device_in_project(db, "test_user", prj["_id"], fft_update)
     assert err == ""
+    snapshot = mcd_model.get_recent_snapshot(db, prj["_id"])
+    assert snapshot["changelog"]["created"] == ["TESTFC"]
+    assert snapshot["changelog"]["updated"] == []
+    assert snapshot["changelog"]["deleted"] == []
 
     # create a discussion comment for previous fft
     ok, err = mcd_model.add_fft_comment(db, "test_user", prj["_id"], dev_id, "Initial discussion comment")
@@ -382,10 +387,9 @@ def test_change_of_device_fc_in_a_project(db):
 
     # old fc is in deleted, new fc is in created so that the user can find it in the history dialog
     snapshot = mcd_model.get_recent_snapshot(db, prj["_id"])
-    changelog = snapshot["changelog"]
-    assert changelog["updated"] == []
-    assert changelog["deleted"] == ["TESTFC"]
-    assert changelog["created"] == ["TESTFC_2"]
+    assert snapshot["changelog"]["updated"] == []
+    assert snapshot["changelog"]["deleted"] == ["TESTFC"]
+    assert snapshot["changelog"]["created"] == ["TESTFC_2"]
 
     # verify that changes were applied and 'fc' has changed
     ffts = mcd_model.get_project_devices(db, prj["_id"])
@@ -739,7 +743,7 @@ def test_project_approval_workflow(db):
     email_sender.clear()
 
     # an editor user should be able to save an fft
-    fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', "tc_part_no": "PART 123"})
+    fft_update = create_test_device({'fc': 'APPROVAL_FC', 'fg': 'APPROVAL_FG', "tc_part_no": "PART 123"})
     ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "editor_user", project["_id"], fft_update)
     assert err == ""
     assert ok
@@ -787,6 +791,9 @@ def test_project_approval_workflow(db):
     assert len(email_sender.emails_sent) == 0, "there should be no notifications"
     assert prj['status'] == 'submitted'
 
+    master_project = mcd_model.get_master_project(db)
+    before_approval_snapshot = mcd_model.get_recent_snapshot(db, master_project["_id"])
+
     # approve by the final approver, we should receive notifications about approved project
     ok, all_approved, err, prj = mcd_model.approve_project(db, prjid, 'approve_user', notifier)
     assert err == ""
@@ -799,10 +806,17 @@ def test_project_approval_workflow(db):
     assert prj['status'] == 'development'
 
     # the changed fft data should reflect in the master project
-    master_project = mcd_model.get_master_project(db)
     ffts = mcd_model.get_latest_project_data(db, projectid=master_project['_id'])
     fft = ffts[fft_update['fc']]
     assert fft['tc_part_no'] == "PART 123"
+
+    master_snapshot = mcd_model.get_recent_snapshot(db, master_project["_id"])
+    if before_approval_snapshot:
+        assert before_approval_snapshot["_id"] != master_snapshot["_id"], "A new snapshot should be created during merge"
+    assert master_snapshot["author"] == project["owner"], "Recent change should be from the same author"
+    assert master_snapshot["changelog"]["created"] == ["APPROVAL_FC"]
+    assert master_snapshot["changelog"]["updated"] == []
+    assert master_snapshot["changelog"]["deleted"] == []
 
     assert len(email_sender.emails_sent) == 1, "only one set of messages should be sent"
     email = email_sender.emails_sent[0]
