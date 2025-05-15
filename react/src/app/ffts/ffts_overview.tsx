@@ -142,7 +142,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
 
         // fcs were provided, nothing to do
         if (fcs != undefined) {
-            setAllFcs(fcs);
             return;
         }
 
@@ -188,8 +187,11 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
     }
 
     const fcList = useMemo(() => {
+        if (fcs != undefined) {
+            return fcs;
+        }
         return calculateValidFcs(allFcs, usedFcs)
-    }, [allFcs, usedFcs])
+    }, [fcs, allFcs, usedFcs])
 
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Add a New FC" autoFocus={true} style={{ width: "70ch" }}>

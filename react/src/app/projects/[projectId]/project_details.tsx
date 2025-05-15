@@ -561,6 +561,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
                     onSubmit={(newFft) => addNewFft(newFft)}
+                    fcs={calculateValidFcs(allFcs, fftData.map(fft => fft.fc))}
                 />
                 : null
             }
