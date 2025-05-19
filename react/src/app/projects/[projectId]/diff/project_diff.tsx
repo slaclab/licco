@@ -54,15 +54,15 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
         <thead>
             {title ? <tr><th colSpan={17}><h5>{title}</h5></th></tr> : null}
             <tr>
-                <th colSpan={7}></th>
+                <th colSpan={8}></th>
 
                 <th colSpan={3} className="text-center">Nominal Location (meters in LCLS coordinates)</th>
                 <th colSpan={3} className="text-center">Nominal Angle (radians)</th>
                 <th></th>
                 <th></th>
-                <th></th>
             </tr>
             <tr>
+                <th></th>
                 <th>FC</th>
                 <th>Fungible</th>
                 <th>TC Part No.</th>
@@ -80,7 +80,6 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
                 <th className="text-center">Ry</th>
                 <th>Must Ray Trace</th>
                 <th>Comments</th>
-                <th>Communications</th>
             </tr>
         </thead>
     )
@@ -167,6 +166,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
         return data.map(devices => {
             return (<tr key={devices.a._id}>
+                <td><ButtonGroup>{renderDiscussionButton(devices.a)}</ButtonGroup></td>
                 <td>{renderField(devices.a, devices.b, 'fc')}</td>
                 <td>{renderField(devices.a, devices.b, 'fg')}</td>
                 <td>{renderField(devices.a, devices.b, 'tc_part_no')}</td>
@@ -186,8 +186,6 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
                 <td>{renderField(devices.a, devices.b, 'ray_trace')}</td>
 
                 <td>{renderField(devices.a, devices.b, 'comments')}</td>
-
-                <td><ButtonGroup>{renderDiscussionButton(devices.a)}</ButtonGroup></td>
             </tr>
             )
         })
@@ -197,6 +195,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
         return data.map(d => {
             return (
                 <tr key={d._id}>
+                    <td>{renderDiscussion ? <ButtonGroup>{renderDiscussionButton(d)}</ButtonGroup> : null}</td>
                     <td>{d.fc}</td>
                     <td>{d.fg}</td>
                     <td>{d.tc_part_no}</td>
@@ -215,8 +214,6 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
 
                     <td>{d.ray_trace}</td>
                     <td>{d.comments}</td>
-
-                    <td>{renderDiscussion ? <ButtonGroup>{renderDiscussionButton(d)}</ButtonGroup> : null}</td>
                 </tr>
             )
         })

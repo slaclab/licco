@@ -4,7 +4,7 @@ export class SortState<T> {
     constructor(public column: T, public sortDesc: boolean = true) { }
 
     public changed(clickedColumn: T): SortState<T> {
-        if (clickedColumn == this.column) {
+        if (clickedColumn === this.column) {
             // same field was clicked, change the sort order
             let newSortOrder = !this.sortDesc;
             return new SortState(clickedColumn, newSortOrder);
@@ -67,4 +67,30 @@ export function sortDate(a?: Date, b?: Date, desc: boolean = true) {
     let timeB = b ? toUnixMs(b) : 0;
     let diff = timeB - timeA;
     return desc ? diff : -diff;
+}
+
+export function sortArrayStr(a?: string[], b?: string[], desc: boolean = true) {
+    if (a !== undefined && b !== undefined) {
+        const aLen = a.length;
+        const bLen = b.length;
+        if (aLen > 0 && bLen > 0) {
+            let diff = a[0].localeCompare(b[0]);
+            return desc ? diff : -diff;
+        }
+
+        // one of those is 0, the one with the elements should appear before       
+        if (aLen > 0) {
+            return 1;
+        }
+        return -1;
+    }
+
+    if (a === undefined) {
+        return 1;
+    }
+
+    if (b === undefined) {
+        return -1;
+    }
+    return 0;
 }

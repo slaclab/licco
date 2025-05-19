@@ -13,7 +13,7 @@ import { LoadingSpinner } from "@/app/components/loading";
 import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { numberOrDefault } from "@/app/utils/num_utils";
-import { SortState, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { SortState, sortArrayStr, sortNumber, sortString } from "@/app/utils/sort_utils";
 import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { FFTInfo } from "../project_model";
 import { renderTableField } from "../project_utils";
@@ -47,6 +47,15 @@ export function sortDeviceDataByColumn(data: ProjectDeviceDetails[], col: device
                 }
                 return sortString(a.fc, b.fc, false); // asc
             });
+            break;
+        case "beamline":
+            data.sort((a, b) => {
+                let diff = sortArrayStr(a.beamline, b.beamline, desc);
+                if (diff != 0) {
+                    return diff;
+                }
+                return sortString(a.fc, b.fc, false); // ascending sort by fc (if beamlines are equal)
+            })
             break;
         default:
             let isNumericField = ProjectDeviceDetailsNumericKeys.indexOf(col) >= 0;

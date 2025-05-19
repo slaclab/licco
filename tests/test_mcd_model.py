@@ -901,13 +901,12 @@ def test_update_ffts_invalid_empty_value(db):
     #assert err == "'nom_loc_z' value is required for a Non-Conceptual device"
 
 def test_update_ffts_wrong_type(db):
-    #TODO: update test once we add in validation
     project = create_test_project(db, "test_user", "test_update_wrong_type", "")
 
-    ffts = [{'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.DeviceState.Installed.value, "nom_loc_z": "aaa"}]
+    ffts = [create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.DeviceState.Installed.value, "nom_loc_z": "aaa"})]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
-    #assert updates.fail == 1
-    #assert err == "Invalid data type for 'nom_loc_z': 'aaa'"
+    assert updates.fail == 1
+    assert "invalid 'nom_loc_z' value: could not convert string to float: 'aaa'" in err
 
 
 def create_string_logger(stream: io.StringIO) -> logging.Logger:
