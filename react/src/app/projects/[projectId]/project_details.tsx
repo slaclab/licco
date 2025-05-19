@@ -5,7 +5,7 @@ import { createLink } from "@/app/utils/path_utils";
 import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
+import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchFcs, fetchKeymap, fetchProjectFfts, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
@@ -18,6 +18,8 @@ import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/sele
 import { FFTInfo } from "../project_model";
 import { renderTableField } from "../project_utils";
 import styles from './project_details.module.css';
+import { StringSuggest } from "@/app/components/suggestion_field";
+import { calculateValidFcs } from "@/app/utils/fc_utils";
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
@@ -91,6 +93,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     /* @FUTURE: these two fields may come from backend in the future */
     const [deviceLocations, setDeviceLocations] = useState(["", "EBD", "FEE", "H1.1", "H1.2", "H1.3", "H2", "XRT", "Alcove", "H4", "H4.5", "H5", "H6"]);
     const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
+    const [allFcs, setAllFcs] = useState<string[]>([]);
 
     // dialogs open state
     const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
@@ -164,13 +167,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
 
         const loadInitialData = async () => {
-            const [data, fftData, keymapData, whoami] = await Promise.all([
+            const [data, fftData, keymapData, whoami, allFcs] = await Promise.all([
                 fetchProjectInfo(projectId),
                 fetchProjectFfts(projectId, showAllEntries, asOfTimestamp),
                 fetchKeymap(),
                 whoAmI(),
+                fetchFcs(),
             ])
-            return { data, fftData, keymapData, whoami };
+            return { data, fftData, keymapData, whoami, allFcs };
         }
 
         loadInitialData().then(d => {
@@ -178,6 +182,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setFftData(d.fftData);
             setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
+            setAllFcs(d.allFcs);
         }).catch((e: JsonErrorMsg) => {
             console.error("Failed to load required project data", e);
             setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -508,6 +513,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                 availableFftStates={availableFftStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
+                                availableFcs={allFcs}
+                                usedFcs={fftData.map(fft => fft.fc)}
                                 onEditDone={(updatedDeviceData, action) => {
                                     if (action == "cancel") {
                                         setEditedDevice(undefined);
@@ -554,6 +561,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
                     onSubmit={(newFft) => addNewFft(newFft)}
+                    fcs={calculateValidFcs(allFcs, fftData.map(fft => fft.fc))}
                 />
                 : null
             }
@@ -859,8 +867,10 @@ const DeviceDataEditTableRow: React.FC<{
     availableFftStates: DeviceState[],
     availableLocations: string[],
     availableBeamlines: string[],
+    availableFcs:       string[],
+    usedFcs:            string[],
     onEditDone: (newDevice: ProjectDeviceDetails, action: "ok" | "cancel") => void,
-}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, onEditDone }) => {
+}> = ({ project, keymap, device, availableFftStates, availableLocations, availableBeamlines, availableFcs, usedFcs, onEditDone }) => {
     const [editError, setEditError] = useState('');
     const [isSubmitting, setSubmitting] = useState(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -868,9 +878,9 @@ const DeviceDataEditTableRow: React.FC<{
 
     interface EditField {
         key: (keyof ProjectDeviceDetails);
-        type: "string" | "number" | "select" | "multi-select"
+        type: "string" | "number" | "select" | "multi-select" | "suggest"
         value: [string | string[] | undefined, Dispatch<SetStateAction<string | undefined>> | Dispatch<SetStateAction<string[] | undefined>>];
-        valueOptions?: string[]; // only used when type == "select"
+        valueOptions?: string[]; // only used when type == "select" or "suggest"
         err: [boolean, Dispatch<SetStateAction<boolean>>];
         min?: number;
         max?: number;
@@ -881,8 +891,12 @@ const DeviceDataEditTableRow: React.FC<{
         return availableFftStates.map(s => s.name);
     }, [availableFftStates])
 
+    let fcList = useMemo(() => {
+        return calculateValidFcs(availableFcs, usedFcs, device.fc)
+    }, [availableFcs, usedFcs, device.fc])
+
     const editableDeviceFields: EditField[] = [
-        { key: 'fc', type: "string", value: useState<string>(), err: useState(false) },
+        { key: 'fc', type: "suggest", valueOptions: fcList, value: useState<string>(), err: useState(false) },
         { key: 'fg', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'tc_part_no', type: "string", value: useState<string>(), err: useState(false) },
         { key: 'stand', type: "string", value: useState<string>(), err: useState(false) },
@@ -990,6 +1004,12 @@ const DeviceDataEditTableRow: React.FC<{
             return;
         }
 
+        // ensure that fcs are unique within a project
+        if (usedFcs.includes(changes.fc)) {
+            setEditError(`${changes.fc} is already a part of the project: \"${project.name}\"`);
+            return;
+        }
+
         setValueChanges(changes);
         setConfirmDialogOpen(true);
     }
@@ -1021,7 +1041,9 @@ const DeviceDataEditTableRow: React.FC<{
                     inputField = <SelectEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
                 } else if (field.type == "multi-select") {
                     inputField = <MultiSelectEditField selectedValues={field.value[0] ? field.value[0] as string[] : []} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
-                } else {
+                } else if (field.type == "suggest") {
+                    inputField = <SuggestEditField value={field.value[0] as string ?? ''} setter={field.value[1]} options={field.valueOptions || []} err={field.err[0]} errSetter={field.err[1]} />
+                }else {
                     throw new Error("Unhandled field type: ", field.type)
                 }
                 return <td key={field.key}>{inputField}</td>
@@ -1077,6 +1099,12 @@ const StringEditField: React.FC<{ value: string, setter: any, err: boolean, errS
 const SelectEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
     return useMemo(() => {
         return <HTMLSelect value={value} options={options} onChange={(e) => setter(e.target.value)} style={{ width: "auto" }} iconName="caret-down" fill={true} />
+    }, [value, options, setter])
+}
+
+const SuggestEditField: React.FC<{ value: string, setter: any, options: string[], err: boolean, errSetter: any }> = ({ value, setter, options, err, errSetter }) => {
+    return useMemo(() => {
+        return <StringSuggest value={value} setValue={setter} items={options} inputProps={{style: { width: 'auto', minWidth: "5ch" }}} fill={true} />
     }, [value, options, setter])
 }
 

@@ -1,10 +1,12 @@
-import { Alert, Button, ButtonGroup, Colors, Dialog, DialogBody, DialogFooter, FormGroup, Icon, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
-import React, { useEffect, useState } from "react";
-import { FFTInfo, deleteFft, fetchFfts } from "../projects/project_model";
+import { Alert, Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, NonIdealState, Spinner } from "@blueprintjs/core";
+import React, { useEffect, useMemo, useState } from "react";
+import { FFTInfo, deleteFft, fetchFcs, fetchProjectFfts } from "../projects/project_model";
 import { JsonErrorMsg } from "../utils/fetching";
-import { sortString } from "../utils/sort_utils";
+import { StringSuggest } from "../components/suggestion_field";
+import { calculateValidFcs } from "../utils/fc_utils";
 
 export const FFTOverviewTable: React.FC = () => {
+    const [fcs, setFcs] = useState<string[]>([]);
     const [data, setData] = useState<FFTInfo[]>([]);
     const [isFftDialogOpen, setIsFftDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -29,8 +31,8 @@ export const FFTOverviewTable: React.FC = () => {
 
     useEffect(() => {
         setIsLoading(true);
-        fetchFfts()
-            .then(data => setData(data))
+        fetchFcs()
+            .then(fcs => setFcs(fcs))
             .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch ffts data: " + e.error;
                 setLoadingError(msg);
@@ -85,7 +87,7 @@ export const FFTOverviewTable: React.FC = () => {
 
             <AddFftDialog isOpen={isFftDialogOpen}
                 dialogType="create"
-                ffts={data}
+                fcs={fcs}
                 currentProject=""
                 onClose={() => setIsFftDialogOpen(false)}
                 onSubmit={(fft) => {
@@ -122,57 +124,47 @@ export const FFTOverviewTable: React.FC = () => {
 
 
 
-export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, ffts, currentProject, dialogType, onClose, onSubmit }) => {
+export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
     const [fgName, setFgName] = useState('');
-    const [allFfts, setAllFfts] = useState<FFTInfo[]>([]);
+    const [allFcs, setAllFcs] = useState<string[]>([]);
+    const [usedFcs, setUsedFcs] = useState<string[]>([]);
 
     const [dialogError, setDialogError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [fcNames, setFcNames] = useState<Set<string>>(new Set());
-
-    const createFgFcNames = (ffts: FFTInfo[]) => {
-        let fcSet = new Set<string>();
-
-        for (let fft of ffts) {
-            let fcName = fft.fc.name;
-            if (fcName != "") {
-                fcSet.add(fcName);
-            }
-        }
-
-        setFcNames(fcSet);
-        setFgName('');
-    }
-
     useEffect(() => {
         if (!isOpen) {
+            setFcName('');
             return;
         }
 
-        // ffts were provided, nothing to do
-        if (ffts != undefined) {
-            createFgFcNames(ffts);
-            setAllFfts(ffts);
+        // fcs were provided, nothing to do
+        if (fcs != undefined) {
             return;
         }
 
-        // ffts were not provided, download them on our own
+        // fcs were not provided, download them on our own
         setIsLoading(true);
-        fetchFfts()
-            .then(data => {
-                createFgFcNames(data);
-                setAllFfts(data);
+
+        const p1 = fetchProjectFfts(currentProject)
+            .then(ffts => 
+                setUsedFcs(ffts.map(fft => fft.fc))
+            );
+        const p2 = fetchFcs()
+            .then(fcs => {
+                setAllFcs(fcs);
                 setDialogError('');
-            }).catch((e: JsonErrorMsg) => {
+            });
+        Promise.all([p1, p2])
+            .catch((e: JsonErrorMsg) => {
                 let msg = "Failed to fetch FFTs: " + e.error;
                 setDialogError(msg);
             }).finally(() => {
                 setIsLoading(false)
             });
-    }, [ffts, isOpen])
+    }, [isOpen, currentProject, fcs])
 
 
     const disableSubmit = fcName.trim() == "";
@@ -180,24 +172,6 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
     const submit = () => {
         const fc = fcName.trim();
         const fg = fgName.trim();
-
-        if (dialogType === 'addToProject') {
-            // check if the chosen combination of fc-fg name already exists in provided data
-            // if it does, we simply return an existing fft. This is a special behavior
-            // when we are adding an fft to a project that doesn't already have such fft 
-            // assigned.
-            for (let fft of allFfts) {
-                if (fft.fc.name == fc) {
-                    // the chosen combination already exists, so there is nothing 
-                    // to create. Simply return
-                    onSubmit(fft)
-                    return;
-                }
-            }
-
-            // chosen fc-fg name combination was not found, therefore we have to create
-            // a new one.
-        }
 
         // TODO: refactor this, we are no longer using this
         let data: FFTInfo = {
@@ -209,7 +183,15 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
 
         setIsSubmitting(true);
         onSubmit(data);
+        setIsSubmitting(false);
     }
+
+    const fcList = useMemo(() => {
+        if (fcs != undefined) {
+            return fcs;
+        }
+        return calculateValidFcs(allFcs, usedFcs)
+    }, [fcs, allFcs, usedFcs])
 
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title="Add a New FC" autoFocus={true} style={{ width: "70ch" }}>
@@ -221,25 +203,14 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, ffts?: FFTInfo[], current
                 {isLoading ?
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
                     :
-                    <>
-                        <datalist id="fc-names-list">
-                            {Array.from(fcNames.values()).sort((a, b) => sortString(a, b, false)).map(name => {
-                                return <option key={name} value={name} />
-                            })
-                            }
-                        </datalist>
-
-                        <FormGroup label="Functional Component:" labelFor="fc-name">
-                            <InputGroup id="fc-name"
-                                autoFocus={true}
-                                list="fc-names-list"
-                                placeholder=""
-                                value={fcName}
-                                rightElement={<Icon className="ps-2 pe-2" icon="caret-down" color={Colors.GRAY1} />}
-                                onValueChange={(val: string) => setFcName(val)} />
-                        </FormGroup>
-
-                    </>
+                    <FormGroup label="Functional Component:" labelFor="fc-name">
+                        <StringSuggest value={fcName} setValue={setFcName} items={fcList} 
+                            inputProps={{ 
+                                id: "fc-name", 
+                                autoFocus: true,
+                            }} 
+                        />
+                    </FormGroup>
                 }
 
             </DialogBody>
