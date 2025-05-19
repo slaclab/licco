@@ -244,8 +244,7 @@ def svc_get_project_changes(prjid):
     return json_response(snapshots)
 
 
-# @TODO: rename endpoint at some point (we no longer use ffts, only fcs as strings)
-@licco_ws_blueprint.route("/ffts/", methods=["GET"])
+@licco_ws_blueprint.route("/fcs/", methods=["GET"])
 @context.security.authentication_required
 def svc_get_fcs():
     """

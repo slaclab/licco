@@ -1,22 +1,21 @@
 import { HtmlPage } from "@/app/components/html_page";
-import { JsonErrorMsg } from "@/app/utils/fetching";
-import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
-import { createLink } from "@/app/utils/path_utils";
-import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
-import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
-
 import { LoadingSpinner } from "@/app/components/loading";
 import { AddFftDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
+import { JsonErrorMsg } from "@/app/utils/fetching";
+import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
 import { numberOrDefault } from "@/app/utils/num_utils";
+import { createLink } from "@/app/utils/path_utils";
 import { SortState, sortArrayStr, sortNumber, sortString } from "@/app/utils/sort_utils";
+import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HTMLSelect, Icon, InputGroup, MenuItem, NonIdealState, NumericInput } from "@blueprintjs/core";
 import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
-import { FFTInfo } from "../project_model";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
+import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
+import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
+import { CopyDeviceValuesDialog, FFTCommentViewerDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
+
 import styles from './project_details.module.css';
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
