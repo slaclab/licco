@@ -326,6 +326,8 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
         for (let comment of device.discussion) {
             comment.time = new Date(comment.time);
         }
+    } else if (device.discussion === undefined) {
+        device.discussion = [];
     }
 }
 

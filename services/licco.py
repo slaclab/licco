@@ -278,9 +278,9 @@ def get_latest_project_device_data(prjid, fc):
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
 @project_writable
-def svc_update_fc_in_project(prjid, fftid):
+def svc_update_device_in_project(prjid, fftid):
     """
-    Update the values of a functional component in a project
+    Update the values of a device in a project
     """
     fcupdate = request.json
     fcupdate["_id"] = fftid
@@ -299,11 +299,32 @@ def svc_update_fc_in_project(prjid, fftid):
             'created': datetime.datetime.now(datetime.UTC)
         }]
 
-    device_id, err = mcd_model.change_device_fc(licco_db, userid, prjid, fcupdate)
-    if err:
-        return json_error(err)
-    updated_device = mcd_model.get_project_devices(licco_db, prjid, device_id=device_id)
-    return json_response(updated_device)
+    fc = fcupdate.get("fc", None)
+    if fc:
+        device_id, err = mcd_model.change_device_fc(licco_db, userid, prjid, fcupdate)
+        if err:
+            return json_error(err)
+    else:
+        # get the fc of the fftid, before using the update function
+        device = mcd_model.get_device(licco_db, fftid)
+        if device:
+            fc = device['fc']
+            fcupdate['fc'] = fc
+
+        ok, err, changed_fields, device_id = mcd_model.update_device_in_project(licco_db, userid, prjid, fcupdate)
+        if err:
+            return json_error(err)
+
+    if not device_id:   # device fields have not changed.
+        device_id = fftid
+
+    # it's possible that another user made a change just after we made ours: in this case we want to
+    # pull out this device fc from the latest snapshot
+    updated_devices = mcd_model.get_project_devices(licco_db, prjid, device_id=device_id)
+    device = updated_devices.get(fc, None)
+    if not device:
+        return json_error(f"device '{fc}' was not found in the database after updating: this should never happen unless someone has just deleted it (or deleted an entire project)")
+    return json_response(device)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])

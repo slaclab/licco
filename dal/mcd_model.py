@@ -376,6 +376,10 @@ def insert_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[s
 def change_device_fc(licco_db: MongoDb, userid: str, prjid: str, update: Dict[str, any]) -> Tuple[str, str]:
     device_id = update.get("_id", None)
     if empty_string_or_none(device_id):
+        return "", f"Can't change a device fc: '_id' field should not be empty"
+
+    device_fc = update.get('fc', None)
+    if empty_string_or_none(device_fc):
         return "", f"Can't change a device fc: 'fc' field should not be empty"
 
     project = get_project(licco_db, prjid)
@@ -496,7 +500,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
 
 def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, modification_time=None) -> Tuple[str, Dict[str, any], str]:
-    device_changes = {}
+    device_changes : Dict[str, any] = {}
 
     # the user wants to update an existing device with new values
     # create a copy of a device, so we don't mutate an existing device
@@ -550,10 +554,10 @@ def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: M
             updated_devices = [ObjectId(new_device_id)]
             if snapshot:
                 updated_devices.extend([id for id in snapshot["devices"] if id != ObjectId(old_id)])
-
-            device_changes = Changelog()
-            device_changes.add_updated(fc)
-            create_new_snapshot(licco_db, userid, prjid, updated_devices, changelog=device_changes)
+            
+            changelog = Changelog()
+            changelog.add_updated(fc)
+            create_new_snapshot(licco_db, userid, prjid, updated_devices, changelog=changelog)
 
         return "", device_changes, str(new_device_id)
 
