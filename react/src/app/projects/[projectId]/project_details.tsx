@@ -14,7 +14,7 @@ import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useStat
 import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
+import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog } from "./project_dialogs";
 
 import styles from './project_details.module.css';
 
@@ -106,7 +106,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
-    const [isTagSelectionDialogOpen, setIsTagSelectionDialogOpen] = useState(false);
     const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -411,8 +410,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         <>
                                             <Button icon="tag-add" title="Create a snapshot" variant="minimal" size="small"
                                                 onClick={(e) => { setIsTagCreationDialogOpen(true) }} />
-                                            <Button icon="tags" title="Show created snapshots" variant="minimal" size="small"
-                                                onClick={(e) => { setIsTagSelectionDialogOpen(true) }} />
                                             <Divider />
                                         </>
                                         : null
@@ -659,19 +656,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         updateQueryParams(fcFilter, fgFilter, stateFilter, timestampFilter);
                         setAsOfTimestampFilter(timestampFilter);
                     }}
-                />
-                : null}
-            {project && isProjectApproved ?
-                <SnapshotSelectionDialog
-                    isOpen={isTagSelectionDialogOpen}
-                    projectId={project._id}
-                    onSubmit={(tagDate) => {
-                        loadFFTData(project._id, true, tagDate);
-                        updateQueryParams(fcFilter, fgFilter, stateFilter, tagDate.toISOString());
-                        setAsOfTimestampFilter(tagDate.toISOString());
-                        setIsTagSelectionDialogOpen(false);
-                    }}
-                    onClose={() => setIsTagSelectionDialogOpen(false)}
                 />
                 : null}
             {project && isProjectApproved ?

@@ -238,7 +238,7 @@ def svc_get_project_changes(prjid):
     """
     Get the functional component objects
     """
-    limit = request.args.get("limit", 100)
+    limit = int(request.args.get("limit", 100))
     snapshots, err = mcd_model.get_project_history(licco_db, prjid, limit=limit)
     if err:
         return json_error(err)
