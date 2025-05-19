@@ -1,9 +1,9 @@
 import { Alert, Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useMemo, useState } from "react";
-import { FFTInfo, deleteFft, fetchFcs, fetchProjectFfts } from "../projects/project_model";
-import { JsonErrorMsg } from "../utils/fetching";
 import { StringSuggest } from "../components/suggestion_field";
+import { FFTInfo, deleteFft, fetchFcs, fetchProjectDevices } from "../projects/project_model";
 import { calculateValidFcs } from "../utils/fc_utils";
+import { JsonErrorMsg } from "../utils/fetching";
 
 export const FFTOverviewTable: React.FC = () => {
     const [fcs, setFcs] = useState<string[]>([]);
@@ -148,9 +148,9 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
         // fcs were not provided, download them on our own
         setIsLoading(true);
 
-        const p1 = fetchProjectFfts(currentProject)
-            .then(ffts => 
-                setUsedFcs(ffts.map(fft => fft.fc))
+        const p1 = fetchProjectDevices(currentProject)
+            .then(devices =>
+                setUsedFcs(devices.map(device => device.fc))
             );
         const p2 = fetchFcs()
             .then(fcs => {
