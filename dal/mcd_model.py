@@ -213,6 +213,8 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, device_id:
         return False, f"Comment should not be empty", None
 
     project = get_project(licco_db, project_id)
+    if not project:
+        return False, f"Can't add a comment to a device in a project that does not exist (id: {project_id})"
     project_name = project["name"]
     status = project["status"]
 
@@ -237,10 +239,10 @@ def add_fft_comment(licco_db: MongoDb, user_id: str, project_id: str, device_id:
     }
     snapshot = get_recent_snapshot(licco_db, project_id)
     if not snapshot:
-        return False, f"No snapshot found for project id {project_id}"
+        return False, f"No snapshot found for a project id {project_id}"
 
     if ObjectId(device_id) not in snapshot["devices"]:
-        return False, f"No device with ID {device_id} exists in project {project_name}"
+        return False, f"No device with ID {device_id} exists in a project {project_name}"
 
     status, errormsg = insert_comment_db(licco_db, project_id, device_id, new_comment)
     return status, errormsg
@@ -1279,7 +1281,12 @@ def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tupl
     prj = get_project(licco_db, prjid)
     if not prj:
         return [], f"Project {prjid} does not exist"
-    snapshots = list(licco_db["project_snapshots"].find({"project_id": ObjectId(prjid)}).sort("created", -1).limit(limit))
+
+    out = licco_db["project_snapshots"].find({"project_id": ObjectId(prjid)}).sort("created", -1)
+    if limit > 0:
+        out.limit(limit)
+
+    snapshots = list(out)
     for snap in snapshots:
         if "changelog" not in snap:
             changelog = Changelog()

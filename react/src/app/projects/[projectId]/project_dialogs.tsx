@@ -11,7 +11,7 @@ import { DeviceValueDiff, diffDeviceFields } from "./diff/project_diff_model";
 
 
 // this dialog is used for filtering the table (fc, fg, and based on state)
-export const FilterFFTDialog: React.FC<{
+export const FilterDeviceDialog: React.FC<{
   isOpen: boolean;
   possibleStates: DeviceState[];
   onClose: () => void;
@@ -54,6 +54,7 @@ export const FilterFFTDialog: React.FC<{
             placeholder="Use GLOB pattern to filter on FC name"
             value={fcFilter}
             onKeyUp={submitOnEnter}
+            autoFocus={true}
             onValueChange={(val: string) => setFcFilter(val)}
           />
         </FormGroup>
@@ -366,7 +367,7 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
   )
 };
 
-export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<string, string>, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, keymap, currentProject, onClose, displayProjectSince }) => {
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, currentProject, onClose, displayProjectSince }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogErr, setDialogErr] = useState('');
   const [data, setData] = useState<ProjectSnapshot[]>([])
@@ -409,6 +410,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
     };
 
     return (
+      <>
       <table className="table table-sm table-bordered table-striped">
         <thead>
           <tr>
@@ -421,7 +423,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
           </tr>
         </thead>
         <tbody>
-          {data.map(change => {
+            {data.map((change, i) => {
             return (
               <tr key={change._id}>
                 <td>
@@ -440,8 +442,12 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, keymap: Record<st
           })}
         </tbody>
       </table>
+
+        {/* Inform the user that they are looking at a limited number of changes (for performance reasons) */}
+        {data.length < 100 ? null : <p className="comment">NOTE: only the last {data.length} user changes are displayed in this table!</p>}
+      </>
     )
-  }, [data, dialogErr, isLoading, currentProject.name, displayProjectSince, keymap])
+  }, [data, dialogErr, isLoading, currentProject.name, displayProjectSince])
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%" }}>
@@ -782,7 +788,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
   )
 }
 
-export const CommentDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, onClose, onCommentAdd }) => {
+export const CommentDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, disableActionButton?: boolean, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, disableActionButton = false, onClose, onCommentAdd }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');
@@ -827,10 +833,11 @@ export const CommentDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, de
 
         {isUserAProjectEditor(project, user) || isUserAProjectApprover(project, user) ?
           <FormGroup label="Add a comment:">
-            <TextArea autoFocus={true} fill={true} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
+            <TextArea autoFocus={true} fill={true} disabled={disableActionButton} onChange={e => setComment(e.target.value)} value={comment} placeholder="Comment text..." rows={4} />
 
             <ButtonGroup className="d-flex justify-content-end">
               <Button className="mt-1" intent="primary" loading={isSubmitting}
+                disabled={disableActionButton}
                 onClick={e => addAComment()}>Add Comment</Button>
             </ButtonGroup>
             {dialogErr ? <p className="error">ERROR: {dialogErr}</p> : null}
@@ -845,7 +852,7 @@ export const CommentDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, de
       </DialogBody>
       <DialogFooter actions={
         <>
-          <Button onClick={e => onClose()}>Close</Button>
+          <Button onClick={e => onClose()} autoFocus={disableActionButton ? true : false}>Close</Button>
         </>
       }>
       </DialogFooter>

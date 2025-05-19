@@ -14,7 +14,7 @@ import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useStat
 import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CommentDialog, CopyDeviceValuesDialog, FilterFFTDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
+import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog, SnapshotSelectionDialog } from "./project_dialogs";
 
 import styles from './project_details.module.css';
 
@@ -337,7 +337,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || asOfTimestampFilter;
     const isEditedTable = editedDevice != undefined;
-    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser)
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser) || asOfTimestampFilter !== ""
 
     return (
         <HtmlPage>
@@ -470,11 +470,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     <tbody>
                         {fftDataDisplay.map(device => {
                             const isEditedDevice = editedDevice == device;
-                            const disableRow = isEditedTable && !isEditedDevice;
+                            const disableRow = isEditedTable && !isEditedDevice
                             if (!isEditedDevice) {
                                 return <DeviceDataTableRow key={device._id}
                                     project={project} device={device} currentUser={currentlyLoggedInUser}
                                     disabled={disableRow}
+                                    disableEditButtons={disableActionButtons}
                                     onEdit={(device) => setEditedDevice(device)}
                                     onCopyFft={(device) => {
                                         setSelectedDevice(device);
@@ -545,7 +546,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 : null
             }
 
-            <FilterFFTDialog
+            <FilterDeviceDialog
                 isOpen={isFilterDialogOpen}
                 possibleStates={availableFftStates}
                 onClose={() => setIsFilterDialogOpen(false)}
@@ -623,6 +624,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     project={project}
                     user={currentlyLoggedInUser}
                     device={commentDevice}
+                    disableActionButton={disableActionButtons}
                     onClose={() => {
                         setCommentDevice(undefined);
                         setIsFftCommentViewerOpen(false);
@@ -647,7 +649,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             {project ?
                 <ProjectHistoryDialog
                     currentProject={project}
-                    keymap={keymap}
                     isOpen={isProjectHistoryDialogOpen}
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
                     displayProjectSince={(time) => {
@@ -734,7 +735,7 @@ export const formatDevicePositionNumber = (value?: number | string): string => {
 }
 
 
-const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
+const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDeviceDetails, currentUser: string, disabled: boolean, disableEditButtons: boolean, onEdit: (device: ProjectDeviceDetails) => void, onCopyFft: (device: ProjectDeviceDetails) => void, onDeleteFft: (device: ProjectDeviceDetails) => void, onUserComment: (device: ProjectDeviceDetails) => void }> = ({ project, device, currentUser, disabled, disableEditButtons, onEdit, onCopyFft, onDeleteFft, onUserComment }) => {
     // we have to cache each table row, as once we have lots of rows in a table editing text fields within
     // becomes very slow due to constant rerendering of rows and their tooltips on every keystroke. 
     const [subdeviceRowOpen, setSubdeviceRowOpen] = useState(false);
@@ -755,12 +756,15 @@ const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDevice
                         {isProjectInDevelopment(project) && isUserAProjectEditor(project, currentUser) ?
                             <>
                                 <Button icon="edit" variant="minimal" size="small" title="Edit this device"
+                                    disabled={disableEditButtons}
                                     onClick={(e) => onEdit(device)}
                                 />
                                 <Button icon="refresh" variant="minimal" size="small" title={"Copy over the value from another project"}
+                                    disabled={disableEditButtons}
                                     onClick={(e) => onCopyFft(device)}
                                 />
                                 <Button icon="trash" variant="minimal" size="small" title={"Delete this device"}
+                                    disabled={disableEditButtons}
                                     onClick={(e) => onDeleteFft(device)}
                                 />
                                 <Button icon="chat" variant="minimal" size="small" title={"See user comments"}
@@ -831,7 +835,7 @@ const DeviceDataTableRow: React.FC<{ project: ProjectInfo, device: ProjectDevice
                 }
             </>
         )
-    }, [project, device, currentUser, disabled, onCopyFft, onDeleteFft, onEdit, onUserComment, subdeviceRowOpen])
+    }, [project, device, currentUser, disabled, disableEditButtons, onCopyFft, onDeleteFft, onEdit, onUserComment, subdeviceRowOpen])
 
     return row;
 }
@@ -1074,7 +1078,7 @@ const MultiSelectEditField: React.FC<{ selectedValues: string[], setter: any, op
             return normalizedValue === normalizedQuery;
         }
 
-        return normalizedValue.indexOf(query) >= 0;
+        return normalizedValue.indexOf(normalizedQuery) >= 0;
     }
 
     const removeTagValue = (tag: React.ReactNode, index: number) => {
