@@ -8,7 +8,7 @@ import { ProjectFftDiff, useFetchProjectDiffDataHook } from "./project_diff_mode
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
 import { renderTableField } from "../../project_utils";
-import { FFTCommentViewerDialog } from "../project_dialogs";
+import { CommentDialog } from "../project_dialogs";
 import styles from './project_diff.module.css';
 
 // displays the diff tables between two projects
@@ -287,7 +287,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, ty
             </Collapse>
 
             {commentDevice ?
-                <FFTCommentViewerDialog
+                <CommentDialog
                     project={diff.a}
                     isOpen={commentDevice != undefined}
                     device={commentDevice}

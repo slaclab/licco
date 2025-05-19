@@ -328,7 +328,7 @@ def svc_update_device_in_project(prjid, fftid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["POST"])
 @context.security.authentication_required
-def svc_add_fft_comment(prjid, fftid):
+def add_device_comment(prjid, fftid):
     """
     Endpoint for adding a comment into a device fft, despite the project not being in a development mode
     (approval comments and discussions should always be available, regardless of the project status)
@@ -347,13 +347,16 @@ def svc_add_fft_comment(prjid, fftid):
         return json_error(errormsg)
 
     data = mcd_model.get_project_devices(licco_db, prjid, device_id=fftid)
-    return json_response(data)
+    for key, val in data.items():
+        if str(val['_id']) == fftid:
+            return json_response(val)
+    return json_error(f"failed to find the device {fftid}: another user has probably changed or deleted this device")
 
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>/comment", methods=["DELETE"])
 @context.security.authentication_required
-def svc_remove_fft_comment(prjid, fftid):
+def remove_device_comment(prjid, fftid):
     """Remove a specific fft device comment or a set of comments"""
     userid = context.security.get_current_user_id()
 

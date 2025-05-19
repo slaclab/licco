@@ -747,7 +747,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
 
   const userNotes: string[] = useMemo(() => {
     return device.discussion.map((d) => {
-      let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;
+      let text = `${d.author} (${formatToLiccoDateTime(d.created)}):\n\n${d.comment}`;
       return text;
     });
   }, [device.discussion]);
@@ -782,7 +782,7 @@ export const ProjectEditConfirmDialog: React.FC<{ isOpen: boolean, keymap: Recor
   )
 }
 
-export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, onClose, onCommentAdd }) => {
+export const CommentDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, device: ProjectDeviceDetails, user: string, onClose: () => void, onCommentAdd: (device: ProjectDeviceDetails) => void }> = ({ isOpen, project, device, user, onClose, onCommentAdd }) => {
   const [dialogErr, setDialogErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [comment, setComment] = useState('');
@@ -790,7 +790,7 @@ export const FFTCommentViewerDialog: React.FC<{ isOpen: boolean, project: Projec
   const userNotes = useMemo(() => {
 
     let notes = device.discussion.map((d) => {
-      let text = `${d.author} (${formatToLiccoDateTime(d.time)}):\n\n${d.comment}`;
+      let text = `${d.author} (${formatToLiccoDateTime(d.created)}):\n\n${d.comment}`;
       return text;
     });
 

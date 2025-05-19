@@ -226,7 +226,7 @@ export function deviceDetailsBackendToFrontend(details: ProjectDeviceDetails): P
 interface ChangeComment {
     id: string;
     author: string;
-    time: Date;
+    created: Date;
     comment: string;
 }
 
@@ -324,7 +324,7 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
 
     if (device.discussion && device.discussion.length >= 1) {
         for (let comment of device.discussion) {
-            comment.time = new Date(comment.time);
+            comment.created = new Date(comment.created);
         }
     } else if (device.discussion === undefined) {
         device.discussion = [];
