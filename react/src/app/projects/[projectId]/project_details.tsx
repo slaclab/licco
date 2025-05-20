@@ -120,10 +120,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [fgFilter, setFgFilter] = useState("");
     const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
-    const [asOfTimestampFilter, setAsOfTimestampFilter] = useState("");
-
-    // tag creation
-    const [tagName, setTagName] = useState("");
+    const [timestampFilter, setTimestampFilter] = useState<Date>();
 
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
@@ -161,7 +158,19 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setFcFilter(queryParams.get("fc") ?? "");
             setFgFilter(queryParams.get("fg") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
-            setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
+
+            const timeQueryParam = queryParams.get("asoftimestamp")
+            if (timeQueryParam) {
+                let timeFilter = Date.parse(timeQueryParam);
+                if (isNaN(timeFilter)) {
+                    setTimestampFilter(undefined);
+                } else {
+                    const date = new Date(timeFilter);
+                    setTimestampFilter(date);
+                }
+            } else {
+                setTimestampFilter(undefined);
+            }
         }
 
         const showAllEntries = true;
@@ -333,9 +342,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
     const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
-    const isRemoveFilterEnabled = isFilterApplied || asOfTimestampFilter;
+    const isRemoveFilterEnabled = isFilterApplied || timestampFilter !== undefined;
     const isEditedTable = editedDevice != undefined;
-    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser) || asOfTimestampFilter !== ""
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser) || timestampFilter !== undefined
 
     return (
         <HtmlPage>
@@ -393,9 +402,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             setFcFilter('')
                                             setFgFilter('');
                                             setStateFilter('');
-                                            let timestampFilter = asOfTimestampFilter;
-                                            setAsOfTimestampFilter('');
-                                            if (timestampFilter) {
+                                            let timeFilter = timestampFilter;
+                                            setTimestampFilter(undefined);
+                                            if (timeFilter !== undefined) {
                                                 // timestamp filter was applied and now we have to load original data
                                                 loadFFTData(project._id, true);
                                             }
@@ -406,7 +415,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     <Divider />
 
                                     <Button icon="history" title="Show the history of changes" variant="minimal" size="small"
-                                        intent={asOfTimestampFilter ? "danger" : "none"}
+                                        intent={timestampFilter ? "danger" : "none"}
                                         onClick={(e) => setIsProjectHistoryDialogOpen(true)}
                                     />
 
@@ -542,7 +551,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     setFgFilter(newFgFilter);
                     newStateFilter = newStateFilter.startsWith("---") ? "" : newStateFilter;
                     setStateFilter(newStateFilter);
-                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter, asOfTimestampFilter);
+                    const timeFilter = timestampFilter ? timestampFilter.toISOString() : "";
+                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter, timeFilter);
                     setIsFilterDialogOpen(false);
                 }}
             />
@@ -638,13 +648,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     project={project}
                     isOpen={isProjectHistoryDialogOpen}
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
+                    selectedTimestamp={timestampFilter}
                     displayProjectSince={(time) => {
                         loadFFTData(project._id, true, time);
                         setIsProjectHistoryDialogOpen(false);
 
-                        let timestampFilter = time.toISOString();
-                        updateQueryParams(fcFilter, fgFilter, stateFilter, timestampFilter);
-                        setAsOfTimestampFilter(timestampFilter);
+                        let timeFilterStr = time ? time.toISOString() : '';
+                        updateQueryParams(fcFilter, fgFilter, stateFilter, timeFilterStr);
+                        setTimestampFilter(time);
                     }}
                 />
                 : null}
@@ -658,7 +669,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             setFcFilter('')
                             setFgFilter('');
                             setStateFilter('');
-                            setAsOfTimestampFilter('');
+                            setTimestampFilter(undefined);
                             updateQueryParams('', '', '', '');
                             const showAllEntries = true;
                             loadFFTData(projectId, showAllEntries);

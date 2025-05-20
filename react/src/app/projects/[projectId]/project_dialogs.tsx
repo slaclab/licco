@@ -366,7 +366,7 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
   )
 };
 
-export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, project, onClose, displayProjectSince }) => {
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, selectedTimestamp?: Date, onClose: () => void, displayProjectSince: (time?: Date) => void }> = ({ isOpen, project, selectedTimestamp, onClose, displayProjectSince }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogErr, setDialogErr] = useState('');
   const [snapshotHistory, setSnapshotHistory] = useState<ProjectSnapshot[]>([])
@@ -411,6 +411,22 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
       "maxWidth": "20%",
     };
 
+    const isSelectedHistory = (index: number, snapshotDate: Date, selectedDate?: Date): boolean => {
+      if (index == 0 && selectedDate === undefined) {
+        return true;
+      }
+
+      if (selectedDate === undefined) {
+        return false;
+      }
+
+      // selected date exists, compare it to snapshot date
+      if (snapshotDate.getTime() === selectedDate.getTime()) {
+        return true
+      }
+      return false
+    }
+
     return (
       <>
       <table className="table table-sm table-bordered table-striped">
@@ -427,13 +443,25 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
         </thead>
         <tbody>
             {snapshotHistory.map((snapshot, i) => {
+              const isSnapshotSelected = isSelectedHistory(i, snapshot.created, selectedTimestamp);
             return (
               <tr key={snapshot._id}>
                 <td>
                   <ButtonGroup>
                     <Button icon="history"
+                      intent={isSnapshotSelected ? "danger" : "none"}
+                      disabled={isSnapshotSelected}
                       title="View the project as of this point in time"
-                      onClick={(e) => displayProjectSince(snapshot.created)}
+                      onClick={(e) => {
+                        if (i == 0) {
+                          // clear timestamp so that the user will fetch the latest project data
+                          // and be able to edit the device fields
+                          displayProjectSince(undefined);
+                        } else {
+                          displayProjectSince(snapshot.created)
+                        }
+                      }
+                      }
                     />
 
                     &nbsp;
@@ -468,8 +496,8 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
 
   return (
     <>
-      <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${project.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%" }}>
-      <DialogBody useOverflowScrollContainer>
+      <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${project.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%", height: "90vh" }}>
+        <DialogBody useOverflowScrollContainer style={{ maxHeight: "100%" }}>
         {projectHistoryTable}
       </DialogBody>
       <DialogFooter actions={
