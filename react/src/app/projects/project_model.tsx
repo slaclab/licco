@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isArrayEqual } from "../utils/arr_utils";
 import { toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
+import { DeviceType } from "./device_model";
 
 export interface ProjectInfo {
     _id: string;
@@ -335,6 +336,7 @@ export interface ProjectFFT {
     _id: string;
     fc: string;
     fg: string;
+    device_type: DeviceType;
 }
 
 
@@ -554,6 +556,7 @@ export interface FFTInfo {
     is_being_used: boolean;
     fc: FC;
     fg: FG;
+    device_type: DeviceType
 }
 
 interface FC {

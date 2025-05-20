@@ -31,6 +31,11 @@ export enum DeviceType {
     GROUP = 11,
 }
 
+// map the DeviceType enum to an array of value/label pairs
+export const deviceTypes = Object.values(DeviceType)
+    .filter(key => typeof key == 'number') // filter out reverse mapping
+    .map(key => { return {value: key, label: DeviceType[key]}})
+
 // parse a device object from a provided json object. This lets us be typesafe in our ui code
 export function parseDevice(deviceObj: Record<string, any>): DeviceMcd {
     let deviceType = deviceObj.get('device_type')

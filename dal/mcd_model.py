@@ -473,6 +473,13 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
         if 'created' not in updates:
             updates['created'] = modification_time
+            
+        # the default state for a device should be Conceptual
+        if 'state' not in updates:
+            updates['state'] = "Conceptual"
+            
+        # a new device should have a new device_id
+        updates['device_id'] = str(uuid.uuid4())
 
         err = mcd_validate.validate_device(updates)
         if err:

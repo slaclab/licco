@@ -270,6 +270,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             _id: newFft._id,
             fc: newFft.fc.name,
             fg: newFft.fg.name,
+            device_type: newFft.device_type,
         }
 
         return addFftsToProject(project._id, [fft])
