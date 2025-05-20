@@ -443,7 +443,7 @@ export interface ProjectSnapshot {
 }
 
 export function fetchHistoryOfChanges(projectId: string, numberOfChanges: number = 100): Promise<ProjectSnapshot[]> {
-    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/changes/?limit=${numberOfChanges}`)
+    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/snapshots/?limit=${numberOfChanges}`)
         .then((data) => {
             // create date objects from given date
             data.forEach(d => d.created = new Date(d.created));

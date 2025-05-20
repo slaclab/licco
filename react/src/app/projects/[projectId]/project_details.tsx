@@ -14,7 +14,7 @@ import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useStat
 import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog } from "./project_dialogs";
+import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog } from "./project_dialogs";
 
 import styles from './project_details.module.css';
 
@@ -106,7 +106,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
-    const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
@@ -406,15 +405,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                     <Divider />
 
-                                    {isProjectApproved ?
-                                        <>
-                                            <Button icon="tag-add" title="Create a snapshot" variant="minimal" size="small"
-                                                onClick={(e) => { setIsTagCreationDialogOpen(true) }} />
-                                            <Divider />
-                                        </>
-                                        : null
-                                    }
-
                                     <Button icon="history" title="Show the history of changes" variant="minimal" size="small"
                                         intent={asOfTimestampFilter ? "danger" : "none"}
                                         onClick={(e) => setIsProjectHistoryDialogOpen(true)}
@@ -645,7 +635,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
             {project ?
                 <ProjectHistoryDialog
-                    currentProject={project}
+                    project={project}
                     isOpen={isProjectHistoryDialogOpen}
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
                     displayProjectSince={(time) => {
@@ -656,14 +646,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         updateQueryParams(fcFilter, fgFilter, stateFilter, timestampFilter);
                         setAsOfTimestampFilter(timestampFilter);
                     }}
-                />
-                : null}
-            {project && isProjectApproved ?
-                <SnapshotCreationDialog
-                    isOpen={isTagCreationDialogOpen}
-                    projectId={project._id}
-                    onSubmit={() => setIsTagCreationDialogOpen(false)}
-                    onClose={() => setIsTagCreationDialogOpen(false)}
                 />
                 : null}
             {project ?

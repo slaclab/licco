@@ -232,17 +232,31 @@ def svc_get_project_ffts(prjid):
     return json_response(project_fcs)
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/changes/", methods=["GET"])
+@licco_ws_blueprint.route("/projects/<prjid>/snapshots/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_project_changes(prjid):
+def get_project_snapshots(prjid):
     """
-    Get the functional component objects
+    Get a history of project changes (snapshots)
     """
     limit = int(request.args.get("limit", 100))
-    snapshots, err = mcd_model.get_project_history(licco_db, prjid, limit=limit)
+    snapshots, err = mcd_model.get_project_snapshots(licco_db, prjid, limit=limit)
     if err:
         return json_error(err)
     return json_response(snapshots)
+
+
+@licco_ws_blueprint.route("/projects/<prjid>/snapshots/<snapshot_id>/", methods=["POST"])
+@context.security.authentication_required
+def edit_snapshot_name(prjid, snapshot_id):
+    """Change snapshot name"""
+    name = request.args.get("name", "")
+    if not name:
+        return json_error("name parameter was not set")
+
+    updated_snapshot, err = mcd_model.edit_snapshot_name(licco_db, prjid, snapshot_id, name)
+    if err:
+        return json_error(err)
+    return json_response(updated_snapshot)
 
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])

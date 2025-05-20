@@ -1,10 +1,9 @@
 import { formatToLiccoDateTime } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
-import { Button, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
+import { Button, ButtonGroup, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
-import { ButtonGroup } from "react-bootstrap";
-import { DeviceState, ProjectDeviceDetails, ProjectInfo, ProjectSnapshot, Tag, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchDeviceDataByName, fetchHistoryOfChanges, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
+import { DeviceState, ProjectDeviceDetails, ProjectInfo, ProjectSnapshot, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchDeviceDataByName, fetchHistoryOfChanges, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { CollapsibleProjectNotes } from "../projects_overview";
 import { DeviceValueDiff, diffDeviceFields } from "./diff/project_diff_model";
@@ -242,7 +241,7 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
 
   const allChangesAreSelected = numOfFFTChanges == fieldsToCopy.length;
 
-  // render fft diff table
+  // render device diff table
   const renderDiffTable = () => {
     if (selectedProject === DEFAULT_PROJECT) {
       return <NonIdealState icon={"search"} title="No Project Selected" description={"Please select a project"} />
@@ -263,7 +262,7 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
 
     return (
       <>
-        <h6>FFT Value Changes:</h6>
+        <h6>Device Value Changes:</h6>
         <table className="table table-bordered table-striped table-sm">
           <thead>
             <tr>
@@ -367,10 +366,13 @@ export const CopyDeviceValuesDialog: React.FC<{ isOpen: boolean, currentProject:
   )
 };
 
-export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, currentProject, onClose, displayProjectSince }) => {
+export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectInfo, onClose: () => void, displayProjectSince: (time: Date) => void }> = ({ isOpen, project, onClose, displayProjectSince }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dialogErr, setDialogErr] = useState('');
-  const [data, setData] = useState<ProjectSnapshot[]>([])
+  const [snapshotHistory, setSnapshotHistory] = useState<ProjectSnapshot[]>([])
+
+  const [editedSnapshot, setEditedSnapshot] = useState<ProjectSnapshot>();
+  const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -378,9 +380,9 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
     }
 
     setIsLoading(true);
-    fetchHistoryOfChanges(currentProject._id)
+    fetchHistoryOfChanges(project._id)
       .then((data) => {
-        setData(data);
+        setSnapshotHistory(data);
         setDialogErr('');
       }).catch((e: JsonErrorMsg) => {
         console.error(e);
@@ -389,7 +391,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
       }).finally(() => {
         setIsLoading(false);
       })
-  }, [isOpen, currentProject._id]);
+  }, [isOpen, project._id]);
 
   const projectHistoryTable = useMemo(() => {
     if (isLoading) {
@@ -400,8 +402,8 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
       return <NonIdealState icon="error" title="Error" description={dialogErr} />
     }
 
-    if (data.length == 0) {
-      return <NonIdealState icon="clean" title="No Project History Exists" description={`Project ${currentProject.name} does not have any changes since creation`} />
+    if (snapshotHistory.length == 0) {
+      return <NonIdealState icon="clean" title="No Project History Exists" description={`Project ${project.name} does not have any changes since creation`} />
     }
 
     const changedDeviceColStyle = {
@@ -415,6 +417,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
         <thead>
           <tr>
             <th></th>
+              <th>Name</th>
             <th>Updated</th>
             <th>Created</th>
             <th>Deleted</th>
@@ -423,20 +426,34 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
           </tr>
         </thead>
         <tbody>
-            {data.map((change, i) => {
+            {snapshotHistory.map((snapshot, i) => {
             return (
-              <tr key={change._id}>
+              <tr key={snapshot._id}>
                 <td>
-                  <Button icon="history"
-                    title="View the project as of this point in time"
-                    onClick={(e) => displayProjectSince(change.created)}
-                  />
+                  <ButtonGroup>
+                    <Button icon="history"
+                      title="View the project as of this point in time"
+                      onClick={(e) => displayProjectSince(snapshot.created)}
+                    />
+
+                    &nbsp;
+
+                    <Button icon="edit"
+                      title="Edit Snapshot Name"
+                      onClick={(e) => {
+                        setEditedSnapshot(snapshot);
+                        setIsNameDialogOpen(true);
+                      }
+                      }
+                    />
+                  </ButtonGroup>
                 </td>
-                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.updated ?? [])}</td>
-                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.created ?? [])}</td>
-                <td style={changedDeviceColStyle}>{renderTableField(change.changelog?.deleted ?? [])}</td>
-                <td className="text-nowrap">{change.author}</td>
-                <td>{formatToLiccoDateTime(change.created)}</td>
+                <td>{snapshot.name}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(snapshot.changelog?.updated ?? [])}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(snapshot.changelog?.created ?? [])}</td>
+                <td style={changedDeviceColStyle}>{renderTableField(snapshot.changelog?.deleted ?? [])}</td>
+                <td className="text-nowrap">{snapshot.author}</td>
+                <td>{formatToLiccoDateTime(snapshot.created)}</td>
               </tr>
             )
           })}
@@ -444,13 +461,14 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
       </table>
 
         {/* Inform the user that they are looking at a limited number of changes (for performance reasons) */}
-        {data.length < 100 ? null : <p className="comment">NOTE: only the last {data.length} user changes are displayed in this table!</p>}
+        {snapshotHistory.length < 100 ? null : <p className="comment">NOTE: only the last {snapshotHistory.length} user changes are displayed in this table!</p>}
       </>
     )
-  }, [data, dialogErr, isLoading, currentProject.name, displayProjectSince])
+  }, [snapshotHistory, dialogErr, isLoading, project.name, displayProjectSince])
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${currentProject.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%" }}>
+    <>
+      <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${project.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%" }}>
       <DialogBody useOverflowScrollContainer>
         {projectHistoryTable}
       </DialogBody>
@@ -461,54 +479,89 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, currentProject: P
       }>
       </DialogFooter>
     </Dialog >
+
+      {editedSnapshot ?
+        <EditSnapshotNameDialog
+          project={project}
+          snapshot={editedSnapshot}
+          isOpen={isNameDialogOpen}
+          onClose={() => setIsNameDialogOpen(false)}
+          onSubmit={(updatedSnapshot) => {
+            // replace the snapshot with an updated snapshot
+            const oldSnapshot = editedSnapshot;
+            let updatedHistory = [];
+            for (const snap of snapshotHistory) {
+              if (snap._id !== oldSnapshot._id) {
+                updatedHistory.push(snap);
+                continue;
+              }
+              updatedHistory.push(updatedSnapshot);
+            }
+
+            // close the dialog
+            setSnapshotHistory(updatedHistory);
+            setIsNameDialogOpen(false);
+            setEditedSnapshot(undefined);
+          }
+          }
+        />
+        : null}
+    </>
   )
 }
 
-export const SnapshotCreationDialog: React.FC<{
+export const EditSnapshotNameDialog: React.FC<{
   isOpen: boolean;
-  projectId: string;
+  project: ProjectInfo,
+  snapshot: ProjectSnapshot,
   onClose: () => void;
-  onSubmit: () => void;
-}> = ({ isOpen, projectId, onClose, onSubmit }) => {
+  onSubmit: (updatedSnapshot: ProjectSnapshot) => void;
+}> = ({ isOpen, project, snapshot, onClose, onSubmit }) => {
   const [submittingForm, setSubmittingForm] = useState(false);
-  const [tagName, setTagName] = useState("");
+  const [snapshotName, setSnapshotName] = useState("");
   const [dialogErr, setDialogErr] = useState("");
 
-  const submitCreateTag = () => {
-    if (!projectId) {
+  useEffect(() => {
+    if (isOpen) {
+      setSnapshotName(snapshot.name);
+    }
+  }, [isOpen])
+
+  const editSnapshotName = () => {
+    if (!project) {
       // in general this should never happen, if it does we have a bug
-      setDialogErr(`Invalid project id '${projectId}'`);
+      setDialogErr(`Project was not found: this is a programming bug`);
       return;
     }
-    const currentDate = new Date();
 
     setSubmittingForm(true);
-    Fetch.get<Tag[]>(`/ws/projects/${projectId}/add_tag?tag_name=${tagName}&asoftimestamp=${currentDate.toISOString()}`)
-      .then(() => {
-        setTagName("");
-        onSubmit();
+    let params = new URLSearchParams();
+    params.append("name", snapshotName)
+    Fetch.post<ProjectSnapshot>(`/ws/projects/${project._id}/snapshots/${snapshot._id}/?${params.toString()}`)
+      .then((updatedSnapshot) => {
+        updatedSnapshot.created = new Date(updatedSnapshot.created);
+        onSubmit(updatedSnapshot);
+        setSnapshotName("");
         setDialogErr("");
-      })
-      .catch((e) => {
+      }).catch((e) => {
         let err = e as JsonErrorMsg;
-        let msg = `Failed to create the tag.`;
+        let msg = `Failed to create the a snapshot name: ${err.error}`;
         setDialogErr(msg);
         console.error(msg, e);
-      })
-      .finally(() => {
+      }).finally(() => {
         setSubmittingForm(false);
       });
   };
 
   return (
-    <Dialog onClose={onClose} isOpen={isOpen} title={`Create a New Snapshot`}>
+    <Dialog onClose={onClose} isOpen={isOpen} title={`Set a Snapshot Name (${snapshot._id})`} autoFocus={true}>
       <DialogBody>
-        <FormGroup label="Enter a Name for a New Snapshot:">
-          <InputGroup id="tag-name"
+        <FormGroup label="Enter a new Snapshot Name:" labelFor="snapshot-name">
+          <InputGroup id="snapshot-name"
             placeholder=""
-            value={tagName}
+            value={snapshotName}
             autoFocus={true}
-            onValueChange={(val: string) => setTagName(val)}
+            onValueChange={(val: string) => setSnapshotName(val)}
           />
         </FormGroup>
 
@@ -517,15 +570,14 @@ export const SnapshotCreationDialog: React.FC<{
       <DialogFooter
         actions={
           <>
-            <Button onClick={(e) => onClose()}>
-              Cancel
-            </Button>
-            <Button
-              intent="primary"
-              loading={submittingForm}
-              onClick={(e) => submitCreateTag()}
-            >
-              Create Snapshot
+            <Button onClick={(e) => {
+              setSnapshotName("");
+              onClose();
+            }
+            }>Cancel</Button>
+            <Button intent="primary" loading={submittingForm}
+              onClick={(e) => editSnapshotName()}>
+              Edit Snapshot Name
             </Button>
           </>
         }

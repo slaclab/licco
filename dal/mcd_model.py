@@ -1248,35 +1248,7 @@ def delete_project(licco_db: MongoDb, userid, project_id):
     return True, ""
 
 
-def get_tags_for_project(licco_db: MongoDb, prjid):
-    """
-    Get the tags for the specified project
-    """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
-    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
-    return True, "", tags
-
-
-def add_project_tag(licco_db: MongoDb, prjid, tagname, asoftimestamp):
-    """
-    Add a tag at the specified time for the project.
-    """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
-
-    existing_tag = licco_db["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
-    if existing_tag:
-        return False, f"Tag {tagname} already exists for project {prjid}", None
-
-    licco_db["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
-    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
-    return True, "", tags
-
-
-def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tuple[List[McdSnapshot], str]:
+def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tuple[List[McdSnapshot], str]:
     # mongo returns an empty list if the project_id is not find, hence the check for project before that
     prj = get_project(licco_db, prjid)
     if not prj:
@@ -1292,3 +1264,21 @@ def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tupl
             changelog = Changelog()
             snap["changelog"] = changelog.to_dict()
     return snapshots, ""
+
+
+def edit_snapshot_name(licco_db: MongoDb, prjid: str, snapshot_id: str, new_name: str) -> Tuple[McdSnapshot, str]:
+    """Edit snapshot name, so that the past snapshot is easier to find"""
+    if not new_name or new_name.lstrip() == "":
+        return {}, "Can't edit a snapshot name: name should not be empty"
+
+    snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    if not snapshot:
+        return {}, f"Can't edit a snapshot name: snapshot {snapshot_id} was not found"
+
+    # NOTE: for now we don't check for the project owner, anyone can change the name of the snapshot
+    licco_db["project_snapshots"].update_one({"_id": ObjectId(snapshot_id)}, {"$set": {'name': new_name}})
+    snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    if not snapshot:
+        return {}, "Failed to find the latest project snapshot after updating it's name: this is a programming bug that should never happen"
+    return snapshot, ""
+
