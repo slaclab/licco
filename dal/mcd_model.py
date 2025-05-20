@@ -359,17 +359,28 @@ def insert_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[s
     # When updating an existing device, this _id already exists in mongo (hence we remove it to get a new one)
     values.pop("_id", None)
     values["project_id"] = ObjectId(prjid)
+    
+    # a new device should have a new device_id
+    values["device_id"] = str(uuid.uuid4())
 
+    # handle defaults for certain fields
     if "discussion" not in values:
         values["discussion"] = []
 
     if "state" not in values:
         values["state"] = "Conceptual"
 
+    # NOTE: why two different ways of passing in modification time? Should probably be refactored.
     if not modification_time:
         modification_time = datetime.datetime.now(datetime.UTC)
 
-    values["created"] = modification_time
+    if "created" not in values:
+        values["created"] = modification_time
+     
+    # validate device before inserting
+    err = mcd_validate.validate_device(values)
+    if err:
+        return None, err
 
     device_id = licco_db["device_history"].insert_one(values).inserted_id
     return device_id, ""
@@ -473,17 +484,6 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
         if 'created' not in updates:
             updates['created'] = modification_time
-            
-        # the default state for a device should be Conceptual
-        if 'state' not in updates:
-            updates['state'] = "Conceptual"
-            
-        # a new device should have a new device_id
-        updates['device_id'] = str(uuid.uuid4())
-
-        err = mcd_validate.validate_device(updates)
-        if err:
-            return False, err, changes, ""
 
         # we have a unique fc name, so we can create a new device
         new_device_id, err = insert_new_device(licco_db, userid, prjid, values=updates, modification_time=modification_time)
@@ -546,15 +546,10 @@ def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: M
 
     # there are some value changes that we need to persist
     if device_changes:
-        err = mcd_validate.validate_device(new_device)
+        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=new_device, modification_time=modification_time)
         if err:
             fc = existing_device.get('fc', '')
             return f"failed to update a device '{fc}': {err}", device_changes, ""
-
-        # device is valid, insert it
-        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=new_device, modification_time=modification_time)
-        if err:
-            return err, device_changes, ""
 
         if create_snapshot:
             fc = existing_device['fc']
@@ -738,12 +733,6 @@ def copy_device_values_from_project(licco_db: MongoDb, userid: str, from_prjid: 
         changes[key] = f"{old_val} -> {new_val}"
         to_device[key] = new_val
 
-    # validate destination device
-    err = mcd_validate.validate_device(to_device)
-    if err:
-        return {}, f"failed to copy values: destination device validation error: {err}"
-
-    # destination device was validated
     # 1. store updated device
     # 2. create a new snapshot
     # 3. return an updated device data
