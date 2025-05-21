@@ -153,30 +153,31 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // load project data on load
     useEffect(() => {
         setIsLoading(true);
+        let asOfTimestamp = undefined;
         {
+            // parse timestamp filter from a query. Usually this filter will be set by clicking
+            // on the project within the project history dialog, but it's possible that the user
+            // will manually tweak the date: in this case we have to verify that date is valid.
+            const timeQueryParam = queryParams.get("asoftimestamp");
+            if (timeQueryParam) {
+                let timeFilter = Date.parse(timeQueryParam);
+                if (isNaN(timeFilter)) { // failed to parse a date
+                    asOfTimestamp = undefined;
+                } else {
+                    asOfTimestamp = new Date(timeFilter);
+                }
+            } else {
+                asOfTimestamp = undefined;
+            }
+
             // set filters based on query params
             setFcFilter(queryParams.get("fc") ?? "");
             setFgFilter(queryParams.get("fg") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
-
-            const timeQueryParam = queryParams.get("asoftimestamp")
-            if (timeQueryParam) {
-                let timeFilter = Date.parse(timeQueryParam);
-                if (isNaN(timeFilter)) {
-                    setTimestampFilter(undefined);
-                } else {
-                    const date = new Date(timeFilter);
-                    setTimestampFilter(date);
-                }
-            } else {
-                setTimestampFilter(undefined);
-            }
+            setTimestampFilter(asOfTimestamp);
         }
 
         const showAllEntries = true;
-        const timestampFilter = queryParams.get("asoftimestamp") ?? '';
-        const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
-
         const loadInitialData = async () => {
             const [data, fftData, keymapData, whoami] = await Promise.all([
                 fetchProjectInfo(projectId),
@@ -192,6 +193,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setFftData(d.fftData);
             setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
+            if (asOfTimestamp) {
+                // TODO: it's possible that the user will set the timestamp manually and find
+                // the closest snapshot. In this case we should also manually update timestamp
+                // otherwise the snapshot will not be selected in the history dialog.
+            }
         }).catch((e: JsonErrorMsg) => {
             console.error("Failed to load required project data", e);
             setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -339,7 +345,6 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         )
     }
 
-    const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
     const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
     const isRemoveFilterEnabled = isFilterApplied || timestampFilter !== undefined;
@@ -650,12 +655,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onClose={() => setIsProjectHistoryDialogOpen(false)}
                     selectedTimestamp={timestampFilter}
                     displayProjectSince={(time) => {
-                        loadFFTData(project._id, true, time);
+                        // NOTE: when we update query params, we will also trigger a data load
+                        // hence we don't need to do this manually. If the query params don't change
+                        // that means there is nothing to update and we keep displaying fft data as is
                         setIsProjectHistoryDialogOpen(false);
-
                         let timeFilterStr = time ? time.toISOString() : '';
                         updateQueryParams(fcFilter, fgFilter, stateFilter, timeFilterStr);
-                        setTimestampFilter(time);
                     }}
                 />
                 : null}

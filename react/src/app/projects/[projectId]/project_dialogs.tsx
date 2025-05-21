@@ -449,6 +449,7 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
                 <td>
                   <ButtonGroup>
                     <Button icon="history"
+                      className="me-1"
                       intent={isSnapshotSelected ? "danger" : "none"}
                       disabled={isSnapshotSelected}
                       title="View the project as of this point in time"
@@ -463,8 +464,6 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
                       }
                       }
                     />
-
-                    &nbsp;
 
                     <Button icon="edit"
                       title="Edit Snapshot Name"
@@ -498,15 +497,15 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
     <>
       <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${project.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%", height: "90vh" }}>
         <DialogBody useOverflowScrollContainer style={{ maxHeight: "100%" }}>
-        {projectHistoryTable}
-      </DialogBody>
-      <DialogFooter actions={
-        <>
-          <Button autoFocus={true} onClick={onClose}>Close</Button>
-        </>
-      }>
-      </DialogFooter>
-    </Dialog >
+          {projectHistoryTable}
+        </DialogBody>
+        <DialogFooter actions={
+          <>
+            <Button autoFocus={true} onClick={onClose}>Close</Button>
+          </>
+        }>
+        </DialogFooter>
+      </Dialog >
 
       {editedSnapshot ?
         <EditSnapshotNameDialog
