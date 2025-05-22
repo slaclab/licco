@@ -581,7 +581,7 @@ def insert_new_devices_in_project(licco_db: MongoDb, userid: str, prjid: str, de
     old_fcs = set(get_project_fcs(licco_db, prjid))
     new_fcs = set(map(lambda device: device["fc"], devices))
     intersection = old_fcs.intersection(new_fcs)
-    if intersection != set():
+    if intersection:
         return False, f"Devices already present in the project: {list(intersection)}", ImportCounter()
     
     # insert them

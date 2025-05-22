@@ -59,7 +59,6 @@ export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], curren
         let data: NewDeviceInfo = {
             fc: fc,
             device_type: deviceType,
-            _id: currentProject
         }
 
         setIsSubmitting(true);

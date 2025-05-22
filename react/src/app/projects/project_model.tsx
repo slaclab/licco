@@ -333,7 +333,6 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
 }
 
 export interface NewDeviceInfo {
-    _id: string;
     fc: string;
     device_type: DeviceType;
 }
