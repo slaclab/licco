@@ -462,7 +462,7 @@ export interface ProjectApprovalHistory {
 }
 
 export function addDevicesToProject(projectId: string, devices: NewDeviceInfo[]): Promise<ProjectDeviceDetails[]> {
-    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(devices) })
+    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/fcs/`, { body: JSON.stringify(devices) })
         .then(resp => {
             let data = [...Object.values(resp)];
             let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));

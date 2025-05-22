@@ -419,23 +419,23 @@ def svc_copy_fc_from_project():
     return json_response(fc)
 
 
-@licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["POST"])
+@licco_ws_blueprint.route("/projects/<prjid>/fcs/", methods=["POST"])
 @project_writable
 @context.security.authentication_required
 def svc_update_ffts_in_project(prjid):
     """
     Insert one, or multiple devices into a project
     """
-    ffts = request.json
-    if isinstance(ffts, dict):
-        ffts = [ffts]
+    fcs = request.json
+    if isinstance(fcs, dict):
+        fcs = [fcs]
 
     userid = context.security.get_current_user_id()
-    status, errormsg, update_status = mcd_model.insert_new_devices_in_project(licco_db, userid, prjid, ffts)
-    fft = mcd_model.get_project_devices(licco_db, prjid)
+    status, errormsg, update_status = mcd_model.insert_new_devices_in_project(licco_db, userid, prjid, fcs)
+    response = mcd_model.get_project_devices(licco_db, prjid)
     if errormsg:
         return json_error(errormsg)
-    return json_response(fft)
+    return json_response(response)
 
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["DELETE"])

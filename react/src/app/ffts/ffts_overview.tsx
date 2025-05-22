@@ -7,7 +7,7 @@ import { JsonErrorMsg } from "../utils/fetching";
 import { DeviceType, deviceTypes } from "../projects/device_model";
 
 
-export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (device: NewDeviceInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
+export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, onClose: () => void, onSubmit: (device: NewDeviceInfo) => void }> = ({ isOpen, fcs, currentProject, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
     const [deviceType, setDeviceType] = useState(DeviceType.MCD);
     const [allFcs, setAllFcs] = useState<string[]>([]);
@@ -43,7 +43,7 @@ export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], curren
             });
         Promise.all([p1, p2])
             .catch((e: JsonErrorMsg) => {
-                let msg = "Failed to fetch FFTs: " + e.error;
+                let msg = "Failed to fetch FCs: " + e.error;
                 setDialogError(msg);
             }).finally(() => {
                 setIsLoading(false)

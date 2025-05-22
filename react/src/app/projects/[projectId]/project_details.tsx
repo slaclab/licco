@@ -101,7 +101,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
 
     // dialogs open state
-    const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
+    const [isAddNewDeviceDialogOpen, setIsAddNewDeviceDialogOpen] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -253,15 +253,15 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const addNewDevice = (newDevice: NewDeviceInfo) => {
         if (!project) {
             // this should never happen
-            setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
+            setErrorAlertMsg("Can't add a new device to a project without knowing the project details; this is a programming bug");
             return;
         }
 
         return addDevicesToProject(project._id, [newDevice])
             .then(data => {
-                // TODO: we only need the fft that was updated, not all ffts of the project
+                // TODO: we only need the device that was updated, not all devices of the project
                 setFftData(data)
-                setIsAddNewFftDialogOpen(false);
+                setIsAddNewDeviceDialogOpen(false);
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to add an fft to a project: " + e.error;
                 console.error(msg, e);
@@ -365,7 +365,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                     <Button icon="add" title="Add a new Device to Project" variant="minimal" size="small"
                                         disabled={disableActionButtons}
-                                        onClick={e => setIsAddNewFftDialogOpen(true)}
+                                        onClick={e => setIsAddNewDeviceDialogOpen(true)}
                                     />
 
                                     <Divider />
@@ -517,10 +517,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
             {project ?
                 <AddDeviceDialog
-                    dialogType="addToProject"
                     currentProject={project._id}
-                    isOpen={isAddNewFftDialogOpen}
-                    onClose={() => setIsAddNewFftDialogOpen(false)}
+                    isOpen={isAddNewDeviceDialogOpen}
+                    onClose={() => setIsAddNewDeviceDialogOpen(false)}
                     onSubmit={(newFft) => addNewDevice(newFft)}
                 />
                 : null
