@@ -173,15 +173,22 @@ def get_fcs(licco_db: MongoDb) -> List[str]:
     """
     master_project = get_master_project(licco_db)
     if not master_project:
-        # we don't have any ffts
+        # we don't have any fcs
         return []
 
-    # get device ffts
-    latest_master_project = get_recent_snapshot(licco_db, master_project["_id"])
-    if not latest_master_project:
+    # get device fcs for master project
+    return get_project_fcs(licco_db, master_project["_id"])
+
+
+def get_project_fcs(licco_db: MongoDb, project_id: str) -> List[str]:
+    """
+    Get the FC ids from a given project.
+    """
+    snapshot = get_recent_snapshot(licco_db, project_id)
+    if not snapshot:
         return []
 
-    ids = latest_master_project["devices"]
+    ids = snapshot["devices"]
     fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
     return [doc['fc'] for doc in fc_names]
 
@@ -563,6 +570,24 @@ def copy_device(device_values: Dict[str, any]):
     return shallow_device_copy
 
 
+def insert_new_devices_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
+                                  def_logger=None, keep_going_on_error=False, 
+                                  remove_discussion_comments=False, 
+                                  ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
+    if isinstance(devices, dict):
+        devices = list(devices.values())
+    
+    # check that the devices don't already exist
+    old_fcs = set(get_project_fcs(licco_db, prjid))
+    new_fcs = set(map(lambda device: device["fc"], devices))
+    intersection = old_fcs.intersection(new_fcs)
+    if intersection != set():
+        return False, f"Devices already present in the project: {list(intersection)}", ImportCounter()
+    
+    # insert them
+    return update_ffts_in_project(licco_db, userid, prjid, devices, def_logger, keep_going_on_error, remove_discussion_comments, ignore_user_permission_check)
+
+
 def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, def_logger=None, keep_going_on_error=False, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
     """
     Insert multiple FFTs into a project
@@ -572,10 +597,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     insert_counter = ImportCounter()
 
     if isinstance(devices, dict):
-        new_devices = []
-        for entry in devices:
-            new_devices.append(devices[entry])
-        devices = new_devices
+        devices = list(devices.values())
 
     # Get general project details from project table
     project = get_project(licco_db, prjid)

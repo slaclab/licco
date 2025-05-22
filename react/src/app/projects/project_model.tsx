@@ -332,10 +332,9 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
     }
 }
 
-export interface ProjectFFT {
+export interface NewDeviceInfo {
     _id: string;
     fc: string;
-    fg: string;
     device_type: DeviceType;
 }
 
@@ -462,8 +461,8 @@ export interface ProjectApprovalHistory {
     owner: string;
 }
 
-export function addFftsToProject(projectId: string, ffts: ProjectFFT[]): Promise<ProjectDeviceDetails[]> {
-    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(ffts) })
+export function addDevicesToProject(projectId: string, devices: NewDeviceInfo[]): Promise<ProjectDeviceDetails[]> {
+    return Fetch.post<Record<string, ProjectDeviceDetails>>(`/ws/projects/${projectId}/ffts/`, { body: JSON.stringify(devices) })
         .then(resp => {
             let data = [...Object.values(resp)];
             let frontendData = data.map(d => deviceDetailsBackendToFrontend(d));
@@ -550,26 +549,6 @@ export function useWhoAmIHook() {
     return { user, userLoadingError, isUserDataLoading };
 }
 
-
-export interface FFTInfo {
-    _id: string;
-    is_being_used: boolean;
-    fc: FC;
-    fg: FG;
-    device_type: DeviceType
-}
-
-interface FC {
-    _id: string;
-    name: string;
-    description: string;
-}
-
-interface FG {
-    _id: string;
-    name: string;
-    description: string;
-}
 
 export function fetchFcs(): Promise<string[]> {
     return Fetch.get<string[]>("/ws/fcs/");

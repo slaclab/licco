@@ -1,15 +1,14 @@
 import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useMemo, useState } from "react";
 import { StringSuggest } from "../components/suggestion_field";
-import { FFTInfo, fetchFcs, fetchProjectDevices } from "../projects/project_model";
+import { NewDeviceInfo, fetchFcs, fetchProjectDevices } from "../projects/project_model";
 import { calculateValidFcs } from "../utils/fc_utils";
 import { JsonErrorMsg } from "../utils/fetching";
 import { DeviceType, deviceTypes } from "../projects/device_model";
 
 
-export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
+export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (device: NewDeviceInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
-    const [fgName, setFgName] = useState('');
     const [deviceType, setDeviceType] = useState(DeviceType.MCD);
     const [allFcs, setAllFcs] = useState<string[]>([]);
     const [usedFcs, setUsedFcs] = useState<string[]>([]);
@@ -56,14 +55,10 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
 
     const submit = () => {
         const fc = fcName.trim();
-        const fg = fgName.trim();
 
-        // TODO: refactor this, we are no longer using this
-        let data: FFTInfo = {
-            fc: { _id: '', name: fc, description: '' },
-            fg: { _id: '', name: fg, description: '' },
+        let data: NewDeviceInfo = {
+            fc: fc,
             device_type: deviceType,
-            is_being_used: false,
             _id: currentProject
         }
 

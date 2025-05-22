@@ -430,11 +430,8 @@ def svc_update_ffts_in_project(prjid):
     if isinstance(ffts, dict):
         ffts = [ffts]
 
-    # TODO: verify that device id does not already exist in the project snapshot
-    # The user should select a device_type: MCD (at least)
-
     userid = context.security.get_current_user_id()
-    status, errormsg, update_status = mcd_model.update_ffts_in_project(licco_db, userid, prjid, ffts)
+    status, errormsg, update_status = mcd_model.insert_new_devices_in_project(licco_db, userid, prjid, ffts)
     fft = mcd_model.get_project_devices(licco_db, prjid)
     if errormsg:
         return json_error(errormsg)

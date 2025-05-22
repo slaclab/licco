@@ -1,6 +1,6 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { LoadingSpinner } from "@/app/components/loading";
-import { AddFftDialog } from "@/app/ffts/ffts_overview";
+import { AddDeviceDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
@@ -11,7 +11,7 @@ import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HT
 import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
+import { DeviceState, NewDeviceInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectInfo, addDevicesToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog } from "./project_dialogs";
@@ -250,33 +250,15 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         router.replace(`${pathName}?${params.toString()}`)
     }
 
-    const addNewFft = (newFft: FFTInfo) => {
+    const addNewDevice = (newDevice: NewDeviceInfo) => {
         if (!project) {
             // this should never happen
             setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
             return;
         }
 
-        // check if desired fft combination already exist within the project 
-        // if it does, simply show an error message to the user
-        for (let fft of fftData) {
-            if (fft.fc === newFft.fc.name) {
-                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
-                return
-            }
-        }
-
-        let fft: ProjectFFT = {
-            _id: newFft._id,
-            fc: newFft.fc.name,
-            fg: newFft.fg.name,
-            device_type: newFft.device_type,
-        }
-
-        return addFftsToProject(project._id, [fft])
+        return addDevicesToProject(project._id, [newDevice])
             .then(data => {
-                // TODO: when we try to add an fft that is already there, the backend doesn't complain
-                // it just returns success: true, erromsg: no changes detected.
                 // TODO: we only need the fft that was updated, not all ffts of the project
                 setFftData(data)
                 setIsAddNewFftDialogOpen(false);
@@ -534,12 +516,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             }
 
             {project ?
-                <AddFftDialog
+                <AddDeviceDialog
                     dialogType="addToProject"
                     currentProject={project._id}
                     isOpen={isAddNewFftDialogOpen}
                     onClose={() => setIsAddNewFftDialogOpen(false)}
-                    onSubmit={(newFft) => addNewFft(newFft)}
+                    onSubmit={(newFft) => addNewDevice(newFft)}
                 />
                 : null
             }
