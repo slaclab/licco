@@ -14,9 +14,10 @@ import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useStat
 import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog } from "./project_dialogs";
+import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog } from "./project_dialogs";
 
 import styles from './project_details.module.css';
+import { ProjectHistoryDialog, ProjectHistoryDialogState } from "./project_history_dialog";
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
@@ -105,9 +106,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
+    // history state (when a user displays previous snapshot we should retain the state of the history dialog
+    // otherwise we will lose the user set date boundaries)
+    const [historyDialogState, setHistoryDialogState] = useState<ProjectHistoryDialogState>({ snapshotHistory: [] });
 
     const [isFftCommentViewerOpen, setIsFftCommentViewerOpen] = useState(false);
     const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
@@ -646,7 +650,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 project={project}
                 isOpen={isProjectHistoryDialogOpen}
                 onClose={() => setIsProjectHistoryDialogOpen(false)}
+                onStateChange={(newState) => setHistoryDialogState(newState)}
                 selectedTimestamp={timestampFilter}
+                state={historyDialogState}
                 displayProjectSince={(time) => {
                     // NOTE: when we update query params, we will also trigger a data load
                     // hence we don't need to do this manually. If the query params don't change
