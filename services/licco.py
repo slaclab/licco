@@ -38,6 +38,13 @@ def json_error(error_msg: str, ret_status=400):
     out = JSONEncoder().encode({'errormsg': error_msg})
     return Response(out, mimetype="application/json", status=ret_status)
 
+def parse_isodatetime_string(input: str) -> Tuple[datetime.datetime, str]:
+    try:
+        date = datetime.datetime.strptime(input, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+        return date, ""
+    except Exception as e:
+        return datetime.datetime.now(), f"failed to parse a datetime string: {e}"
+
 
 def project_writable(wrapped_function):
     """
@@ -225,7 +232,9 @@ def svc_get_project_ffts(prjid):
 
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
-        asoftimestamp = datetime.datetime.strptime(asoftimestampstr, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+        asoftimestamp, err = parse_isodatetime_string(asoftimestampstr)
+        if err:
+            return json_error(f"failed to get project devices: {err}")
     else:
         asoftimestamp = None
     project_fcs = mcd_model.get_project_devices(licco_db, prjid, asoftimestamp=asoftimestamp)
@@ -238,8 +247,21 @@ def get_project_snapshots(prjid):
     """
     Get a history of project changes (snapshots)
     """
-    limit = int(request.args.get("limit", 100))
-    snapshots, err = mcd_model.get_project_snapshots(licco_db, prjid, limit=limit)
+    start_time = request.args.get("start", None)
+    if start_time:
+        start_time, err = parse_isodatetime_string(start_time)
+        if err:
+            return json_error(f"failed to fetch project snapshots: invalid 'start' time boundary: {err}")
+
+    end_time = request.args.get("end", None)
+    if end_time:
+        end_time, err = parse_isodatetime_string(end_time)
+        if err:
+            return json_error(f"failed to fetch project snapshots: invalid 'end' time boundary: {err}")
+
+    limit = int(request.args.get("limit", 0))
+
+    snapshots, err = mcd_model.get_project_snapshots(licco_db, prjid, limit=limit, start_time=start_time, end_time=end_time)
     if err:
         return json_error(err)
     return json_response(snapshots)
@@ -631,44 +653,6 @@ def svc_clone_project(prjid):
     if not status:
         return json_error(err)
     return json_response(newprj)
-
-
-@licco_ws_blueprint.route("/projects/<prjid>/tags/", methods=["GET"])
-@context.security.authentication_required
-def svc_project_tags(prjid):
-    """
-    Get the tags for the project
-    """
-    status, err, tags = mcd_model.get_tags_for_project(licco_db, prjid)
-    if err:
-        return json_error(err)
-    return json_response(tags)
-
-
-@licco_ws_blueprint.route("/projects/<prjid>/add_tag", methods=["GET"])
-@context.security.authentication_required
-def svc_add_project_tag(prjid):
-    """
-    Add a new tag to the project.
-    The changeid is optional; if not, specified, we add a tag to the latest change.
-    """
-    tagname = request.args.get("tag_name", None)
-    asoftimestamp = request.args.get("asoftimestamp", None)
-    if not tagname:
-        return json_error("Please specify the tag_name")
-
-    if not asoftimestamp:
-        changes = mcd_model.get_all_project_changes(licco_db, prjid)
-        if not changes:
-            return json_error("Cannot tag a project without a change")
-        logger.info("Latest change is at " + str(changes[0]["time"]))
-        asoftimestamp = changes[0]["time"]
-
-    logger.debug(f"Adding a tag for {prjid} at {asoftimestamp} with name {tagname}")
-    status, err, tags = mcd_model.add_project_tag(licco_db, prjid, tagname, asoftimestamp)
-    if err:
-        return json_error(err)
-    return json_response(tags)
 
 
 @licco_ws_blueprint.route("/history/project_approvals", methods=["GET"])

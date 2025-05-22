@@ -1,8 +1,9 @@
-import { formatToLiccoDateTime } from "@/app/utils/date_utils";
+import { constructTimeBoundaries, formatToLiccoDateTime, setTimeBoundary, toIsoDate } from "@/app/utils/date_utils";
 import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { Button, ButtonGroup, Checkbox, Colors, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, Icon, InputGroup, Label, NonIdealState, Spinner, Text, TextArea } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
+import { Row } from "react-bootstrap";
 import { DeviceState, ProjectDeviceDetails, ProjectInfo, ProjectSnapshot, addDeviceComment, deviceDetailsBackendToFrontend, fetchAllProjectsInfo, fetchDeviceDataByName, fetchHistoryOfChanges, isProjectApproved, isProjectInDevelopment, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, syncDeviceUserChanges } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { CollapsibleProjectNotes } from "../projects_overview";
@@ -374,23 +375,22 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
   const [editedSnapshot, setEditedSnapshot] = useState<ProjectSnapshot>();
   const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
 
+  // date selector
+  const [startTime, setStartTime] = useState<Date>();
+  const [endTime, setEndTime] = useState<Date>();
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    setIsLoading(true);
-    fetchHistoryOfChanges(project._id)
-      .then((data) => {
-        setSnapshotHistory(data);
-        setDialogErr('');
-      }).catch((e: JsonErrorMsg) => {
-        console.error(e);
-        let msg = "Failed to fetch project diff history: " + e.error;
-        setDialogErr(msg);
-      }).finally(() => {
-        setIsLoading(false);
-      })
+    // Fetch history on dialog open, but we are fetching last X elements (date boundaries are empty):
+    // Reason: historic data is not supposed to change, so there is no need to re-query data.
+    // When displaying last 100 elements, the user would generally want to see their latest changes
+    // every time they open up this dialog (or when the dialog is opened for the first time).
+    if (startTime == undefined && endTime == undefined) {
+      fetchHistory(startTime, endTime);
+    }
   }, [isOpen, project._id]);
 
   const projectHistoryTable = useMemo(() => {
@@ -493,10 +493,95 @@ export const ProjectHistoryDialog: React.FC<{ isOpen: boolean, project: ProjectI
     )
   }, [snapshotHistory, dialogErr, isLoading, project.name, displayProjectSince])
 
+  // fetch history and update the table
+  const fetchHistory = (start?: Date, end?: Date, limit: number = 0) => {
+    setIsLoading(true);
+    fetchHistoryOfChanges(project._id, start, end, limit)
+      .then((data) => {
+        setSnapshotHistory(data);
+        setDialogErr('');
+      }).catch((e: JsonErrorMsg) => {
+        console.error(e);
+        let msg = "Failed to fetch project diff history: " + e.error;
+        setDialogErr(msg);
+      }).finally(() => {
+        setIsLoading(false);
+      })
+  }
+
   return (
     <>
       <Dialog isOpen={isOpen} onClose={onClose} title={`Project History (${project.name})`} autoFocus={true} style={{ width: "100%", maxWidth: "95%", height: "90vh" }}>
         <DialogBody useOverflowScrollContainer style={{ maxHeight: "100%" }}>
+          <Row className="mb-2">
+            <ButtonGroup>
+              <Button
+                text="Last Week"
+                disabled={isLoading}
+                onClick={() => {
+                  const { start, end } = constructTimeBoundaries(new Date(), "lastWeek")
+                  fetchHistory(start, end);
+                  setStartTime(start);
+                  setEndTime(end);
+                }} />
+              <Button text="Last Month"
+                disabled={isLoading}
+                onClick={() => {
+                  const { start, end } = constructTimeBoundaries(new Date(), "lastMonth")
+                  fetchHistory(start, end);
+                  setStartTime(start);
+                  setEndTime(end);
+                }}
+              />
+              <Button text="Last Year"
+                disabled={isLoading}
+                onClick={() => {
+                  const { start, end } = constructTimeBoundaries(new Date(), "lastYear");
+                  fetchHistory(start, end);
+                  setStartTime(start);
+                  setEndTime(end);
+                }}
+              />
+              <Button text="Last 100"
+                disabled={isLoading}
+                onClick={() => {
+                  fetchHistory(undefined, undefined, 100)
+                  setStartTime(undefined);
+                  setEndTime(undefined);
+                }} />
+
+              <span className="me-5"></span>
+              <label className="me-1 d-flex align-items-center" htmlFor="from-input">From:</label>
+              <input className="me-2" id="from-input" type="date" onChange={(e) => {
+                // Implementation Note: we didn't want to trigger a search query on every change 
+                // since when looking between date boundaries the user will generally want to change
+                // both boundaries before searching. If search is slow, we don't want an insta query.
+                const date = e.target.valueAsDate;
+                if (date) {
+                  setStartTime(setTimeBoundary(date, "startDay"));
+                } else {
+                  setStartTime(undefined);
+                }
+              }} value={startTime ? toIsoDate(startTime) : ''}></input>
+              <label className="me-1 d-flex align-items-center" htmlFor="to-input">To:</label>
+              <input id="to-input" type="date" className="me-1"
+                onChange={(e) => {
+                  const date = e.target.valueAsDate;
+                  if (date) {
+                    setEndTime(setTimeBoundary(date, "endDay"));
+                  } else {
+                    setEndTime(undefined);
+                  }
+                }}
+                value={endTime ? toIsoDate(endTime) : ''}></input>
+              <Button icon="search"
+                disabled={isLoading}
+                onClick={(e) => {
+                  fetchHistory(startTime, endTime);
+                }}>Search</Button>
+            </ButtonGroup>
+          </Row>
+
           {projectHistoryTable}
         </DialogBody>
         <DialogFooter actions={

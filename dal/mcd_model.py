@@ -1248,13 +1248,24 @@ def delete_project(licco_db: MongoDb, userid, project_id):
     return True, ""
 
 
-def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tuple[List[McdSnapshot], str]:
+def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 0, start_time: datetime.datetime = None, end_time: datetime.datetime = None) -> Tuple[List[McdSnapshot], str]:
     # mongo returns an empty list if the project_id is not find, hence the check for project before that
     prj = get_project(licco_db, prjid)
     if not prj:
         return [], f"Project {prjid} does not exist"
 
-    out = licco_db["project_snapshots"].find({"project_id": ObjectId(prjid)}).sort("created", -1)
+    query = {"project_id": ObjectId(prjid)}
+
+    is_bounded_by_date = start_time or end_time
+    if is_bounded_by_date:
+        q = []
+        if start_time:
+            q.append({'created': {'$gte': start_time}})
+        if end_time:
+            q.append({'created': {'$lte': end_time}})
+        query["$and"] = q
+
+    out = licco_db["project_snapshots"].find(query).sort("created", -1)
     if limit > 0:
         out.limit(limit)
 

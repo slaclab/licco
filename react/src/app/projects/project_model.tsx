@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isArrayEqual } from "../utils/arr_utils";
-import { toUnixSeconds } from "../utils/date_utils";
+import { toUnixMilliseconds, toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 
 export interface ProjectInfo {
@@ -442,8 +442,31 @@ export interface ProjectSnapshot {
     changelog: Changelog;
 }
 
-export function fetchHistoryOfChanges(projectId: string, numberOfChanges: number = 100): Promise<ProjectSnapshot[]> {
-    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/snapshots/?limit=${numberOfChanges}`)
+export function fetchHistoryOfChanges(projectId: string, startDate?: Date, endDate?: Date, limit: number = 0): Promise<ProjectSnapshot[]> {
+    let params = new URLSearchParams();
+    if (startDate || endDate) {
+        if (startDate && endDate) {
+            if (toUnixMilliseconds(startDate) > toUnixMilliseconds(endDate)) {
+                // swap dates so startDate < endDate
+                let temp = startDate;
+                startDate = endDate;
+                endDate = temp;
+            }
+        }
+
+        if (startDate) {
+            params.append("start", startDate.toISOString())
+        }
+        if (endDate) {
+            params.append("end", endDate.toISOString())
+        }
+    }
+
+    if (limit > 0) {
+        params.append("limit", limit.toString())
+    }
+
+    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/snapshots/?${params.toString()}`)
         .then((data) => {
             // create date objects from given date
             data.forEach(d => d.created = new Date(d.created));

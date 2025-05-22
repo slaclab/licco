@@ -536,16 +536,13 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 : null
             }
 
-            {project ?
-                <AddFftDialog
-                    dialogType="addToProject"
-                    currentProject={project._id}
-                    isOpen={isAddNewFftDialogOpen}
-                    onClose={() => setIsAddNewFftDialogOpen(false)}
-                    onSubmit={(newFft) => addNewFft(newFft)}
-                />
-                : null
-            }
+            <AddFftDialog
+                dialogType="addToProject"
+                currentProject={project._id}
+                isOpen={isAddNewFftDialogOpen}
+                onClose={() => setIsAddNewFftDialogOpen(false)}
+                onSubmit={(newFft) => addNewFft(newFft)}
+            />
 
             <FilterDeviceDialog
                 isOpen={isFilterDialogOpen}
@@ -562,7 +559,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 }}
             />
 
-            {project && selectedDevice && isCopyFFTDialogOpen ?
+            {selectedDevice && isCopyFFTDialogOpen ?
                 <CopyDeviceValuesDialog
                     isOpen={isCopyFFTDialogOpen}
                     currentProject={project}
@@ -583,44 +580,41 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     }}
                 /> : null}
 
-            {project ?
-                <Alert className="alert-default"
-                    intent="danger"
-                    cancelButtonText="Cancel"
-                    confirmButtonText="Delete"
-                    isOpen={isDeleteDialogOpen}
-                    onClose={e => {
-                        setSelectedDevice(undefined);
-                        setIsDeleteDialogOpen(false);
-                    }}
-                    onConfirm={(e) => {
-                        const device = selectedDevice;
-                        if (!device) {
-                            return;
-                        }
+            <Alert className="alert-default"
+                intent="danger"
+                cancelButtonText="Cancel"
+                confirmButtonText="Delete"
+                isOpen={isDeleteDialogOpen}
+                onClose={e => {
+                    setSelectedDevice(undefined);
+                    setIsDeleteDialogOpen(false);
+                }}
+                onConfirm={(e) => {
+                    const device = selectedDevice;
+                    if (!device) {
+                        return;
+                    }
 
-                        removeDevicesFromProject(project._id, [device._id])
-                            .then(() => {
-                                setSelectedDevice(undefined);
-                                setIsDeleteDialogOpen(false);
+                    removeDevicesFromProject(project._id, [device._id])
+                        .then(() => {
+                            setSelectedDevice(undefined);
+                            setIsDeleteDialogOpen(false);
 
-                                // update data 
-                                let updatedFftData = fftData.filter(d => d._id != device._id);
-                                setFftData(updatedFftData);
-                            }).catch((e: JsonErrorMsg) => {
-                                let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
-                                setErrorAlertMsg(msg);
-                            });
-                    }}
-                >
-                    <h5 className="alert-title"><Icon icon="trash" />Delete {selectedDevice?.fc ?? ''}?</h5>
-                    <p>Do you really want to delete a device <b>{selectedDevice?.fc ?? ''}</b> from a project <b>{project.name}</b>?</p>
-                    <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
-                </Alert>
-                : null
-            }
+                            // update data 
+                            let updatedFftData = fftData.filter(d => d._id != device._id);
+                            setFftData(updatedFftData);
+                        }).catch((e: JsonErrorMsg) => {
+                            let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
+                            setErrorAlertMsg(msg);
+                        });
+                }}
+            >
+                <h5 className="alert-title"><Icon icon="trash" />Delete {selectedDevice?.fc ?? ''}?</h5>
+                <p>Do you really want to delete a device <b>{selectedDevice?.fc ?? ''}</b> from a project <b>{project.name}</b>?</p>
+                <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
+            </Alert>
 
-            {project && commentDevice ?
+            {commentDevice ?
                 <CommentDialog
                     isOpen={isFftCommentViewerOpen}
                     project={project}
@@ -648,50 +642,46 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 />
                 : null}
 
-            {project ?
-                <ProjectHistoryDialog
-                    project={project}
-                    isOpen={isProjectHistoryDialogOpen}
-                    onClose={() => setIsProjectHistoryDialogOpen(false)}
-                    selectedTimestamp={timestampFilter}
-                    displayProjectSince={(time) => {
-                        // NOTE: when we update query params, we will also trigger a data load
-                        // hence we don't need to do this manually. If the query params don't change
-                        // that means there is nothing to update and we keep displaying fft data as is
-                        setIsProjectHistoryDialogOpen(false);
-                        let timeFilterStr = time ? time.toISOString() : '';
-                        updateQueryParams(fcFilter, fgFilter, stateFilter, timeFilterStr);
-                    }}
-                />
-                : null}
-            {project ?
-                <ProjectImportDialog
-                    isOpen={isImportDialogOpen}
-                    project={project}
-                    onClose={(dataImported) => {
-                        if (dataImported) {
-                            // clear filters and reload devices so that the user can see the imported devices right away 
-                            setFcFilter('')
-                            setFgFilter('');
-                            setStateFilter('');
-                            setTimestampFilter(undefined);
-                            updateQueryParams('', '', '', '');
-                            const showAllEntries = true;
-                            loadFFTData(projectId, showAllEntries);
-                        }
-                        setIsImportDialogOpen(false);
-                    }}
-                />
-                : null}
-            {project ?
-                <ProjectExportDialog
-                    isOpen={isExportDialogOpen}
-                    project={project}
-                    onSubmit={() => setIsExportDialogOpen(false)}
-                    onClose={() => setIsExportDialogOpen(false)}
-                />
-                : null
-            }
+            <ProjectHistoryDialog
+                project={project}
+                isOpen={isProjectHistoryDialogOpen}
+                onClose={() => setIsProjectHistoryDialogOpen(false)}
+                selectedTimestamp={timestampFilter}
+                displayProjectSince={(time) => {
+                    // NOTE: when we update query params, we will also trigger a data load
+                    // hence we don't need to do this manually. If the query params don't change
+                    // that means there is nothing to update and we keep displaying fft data as is
+                    setIsProjectHistoryDialogOpen(false);
+                    let timeFilterStr = time ? time.toISOString() : '';
+                    updateQueryParams(fcFilter, fgFilter, stateFilter, timeFilterStr);
+                }}
+            />
+
+            <ProjectImportDialog
+                isOpen={isImportDialogOpen}
+                project={project}
+                onClose={(dataImported) => {
+                    if (dataImported) {
+                        // clear filters and reload devices so that the user can see the imported devices right away 
+                        setFcFilter('')
+                        setFgFilter('');
+                        setStateFilter('');
+                        setTimestampFilter(undefined);
+                        updateQueryParams('', '', '', '');
+                        const showAllEntries = true;
+                        loadFFTData(projectId, showAllEntries);
+                    }
+                    setIsImportDialogOpen(false);
+                }}
+            />
+
+            <ProjectExportDialog
+                isOpen={isExportDialogOpen}
+                project={project}
+                onSubmit={() => setIsExportDialogOpen(false)}
+                onClose={() => setIsExportDialogOpen(false)}
+            />
+
             {/* Alert for displaying error messages that may happen in other dialogs */}
             <Alert
                 className="alert-default"
