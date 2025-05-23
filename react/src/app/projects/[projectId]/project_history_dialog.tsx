@@ -128,7 +128,6 @@ export const ProjectHistoryDialog: React.FC<{
                                                 disabled={isSnapshotSelected}
                                                 title="View the project as of this point in time"
                                                 onClick={(e) => {
-                                                    console.log("Latest snapshot:", latestSnapshot?.created)
                                                     if (snapshot.created.getTime() === latestSnapshot?.created.getTime()) {
                                                     // remove filter if latest snapshot was clicked
                                                         displayProjectSince(undefined);
