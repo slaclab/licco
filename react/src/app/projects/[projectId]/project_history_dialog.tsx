@@ -3,7 +3,7 @@ import { Fetch, JsonErrorMsg } from "@/app/utils/fetching";
 import { Button, ButtonGroup, Dialog, DialogBody, DialogFooter, FormGroup, InputGroup, NonIdealState, Spinner } from "@blueprintjs/core";
 import { useEffect, useMemo, useState } from "react";
 import { Row } from "react-bootstrap";
-import { fetchHistoryOfChanges, ProjectInfo, ProjectSnapshot } from "../project_model";
+import { fetchHistoryOfChanges, fetchLatestSnapshot, ProjectInfo, ProjectSnapshot } from "../project_model";
 import { renderTableField } from "../project_utils";
 
 export interface ProjectHistoryDialogState {
@@ -21,6 +21,7 @@ export const ProjectHistoryDialog: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [dialogErr, setDialogErr] = useState('');
     const [editedSnapshot, setEditedSnapshot] = useState<ProjectSnapshot>();
+    const [latestSnapshot, setLatestSnapshot] = useState<ProjectSnapshot>();
 
     // Implementation Note: history state is passed from the parent component, as otherwise the state is not retained 
     // when selecting a snapshot from the past (user selected date boundaries would be lost without this workaround)
@@ -30,9 +31,17 @@ export const ProjectHistoryDialog: React.FC<{
             return;
         }
 
+        // always fetch latest snapshot since it's the only way to mark the latest snapshot in the history table
+        fetchLatestSnapshot(project._id).then(snap => setLatestSnapshot(snap));
+
         // fetch history on dialog open, but only the first time when the dialog is opened.
         // if there are no snapshots we can still make a request, since it's a quick check.
-        if (state.snapshotHistory.length === 0) {
+        //
+        // We should also refetch if the end time is set to the current date or later, since any
+        // user device change will add a new change into the history of snapshots.
+        const noSnapshots = state.snapshotHistory.length === 0;
+        const endTimeIsTodayOrAfter = state.endTime && state.endTime.getTime() > new Date().getTime();
+        if (noSnapshots || endTimeIsTodayOrAfter) {
             fetchHistory(state.startTime, state.endTime);
         }
 
@@ -80,17 +89,13 @@ export const ProjectHistoryDialog: React.FC<{
             "maxWidth": "20%",
         };
 
-        const isSelectedHistory = (index: number, snapshotDate: Date, selectedDate?: Date): boolean => {
-            if (index == 0 && selectedDate === undefined) {
-                return true;
-            }
-
-            if (selectedDate === undefined) {
+        const isSelectedHistory = (snapshotDate: Date, selectedSnapshotDate?: Date): boolean => {
+            if (selectedSnapshotDate === undefined) {
                 return false;
             }
 
             // selected date exists, compare it to snapshot date
-            if (snapshotDate.getTime() === selectedDate.getTime()) {
+            if (snapshotDate.getTime() === selectedSnapshotDate.getTime()) {
                 return true
             }
             return false
@@ -112,7 +117,7 @@ export const ProjectHistoryDialog: React.FC<{
                     </thead>
                     <tbody>
                         {state.snapshotHistory.map((snapshot, i) => {
-                            const isSnapshotSelected = isSelectedHistory(i, snapshot.created, selectedTimestamp);
+                            const isSnapshotSelected = isSelectedHistory(snapshot.created, selectedTimestamp || latestSnapshot?.created);
                             return (
                                 <tr key={snapshot._id}>
                                     <td>
@@ -123,9 +128,9 @@ export const ProjectHistoryDialog: React.FC<{
                                                 disabled={isSnapshotSelected}
                                                 title="View the project as of this point in time"
                                                 onClick={(e) => {
-                                                    if (i == 0) {
-                                                        // clear timestamp so that the user will fetch the latest project data
-                                                        // and be able to edit the device fields
+                                                    console.log("Latest snapshot:", latestSnapshot?.created)
+                                                    if (snapshot.created.getTime() === latestSnapshot?.created.getTime()) {
+                                                    // remove filter if latest snapshot was clicked
                                                         displayProjectSince(undefined);
                                                     } else {
                                                         displayProjectSince(snapshot.created)
@@ -153,7 +158,7 @@ export const ProjectHistoryDialog: React.FC<{
                 </table>
             </>
         )
-    }, [state.snapshotHistory, dialogErr, isLoading, project.name, displayProjectSince])
+    }, [state.snapshotHistory, selectedTimestamp, latestSnapshot, dialogErr, isLoading, project.name, displayProjectSince])
 
 
     return (
@@ -215,6 +220,14 @@ export const ProjectHistoryDialog: React.FC<{
                             <Button icon="search"
                                 disabled={isLoading}
                                 onClick={(e) => {
+                                    let start = state.startTime;
+                                    let end = state.endTime;
+                                    if (start && end && (start.getTime() > end.getTime())) {
+                                        // start > end, swap the times around and search
+                                        let temp = start;
+                                        start = setTimeBoundary(end, "startDay");
+                                        end = setTimeBoundary(temp, "endDay");
+                                    }
                                     fetchHistory(state.startTime, state.endTime);
                                 }}>Search</Button>
                         </ButtonGroup>

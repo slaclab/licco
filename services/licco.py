@@ -19,7 +19,7 @@ import context
 from context import licco_db
 from flask import Blueprint, request, Response, send_file
 
-from dal import mcd_model, mcd_import, mcd_datatypes
+from dal import mcd_model, mcd_import, mcd_datatypes, mcd_db
 from dal.utils import JSONEncoder
 
 licco_ws_blueprint = Blueprint('business_service_api', __name__)
@@ -210,7 +210,7 @@ def svc_update_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/", methods=["DELETE"])
 @context.security.authentication_required
-def svc_delete_project(prjid):
+def delete_project(prjid):
     """
     Get the project details given a project id.
     """
@@ -223,13 +223,10 @@ def svc_delete_project(prjid):
 
 @licco_ws_blueprint.route("/projects/<prjid>/ffts/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_project_ffts(prjid):
+def get_project_devices(prjid):
     """
     Get the project's FFT's given a project id.
     """
-    # TODO: decide what to do with showallentries flag
-    showallentries = json.loads(request.args.get("showallentries", "true"))
-
     asoftimestampstr = request.args.get("asoftimestamp", None)
     if asoftimestampstr:
         asoftimestamp, err = parse_isodatetime_string(asoftimestampstr)
@@ -267,6 +264,23 @@ def get_project_snapshots(prjid):
     return json_response(snapshots)
 
 
+@licco_ws_blueprint.route("/projects/<prjid>/snapshots/<snapshot_id>/", methods=["GET"])
+@context.security.authentication_required
+def get_snapshot(prjid, snapshot_id):
+    """
+    Get project snapshot
+    """
+    userid = context.security.get_current_user_id()
+    if snapshot_id == "latest":
+        snapshot = mcd_model.get_recent_snapshot(licco_db, prjid)
+    else:
+        snapshot = mcd_db.get_snapshot(licco_db, snapshot_id)
+
+    if snapshot:
+        return json_response(snapshot)
+    return json_error(f"there was no snapshot found for {snapshot_id}", ret_status=404)
+
+
 @licco_ws_blueprint.route("/projects/<prjid>/snapshots/<snapshot_id>/", methods=["POST"])
 @context.security.authentication_required
 def edit_snapshot_name(prjid, snapshot_id):
@@ -275,7 +289,8 @@ def edit_snapshot_name(prjid, snapshot_id):
     if not name:
         return json_error("name parameter was not set")
 
-    updated_snapshot, err = mcd_model.edit_snapshot_name(licco_db, prjid, snapshot_id, name)
+    userid = context.security.get_current_user_id()
+    updated_snapshot, err = mcd_model.edit_snapshot_name(licco_db, userid, prjid, snapshot_id, name)
     if err:
         return json_error(err)
     return json_response(updated_snapshot)
@@ -283,7 +298,7 @@ def edit_snapshot_name(prjid, snapshot_id):
 
 @licco_ws_blueprint.route("/fcs/", methods=["GET"])
 @context.security.authentication_required
-def svc_get_fcs():
+def get_fcs():
     """
     Get a list of FC strings from a master project. This is generally used for autocompletion of FCs
     (when creating or updating an existing device)
@@ -314,7 +329,7 @@ def get_latest_project_device_data(prjid, fc):
 @licco_ws_blueprint.route("/projects/<prjid>/fcs/<fftid>", methods=["POST"])
 @context.security.authentication_required
 @project_writable
-def svc_update_device_in_project(prjid, fftid):
+def update_device_in_project(prjid, fftid):
     """
     Update the values of a device in a project
     """
@@ -423,7 +438,7 @@ def remove_device_comment(prjid, fftid):
 
 @licco_ws_blueprint.route("/projects/copy_from_project", methods=["POST"])
 @context.security.authentication_required
-def svc_copy_fc_from_project():
+def copy_fc_from_project():
     """
     Copy values of a device from a different project. Most of the time, that would be 'master' project.
     """

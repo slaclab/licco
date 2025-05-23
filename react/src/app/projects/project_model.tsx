@@ -276,9 +276,8 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
     return false;
 }
 
-export async function fetchProjectDevices(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
+export async function fetchProjectDevices(projectId: string, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
-    queryParams.set('showallentries', showAllEntries.toString());
     if (sinceTime != undefined) {
         queryParams.set("asoftimestamp", sinceTime.toISOString());
     }
@@ -295,6 +294,7 @@ export async function fetchProjectDevices(projectId: string, showAllEntries: boo
             return devices.map(d => deviceDetailsBackendToFrontend(d));
         });
 }
+
 
 function numberOrDefault(input: number | string | undefined, defaultVal: number | undefined): number | undefined {
     if (input == undefined) {
@@ -471,6 +471,19 @@ export function fetchHistoryOfChanges(projectId: string, startDate?: Date, endDa
             // create date objects from given date
             data.forEach(d => d.created = new Date(d.created));
             return data;
+        });
+}
+
+export async function fetchLatestSnapshot(projectId: string): Promise<ProjectSnapshot | undefined> {
+    return Fetch.get<ProjectSnapshot>(`/ws/projects/${projectId}/snapshots/latest/`)
+        .then(snapshot => {
+            snapshot.created = new Date(snapshot.created);
+            return snapshot;
+        }).catch((err: JsonErrorMsg) => {
+            if (err.code === 404) { // snapshot does not exist
+                return undefined;
+            }
+            throw err;
         });
 }
 

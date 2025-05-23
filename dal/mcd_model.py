@@ -1258,6 +1258,10 @@ def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 0, start_t
 
     is_bounded_by_date = start_time or end_time
     if is_bounded_by_date:
+        if start_time and end_time:
+            if start_time > end_time:  # swap start end time so that boundaries are correct
+                start_time, end_time = end_time, start_time
+
         q = []
         if start_time:
             q.append({'created': {'$gte': start_time}})
@@ -1277,19 +1281,28 @@ def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 0, start_t
     return snapshots, ""
 
 
-def edit_snapshot_name(licco_db: MongoDb, prjid: str, snapshot_id: str, new_name: str) -> Tuple[McdSnapshot, str]:
+_empty_snapshot: McdSnapshot = {
+  '_id': ObjectId(), 'project_id': ObjectId(), 'author': '', 'created': datetime.datetime.now(), 'devices': [],
+    'changelog': {}, 'name': '', 'description': '',
+}
+
+def edit_snapshot_name(licco_db: MongoDb, userid: str, prjid: str, snapshot_id: str, new_name: str) -> Tuple[McdSnapshot, str]:
     """Edit snapshot name, so that the past snapshot is easier to find"""
     if not new_name or new_name.lstrip() == "":
-        return {}, "Can't edit a snapshot name: name should not be empty"
+        return _empty_snapshot, "Can't edit a snapshot name: name should not be empty"
 
     snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
     if not snapshot:
-        return {}, f"Can't edit a snapshot name: snapshot {snapshot_id} was not found"
+        return _empty_snapshot, f"Can't edit a snapshot name: snapshot {snapshot_id} was not found"
+
+    project = get_project(licco_db, snapshot["project_id"])
+    if not is_user_allowed_to_edit_project(licco_db, userid, project):
+        return _empty_snapshot, f"Can't edit a snapshot name: insufficient permissions: you are not the project editor"
 
     # NOTE: for now we don't check for the project owner, anyone can change the name of the snapshot
     licco_db["project_snapshots"].update_one({"_id": ObjectId(snapshot_id)}, {"$set": {'name': new_name}})
     snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
     if not snapshot:
-        return {}, "Failed to find the latest project snapshot after updating it's name: this is a programming bug that should never happen"
+        return _empty_snapshot, "Failed to find the latest project snapshot after updating it's name: this is a programming bug that should never happen"
     return snapshot, ""
 

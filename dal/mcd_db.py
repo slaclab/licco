@@ -45,6 +45,13 @@ def get_recent_snapshot(db, prjid: str, asoftimestamp=None) -> Optional[McdSnaps
     return snapshot
 
 
+def get_snapshot(db, snapshot_id) -> Optional[McdSnapshot]:
+    snapshot = db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    if not snapshot:
+        return None
+    return snapshot
+
+
 def get_devices(db, device_ids: List[str | ObjectId]) -> Dict[str, McdDevice]:
     device_id_mapping = {}
     ids = [ObjectId(id) for id in device_ids]

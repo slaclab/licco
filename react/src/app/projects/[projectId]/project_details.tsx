@@ -93,8 +93,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isLoading, setIsLoading] = useState(true);
     const [fftDataLoadingError, setFftDataLoadingError] = useState('');
     const [project, setProject] = useState<ProjectInfo>();
-    const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
-    const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
+
+    const [deviceData, setDeviceData] = useState<ProjectDeviceDetails[]>([]);
+    const [deviceDataDisplay, setDeviceDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
     const [keymap, setKeymap] = useState<Record<string, string>>({});
     /* @FUTURE: these two fields may come from backend in the future */
@@ -122,9 +123,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // filters to apply
     const [fcFilter, setFcFilter] = useState("");
     const [fgFilter, setFgFilter] = useState("");
-    const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
     const [timestampFilter, setTimestampFilter] = useState<Date>();
+    const [availableDeviceStates, setAvailableDeviceStates] = useState<DeviceState[]>(DeviceState.allStates);
 
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
@@ -137,16 +138,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         setSortedByColumn(newSortOrder);
     }
 
-    const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
+    const loadDeviceData = (projectId: string, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
         setFftDataLoadingError('');
-        return fetchProjectDevices(projectId, showAllEntries, sinceTime)
+        return fetchProjectDevices(projectId, sinceTime)
             .then(devices => {
-                setFftData(devices);
+                setDeviceData(devices);
                 return devices;
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to load device data: ${e.error}`;
-                setFftData([]);
+                setDeviceData([]);
                 setFftDataLoadingError(msg);
                 console.error(msg, e);
             }).finally(() => {
@@ -181,11 +182,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             setTimestampFilter(asOfTimestamp);
         }
 
-        const showAllEntries = true;
         const loadInitialData = async () => {
             const [data, fftData, keymapData, whoami] = await Promise.all([
                 fetchProjectInfo(projectId),
-                fetchProjectDevices(projectId, showAllEntries, asOfTimestamp),
+                fetchProjectDevices(projectId, asOfTimestamp),
                 fetchKeymap(),
                 whoAmI(),
             ])
@@ -194,7 +194,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         loadInitialData().then(d => {
             setProject(d.data);
-            setFftData(d.fftData);
+            setDeviceData(d.fftData);
             setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
             if (asOfTimestamp) {
@@ -215,7 +215,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     useEffect(() => {
         let fcGlobMatcher = createGlobMatchRegex(fcFilter)
         let fgGlobMatcher = createGlobMatchRegex(fgFilter);
-        let filteredFftData = fftData.filter(d => {
+        let filteredFftData = deviceData.filter(d => {
             if (fcFilter) {
                 return fcGlobMatcher.test(d.fc);
             }
@@ -233,8 +233,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         })
 
         sortDeviceDataByColumn(filteredFftData, sortedByColumn.column, sortedByColumn.sortDesc);
-        setFftDataDisplay(filteredFftData);
-    }, [fftData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
+        setDeviceDataDisplay(filteredFftData);
+    }, [deviceData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
 
 
     const displayFilterIconInColumn = (filterValue: string) => {
@@ -277,7 +277,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         // check if desired fft combination already exist within the project 
         // if it does, simply show an error message to the user
-        for (let fft of fftData) {
+        for (let fft of deviceData) {
             if (fft.fc === newFft.fc.name) {
                 setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
                 return
@@ -292,10 +292,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         return addFftsToProject(project._id, [fft])
             .then(data => {
-                // TODO: when we try to add an fft that is already there, the backend doesn't complain
-                // it just returns success: true, erromsg: no changes detected.
-                // TODO: we only need the fft that was updated, not all ffts of the project
-                setFftData(data)
+                setDeviceData(data)
                 setIsAddNewFftDialogOpen(false);
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to add an fft to a project: " + e.error;
@@ -378,7 +375,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         variant="minimal" size="small"
                                         disabled={!isFilterApplied}
                                         onClick={e => {
-                                            let data = createCsvStringFromDevices(fftDataDisplay)
+                                            let data = createCsvStringFromDevices(deviceDataDisplay)
                                             let blob = new Blob([data], { type: "text/plain" });
                                             let url = window.URL.createObjectURL(blob);
                                             let a = document.createElement('a');
@@ -415,7 +412,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             setTimestampFilter(undefined);
                                             if (timeFilter !== undefined) {
                                                 // timestamp filter was applied and now we have to load original data
-                                                loadFFTData(project._id, true);
+                                                loadDeviceData(project._id);
                                             }
                                             updateQueryParams('', '', '', '');
                                         }}
@@ -473,7 +470,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         </tr>
                     </thead>
                     <tbody>
-                        {fftDataDisplay.map(device => {
+                        {deviceDataDisplay.map(device => {
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice
                             if (!isEditedDevice) {
@@ -498,7 +495,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             }
 
                             return <DeviceDataEditTableRow key={device._id} keymap={keymap} project={project} device={device}
-                                availableFftStates={availableFftStates}
+                                availableFftStates={availableDeviceStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
                                 onEditDone={(updatedDeviceData, action) => {
@@ -511,7 +508,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     // if the user replaced 'fc' or 'fg' of the device, the new device
                                     // will have a different id.
                                     const oldDevice = device;
-                                    let updatedDevices = [...fftData];
+                                    let updatedDevices = [...deviceData];
                                     for (let i = 0; i < updatedDevices.length; i++) {
                                         const device = updatedDevices[i];
                                         if (device._id === oldDevice._id) {
@@ -521,7 +518,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         }
                                     }
 
-                                    setFftData(updatedDevices);
+                                    setDeviceData(updatedDevices);
                                     setEditedDevice(undefined);
                                 }}
                             />
@@ -531,11 +528,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 </table>
             </div>
 
-            {!isLoading && !fftDataLoadingError && !isFilterApplied && fftDataDisplay.length == 0 ?
+            {!isLoading && !fftDataLoadingError && !isFilterApplied && deviceDataDisplay.length == 0 ?
                 <NonIdealState icon="search" title="No FCs Found" description={<>Project {project?.name} does not have any FCs</>} />
                 : null}
 
-            {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
+            {!isLoading && isFilterApplied && deviceDataDisplay.length == 0 ?
                 <NonIdealState icon="filter" title="No FCs Found" description="Try changing your filters"></NonIdealState>
                 : null
             }
@@ -550,7 +547,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
             <FilterDeviceDialog
                 isOpen={isFilterDialogOpen}
-                possibleStates={availableFftStates}
+                possibleStates={availableDeviceStates}
                 onClose={() => setIsFilterDialogOpen(false)}
                 onSubmit={(newFcFilter, newFgFilter, newStateFilter) => {
                     setFcFilter(newFcFilter);
@@ -572,14 +569,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onSubmit={(newDeviceDetails) => {
                         // find current fft and update device details
                         let updatedData = [];
-                        for (let d of fftData) {
+                        for (let d of deviceData) {
                             if (d._id != newDeviceDetails._id) {
                                 updatedData.push(d);
                                 continue;
                             }
                             updatedData.push(newDeviceDetails);
                         }
-                        setFftData(updatedData);
+                        setDeviceData(updatedData);
                         setIsCopyFFTDialogOpen(false);
                     }}
                 /> : null}
@@ -605,8 +602,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             setIsDeleteDialogOpen(false);
 
                             // update data 
-                            let updatedFftData = fftData.filter(d => d._id != device._id);
-                            setFftData(updatedFftData);
+                            let updatedFftData = deviceData.filter(d => d._id != device._id);
+                            setDeviceData(updatedFftData);
                         }).catch((e: JsonErrorMsg) => {
                             let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
                             setErrorAlertMsg(msg);
@@ -632,14 +629,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onCommentAdd={(updatedDevice) => {
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
-                        for (let fft of fftData) {
+                        for (let fft of deviceData) {
                             if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }
                             updatedFftData.push(updatedDevice);
                         }
-                        setFftData(updatedFftData);
+                        setDeviceData(updatedFftData);
                         setCommentDevice(updatedDevice);
                     }
                     }
@@ -674,8 +671,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         setStateFilter('');
                         setTimestampFilter(undefined);
                         updateQueryParams('', '', '', '');
-                        const showAllEntries = true;
-                        loadFFTData(projectId, showAllEntries);
+                        loadDeviceData(projectId);
                     }
                     setIsImportDialogOpen(false);
                 }}
