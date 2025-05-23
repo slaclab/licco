@@ -1,14 +1,15 @@
-import { Button, Dialog, DialogBody, DialogFooter, FormGroup, NonIdealState, Spinner } from "@blueprintjs/core";
+import { Button, Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, NonIdealState, Spinner } from "@blueprintjs/core";
 import React, { useEffect, useMemo, useState } from "react";
 import { StringSuggest } from "../components/suggestion_field";
-import { FFTInfo, fetchFcs, fetchProjectDevices } from "../projects/project_model";
+import { NewDeviceInfo, fetchFcs, fetchProjectDevices } from "../projects/project_model";
 import { calculateValidFcs } from "../utils/fc_utils";
 import { JsonErrorMsg } from "../utils/fetching";
+import { DeviceType, deviceTypes } from "../projects/device_model";
 
 
-export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, dialogType: 'addToProject' | 'create', onClose: () => void, onSubmit: (fft: FFTInfo) => void }> = ({ isOpen, fcs, currentProject, dialogType, onClose, onSubmit }) => {
+export const AddDeviceDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentProject: string, onClose: () => void, onSubmit: (device: NewDeviceInfo) => void }> = ({ isOpen, fcs, currentProject, onClose, onSubmit }) => {
     const [fcName, setFcName] = useState('');
-    const [fgName, setFgName] = useState('');
+    const [deviceType, setDeviceType] = useState(DeviceType.MCD);
     const [allFcs, setAllFcs] = useState<string[]>([]);
     const [usedFcs, setUsedFcs] = useState<string[]>([]);
 
@@ -19,6 +20,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
     useEffect(() => {
         if (!isOpen) {
             setFcName('');
+            setDeviceType(DeviceType.MCD);
             return;
         }
 
@@ -41,7 +43,7 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
             });
         Promise.all([p1, p2])
             .catch((e: JsonErrorMsg) => {
-                let msg = "Failed to fetch FFTs: " + e.error;
+                let msg = "Failed to fetch FCs: " + e.error;
                 setDialogError(msg);
             }).finally(() => {
                 setIsLoading(false)
@@ -49,18 +51,14 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
     }, [isOpen, currentProject, fcs])
 
 
-    const disableSubmit = fcName.trim() == "";
+    const disableSubmit = fcName.trim() == "" || deviceType == 0;
 
     const submit = () => {
         const fc = fcName.trim();
-        const fg = fgName.trim();
 
-        // TODO: refactor this, we are no longer using this
-        let data: FFTInfo = {
-            fc: { _id: '', name: fc, description: '' },
-            fg: { _id: '', name: fg, description: '' },
-            is_being_used: false,
-            _id: currentProject
+        let data: NewDeviceInfo = {
+            fc: fc,
+            device_type: deviceType,
         }
 
         setIsSubmitting(true);
@@ -85,14 +83,22 @@ export const AddFftDialog: React.FC<{ isOpen: boolean, fcs?: string[], currentPr
                 {isLoading ?
                     <NonIdealState icon={<Spinner />} title="Loading" description="Please Wait..." />
                     :
-                    <FormGroup label="Functional Component:" labelFor="fc-name">
-                        <StringSuggest value={fcName} setValue={setFcName} items={fcList} 
-                            inputProps={{ 
-                                id: "fc-name", 
-                                autoFocus: true,
-                            }} 
-                        />
-                    </FormGroup>
+                    <>
+                        <FormGroup label="Functional Component:" labelFor="fc-name">
+                            <StringSuggest value={fcName} setValue={setFcName} items={fcList} 
+                                inputProps={{ 
+                                    id: "fc-name", 
+                                    autoFocus: true,
+                                }} 
+                            />
+                        </FormGroup>
+                    
+                        <FormGroup label="Device Type:" labelFor="device-type">
+                            <HTMLSelect id="device-type" options={deviceTypes} value={deviceType} onChange={e => setDeviceType(parseInt(e.currentTarget.value))}
+                                disabled={true} 
+                                />
+                        </FormGroup>
+                    </>
                 }
 
             </DialogBody>

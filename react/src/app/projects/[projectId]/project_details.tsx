@@ -1,6 +1,6 @@
 import { HtmlPage } from "@/app/components/html_page";
 import { LoadingSpinner } from "@/app/components/loading";
-import { AddFftDialog } from "@/app/ffts/ffts_overview";
+import { AddDeviceDialog } from "@/app/ffts/ffts_overview";
 import { mapLen } from "@/app/utils/data_structure_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { createGlobMatchRegex } from "@/app/utils/glob_matcher";
@@ -11,7 +11,7 @@ import { Alert, AnchorButton, Button, ButtonGroup, Collapse, Colors, Divider, HT
 import { ItemPredicate, ItemRendererProps, MultiSelect } from "@blueprintjs/select";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
-import { DeviceState, FFTInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectFFT, ProjectInfo, addFftsToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
+import { DeviceState, NewDeviceInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectInfo, addDevicesToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
 import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog } from "./project_dialogs";
@@ -101,7 +101,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [beamlineLocations, setBeamlineLocations] = useState(["TMO", "RIX", "TXI-SXR", "TXI-HXR", "XPP", "DXS", "MFX", "CXI", "MEC"]);
 
     // dialogs open state
-    const [isAddNewFftDialogOpen, setIsAddNewFftDialogOpen] = useState(false);
+    const [isAddNewDeviceDialogOpen, setIsAddNewDeviceDialogOpen] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -250,35 +250,18 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         router.replace(`${pathName}?${params.toString()}`)
     }
 
-    const addNewFft = (newFft: FFTInfo) => {
+    const addNewDevice = (newDevice: NewDeviceInfo) => {
         if (!project) {
             // this should never happen
-            setErrorAlertMsg("Can't add a new fft to a project without knowing the project details; this is a programming bug");
+            setErrorAlertMsg("Can't add a new device to a project without knowing the project details; this is a programming bug");
             return;
         }
 
-        // check if desired fft combination already exist within the project 
-        // if it does, simply show an error message to the user
-        for (let fft of fftData) {
-            if (fft.fc === newFft.fc.name) {
-                setErrorAlertMsg(<>FC <b>{fft.fc}</b> is already a part of the project: &quot;{project.name}&quot;.</>);
-                return
-            }
-        }
-
-        let fft: ProjectFFT = {
-            _id: newFft._id,
-            fc: newFft.fc.name,
-            fg: newFft.fg.name,
-        }
-
-        return addFftsToProject(project._id, [fft])
+        return addDevicesToProject(project._id, [newDevice])
             .then(data => {
-                // TODO: when we try to add an fft that is already there, the backend doesn't complain
-                // it just returns success: true, erromsg: no changes detected.
-                // TODO: we only need the fft that was updated, not all ffts of the project
+                // TODO: we only need the device that was updated, not all devices of the project
                 setFftData(data)
-                setIsAddNewFftDialogOpen(false);
+                setIsAddNewDeviceDialogOpen(false);
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to add an fft to a project: " + e.error;
                 console.error(msg, e);
@@ -382,7 +365,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                     <Button icon="add" title="Add a new Device to Project" variant="minimal" size="small"
                                         disabled={disableActionButtons}
-                                        onClick={e => setIsAddNewFftDialogOpen(true)}
+                                        onClick={e => setIsAddNewDeviceDialogOpen(true)}
                                     />
 
                                     <Divider />
@@ -533,12 +516,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
             }
 
             {project ?
-                <AddFftDialog
-                    dialogType="addToProject"
+                <AddDeviceDialog
                     currentProject={project._id}
-                    isOpen={isAddNewFftDialogOpen}
-                    onClose={() => setIsAddNewFftDialogOpen(false)}
-                    onSubmit={(newFft) => addNewFft(newFft)}
+                    isOpen={isAddNewDeviceDialogOpen}
+                    onClose={() => setIsAddNewDeviceDialogOpen(false)}
+                    onSubmit={(newFft) => addNewDevice(newFft)}
                 />
                 : null
             }

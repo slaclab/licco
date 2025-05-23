@@ -173,15 +173,22 @@ def get_fcs(licco_db: MongoDb) -> List[str]:
     """
     master_project = get_master_project(licco_db)
     if not master_project:
-        # we don't have any ffts
+        # we don't have any fcs
         return []
 
-    # get device ffts
-    latest_master_project = get_recent_snapshot(licco_db, master_project["_id"])
-    if not latest_master_project:
+    # get device fcs for master project
+    return get_project_fcs(licco_db, master_project["_id"])
+
+
+def get_project_fcs(licco_db: MongoDb, project_id: str) -> List[str]:
+    """
+    Get the FC ids from a given project.
+    """
+    snapshot = get_recent_snapshot(licco_db, project_id)
+    if not snapshot:
         return []
 
-    ids = latest_master_project["devices"]
+    ids = snapshot["devices"]
     fc_names = list(licco_db["device_history"].find({"_id": {"$in": ids}}, {"fc": 1, "_id": 0}))
     return [doc['fc'] for doc in fc_names]
 
@@ -353,23 +360,30 @@ def validate_editors(licco_db: MongoDb, editors: List[str], notifier: Notifier) 
     return ""
 
 
-def insert_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any], modification_time=None,
+def insert_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[str, any],
                       current_project_attributes=None) -> Tuple[ObjectId, str]:
     # if device has "_id" field, we have to remove it, otherwise mongodb will raise a duplicate id exception.
     # When updating an existing device, this _id already exists in mongo (hence we remove it to get a new one)
     values.pop("_id", None)
     values["project_id"] = ObjectId(prjid)
+    
+    # a new device should have a new device_id
+    values["device_id"] = str(uuid.uuid4())
 
+    # handle defaults for certain fields
     if "discussion" not in values:
         values["discussion"] = []
 
     if "state" not in values:
         values["state"] = "Conceptual"
 
-    if not modification_time:
-        modification_time = datetime.datetime.now(datetime.UTC)
-
-    values["created"] = modification_time
+    if "created" not in values:
+        values["created"] = datetime.datetime.now(datetime.UTC)
+     
+    # validate device before inserting
+    err = mcd_validate.validate_device(values)
+    if err:
+        return None, err
 
     device_id = licco_db["device_history"].insert_one(values).inserted_id
     return device_id, ""
@@ -428,8 +442,7 @@ def change_device_fc(licco_db: MongoDb, userid: str, prjid: str, update: Dict[st
 
 
 def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates: Dict[str, any],
-                             modification_time=None, remove_discussion_comments=None,
-                             current_project_attributes=None,
+                             remove_discussion_comments=None, current_project_attributes=None,
                              create_snapshot=True) -> Tuple[bool, str, Dict[str, any], str]:
     """
     Update the value(s) of a device in a project. In case of any changes (or if it's a new device) it will be saved
@@ -442,9 +455,6 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return False, f"Cannot find project for {prjid}", {}, ''
-
-    if not modification_time:
-        modification_time = datetime.datetime.now(datetime.UTC)
 
     changes = {}
 
@@ -471,15 +481,8 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
         updates.pop("_id", None)  # if existing device is used, we should drop "_id" to avoid overwriting the same document
         updates["project_id"] = ObjectId(prjid)
 
-        if 'created' not in updates:
-            updates['created'] = modification_time
-
-        err = mcd_validate.validate_device(updates)
-        if err:
-            return False, err, changes, ""
-
         # we have a unique fc name, so we can create a new device
-        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=updates, modification_time=modification_time)
+        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=updates)
         if err:
             return False, err, changes, ""
 
@@ -495,13 +498,13 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
             create_new_snapshot(licco_db, userid, prjid, updated_devices, changelog=changelog)
         return True, "", changes, str(new_device_id)
 
-    err, changes, device_id = _overwrite_device_data(licco_db, userid, prjid, existing_device, updates, create_snapshot=create_snapshot, modification_time=modification_time)
+    err, changes, device_id = _overwrite_device_data(licco_db, userid, prjid, existing_device, updates, create_snapshot=create_snapshot)
     if err:
         return False, err, changes, ""
     return True, "", changes, device_id
 
 
-def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, modification_time=None) -> Tuple[str, Dict[str, any], str]:
+def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False) -> Tuple[str, Dict[str, any], str]:
     device_changes : Dict[str, any] = {}
 
     # the user wants to update an existing device with new values
@@ -539,15 +542,10 @@ def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: M
 
     # there are some value changes that we need to persist
     if device_changes:
-        err = mcd_validate.validate_device(new_device)
+        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=new_device)
         if err:
             fc = existing_device.get('fc', '')
             return f"failed to update a device '{fc}': {err}", device_changes, ""
-
-        # device is valid, insert it
-        new_device_id, err = insert_new_device(licco_db, userid, prjid, values=new_device, modification_time=modification_time)
-        if err:
-            return err, device_changes, ""
 
         if create_snapshot:
             fc = existing_device['fc']
@@ -572,6 +570,24 @@ def copy_device(device_values: Dict[str, any]):
     return shallow_device_copy
 
 
+def insert_new_devices_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
+                                  def_logger=None, keep_going_on_error=False, 
+                                  remove_discussion_comments=False, 
+                                  ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
+    if isinstance(devices, dict):
+        devices = list(devices.values())
+    
+    # check that the devices don't already exist
+    old_fcs = set(get_project_fcs(licco_db, prjid))
+    new_fcs = set(map(lambda device: device["fc"], devices))
+    intersection = old_fcs.intersection(new_fcs)
+    if intersection:
+        return False, f"Devices already present in the project: {list(intersection)}", ImportCounter()
+    
+    # insert them
+    return update_ffts_in_project(licco_db, userid, prjid, devices, def_logger, keep_going_on_error, remove_discussion_comments, ignore_user_permission_check)
+
+
 def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, def_logger=None, keep_going_on_error=False, remove_discussion_comments=False, ignore_user_permission_check=False) -> Tuple[bool, str, ImportCounter]:
     """
     Insert multiple FFTs into a project
@@ -581,10 +597,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     insert_counter = ImportCounter()
 
     if isinstance(devices, dict):
-        new_devices = []
-        for entry in devices:
-            new_devices.append(devices[entry])
-        devices = new_devices
+        devices = list(devices.values())
 
     # Get general project details from project table
     project = get_project(licco_db, prjid)
@@ -731,12 +744,6 @@ def copy_device_values_from_project(licco_db: MongoDb, userid: str, from_prjid: 
         changes[key] = f"{old_val} -> {new_val}"
         to_device[key] = new_val
 
-    # validate destination device
-    err = mcd_validate.validate_device(to_device)
-    if err:
-        return {}, f"failed to copy values: destination device validation error: {err}"
-
-    # destination device was validated
     # 1. store updated device
     # 2. create a new snapshot
     # 3. return an updated device data
