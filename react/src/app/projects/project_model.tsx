@@ -242,10 +242,12 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 
 
 // compare every value field for a change 
+const deviceMetadataFields = new Set<keyof ProjectDeviceDetails>(["discussion", "device_id", "_id", "project_id", "created"])
+
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key === "fc" || key === "fg" || key === "discussion") { // ignored 
+        if (deviceMetadataFields.has(key)) { // ignore device metadata fields
             continue;
         }
 

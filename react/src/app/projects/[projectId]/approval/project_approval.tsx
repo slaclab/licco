@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Container } from "react-bootstrap";
 import { ProjectInfo, approveProject, isProjectApproved, isProjectSubmitted, isUserAProjectApprover, isUserAProjectEditor, rejectProject, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
-import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
+import { ProjectDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
 import { CollapsibleProjectNotes } from "../../projects_overview";
 
@@ -16,7 +16,7 @@ export const ProjectApprovalPage: React.FC<{ projectId: string }> = ({ projectId
     // loading has to be set to true, to show the loading symbol when the page is started initially 
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
-    const [diff, setDiff] = useState<ProjectFftDiff>();
+    const [diff, setDiff] = useState<ProjectDiff>();
     const [rejectDialogOpen, setIsRejectDialogOpen] = useState(false);
     const [userDecision, setUserDecision] = useState('');
 

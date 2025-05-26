@@ -40,7 +40,7 @@ export const ProjectHistoryDialog: React.FC<{
         // We should also refetch if the end time is set to the current date or later, since any
         // user device change will add a new change into the history of snapshots.
         const noSnapshots = state.snapshotHistory.length === 0;
-        const endTimeIsTodayOrAfter = state.endTime && state.endTime.getTime() > new Date().getTime();
+        const endTimeIsTodayOrAfter = state.endTime === undefined || (state.endTime && state.endTime.getTime() > new Date().getTime());
         if (noSnapshots || endTimeIsTodayOrAfter) {
             fetchHistory(state.startTime, state.endTime);
         }
