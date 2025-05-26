@@ -163,7 +163,9 @@ def get_project_devices(licco_db: MongoDb, prjid, asoftimestamp=None, device_id=
     """
     Get the current devices with their data from a project id
     """
-    return get_latest_project_data(licco_db, prjid, asoftimestamp=asoftimestamp, device_id=device_id)
+    # @REFACTOR: return error as well
+    devices, err = get_latest_project_data(licco_db, prjid, asoftimestamp=asoftimestamp, device_id=device_id)
+    return devices
 
 
 def get_fcs(licco_db: MongoDb) -> List[str]:
@@ -646,7 +648,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     return True, "\n".join(errors), insert_counter
 
 
-def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str]|List[ObjectId], changelog:Changelog=None, snapshot_name=None):
+def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str] | List[ObjectId], changelog: Changelog = None, snapshot_name=None):
     modification_time = datetime.datetime.now(datetime.UTC)
     snapshot = {
         "project_id": ObjectId(projectid),
@@ -1133,18 +1135,53 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    err, created_project = create_new_project(licco_db, userid, name, description, [], notifier)
-    if err:
-        return False, f"Failed to create a new project: {err}", None
-
-    # we are cloning an existing project
     original_project = get_recent_snapshot(licco_db, prjid)
     if not original_project:
         return False, f"Project {prjid} to clone from is not found, or has no values to copy", None
 
-    # @TODO: we should probably make a deep copy, otherwise the comment threads will be shared between original and
-    # a new project...
-    create_new_snapshot(licco_db, projectid=created_project["_id"], devices=original_project["devices"], userid=userid)
+    old_device_ids = original_project["devices"]
+    devices = list(mcd_db.get_devices(licco_db, old_device_ids).values())
+    for device in devices:
+        device.pop("_id", None)
+        device["device_id"] = str(uuid.uuid4())
+
+    # NOTE: we first validate old devices, before creating a new project
+    # this is to ensure that we don't create an empty project if device values are invalid
+    validation_result = mcd_validate.validate_project_devices(devices)
+    if validation_result.errors:
+        err = "\n".join([e.error for e in validation_result.errors])
+        return False, f"Failed to validate old devices we are trying to copy: {err}", None
+
+    # devices were validated, create a new project and insert copies of existing devices
+    err, created_project = create_new_project(licco_db, userid, name, description, [], notifier)
+    if err:
+        return False, f"Failed to create a new project: {err}", None
+
+    # replace the project id in devices with a new project
+    for device in devices:
+        # we are copying devices, hence we have to get rid of device ids
+        # if this id was set, we would update existing device instead of creating a new one
+        device.pop("_id", None)
+        device["device_id"] = str(uuid.uuid4())
+        device["project_id"] = created_project["_id"]
+
+    # validate new devices once again, just to be absolutely sure we didn't introduce an invalid device field
+    # (in case 'device_id' field above has changed to 'id_device' in the validator)
+    validation_result = mcd_validate.validate_project_devices(devices)
+    if validation_result.errors:
+        err = "\n".join([e.error for e in validation_result.errors])
+        return False, f"Failed to validate new devices we are trying insert: {err}", None
+
+    # device values are valid, insert them into db and craete a new snapshot
+    new_device_ids = []
+    fcs = []
+    if devices:
+        new_device_ids = list(licco_db["device_history"].insert_many(devices).inserted_ids)
+        fcs = [device['fc'] for device in devices]
+
+    changelog = Changelog()
+    changelog.created = fcs
+    create_new_snapshot(licco_db, projectid=created_project["_id"], devices=new_device_ids, userid=userid, changelog=changelog)
 
     if editors:
         status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)
@@ -1242,7 +1279,7 @@ def delete_project(licco_db: MongoDb, userid, project_id):
         licco_db["tags"].delete_many({'prj': ObjectId(project_id)})
         return True, ""
 
-    new_project_name = 'hidden' + '_' + prj['name'] + '_'+ datetime.date.today().strftime('%m/%d/%Y')
+    new_project_name = 'hidden' + '_' + prj['name'] + '_' + datetime.datetime.now(datetime.UTC).isoformat()
     # user is just the owner, delete in this case means 'hide the project'
     licco_db["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden', 'name': new_project_name}})
     return True, ""

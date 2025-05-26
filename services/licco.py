@@ -59,11 +59,14 @@ def project_writable(wrapped_function):
         prj = mcd_model.get_project(licco_db, prjid)
         if not prj:
             raise Exception(f"Project with id {prjid} does not exist")
-        if prj.get("status", "N/A") == "development":
+        status = prj.get("status", "N/A")
+        if status == "development":
             return wrapped_function(*args, **kwargs)
-        raise Exception(
-            f"Project with id {prjid} is not in development status")
+
+        name = prj.get("name", "UnknownName")
+        raise Exception(f"Project {name} (id: {prjid}) is not in a development status: current status: {status}")
     return function_interceptor
+
 
 @licco_ws_blueprint.route("/backendkeymap/", methods=["GET"])
 @context.security.authentication_required

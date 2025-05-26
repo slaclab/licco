@@ -8,27 +8,25 @@ logger = logging.getLogger(__name__)
 
 
 
-def get_latest_project_data(db, projectid, device_id=None, asoftimestamp=None, commentAfterTimestamp=None) -> Dict[str, McdDevice]:
+def get_latest_project_data(db, projectid, device_id=None, asoftimestamp=None, commentAfterTimestamp=None) -> Tuple[Dict[str, McdDevice], str]:
     # get correct project ID
     project = db["projects"].find_one({"_id": ObjectId(projectid)})
     if not project:
-        logger.error("Cannot find project for id %s", projectid)
-        return {}
+        return {}, f"Cannot find project with id {projectid}"
 
     # find most recent project snapshot
     snapshot = get_recent_snapshot(db, projectid, asoftimestamp=asoftimestamp)
     if not snapshot:
-        logger.debug(f"No recent snapshot found for project {projectid}")
-        return {}
+        return {}, f"No snapshot found for a project {projectid}"
 
     # get information for one specified FFT
     if device_id:
         device = get_device(db, device_id=device_id)
-        return {device["fc"]: device}
+        return {device["fc"]: device}, ""
 
     # get information of every snapshot device
     device_information = get_devices(db, snapshot["devices"])
-    return device_information
+    return device_information, ""
 
 
 def get_recent_snapshot(db, prjid: str, asoftimestamp=None) -> Optional[McdSnapshot]:
