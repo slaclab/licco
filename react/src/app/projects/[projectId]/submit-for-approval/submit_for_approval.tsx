@@ -8,13 +8,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Container, Row } from "react-bootstrap";
 import { ProjectEditData, ProjectInfo, UserRoles, editProject, fetchUsers, isProjectInDevelopment, isProjectSubmitted, submitForApproval, whoAmI } from "../../project_model";
 import { ProjectDiffTables } from "../diff/project_diff";
-import { ProjectFftDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
+import { ProjectDiff, fetchDiffWithMasterProject } from "../diff/project_diff_model";
 
 export const SubmitProjectForApproval: React.FC<{ projectId: string }> = ({ projectId }) => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [project, setProject] = useState<ProjectInfo>();
-    const [diff, setDiff] = useState<ProjectFftDiff>();
+    const [diff, setDiff] = useState<ProjectDiff>();
     const [loggedInUser, setLoggedInUser] = useState('');
 
     // approvers

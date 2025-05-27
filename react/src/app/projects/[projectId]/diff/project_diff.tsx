@@ -3,7 +3,7 @@ import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, useWhoAmIHook } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
-import { ProjectFftDiff, useFetchProjectDiffDataHook } from "./project_diff_model";
+import { ProjectDiff, useFetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
@@ -19,7 +19,7 @@ export const ProjectDiffPage: React.FC<{ projectIdA: string, projectIdB: string 
 }
 
 
-export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, user: string, diff?: ProjectFftDiff }> = ({ isLoading, loadError, user, diff }) => {
+export const ProjectDiffTables: React.FC<{ isLoading: boolean, loadError: string, user: string, diff?: ProjectDiff }> = ({ isLoading, loadError, user, diff }) => {
     if (isLoading) {
         return <NonIdealState icon={<Spinner />} title="Loading Diff" description="Loading project data..." className="mt-5" />
     }
@@ -86,7 +86,7 @@ const DiffTableHeading: React.FC<{ title?: ReactNode }> = ({ title }) => {
 }
 
 // just for displaying data
-export const ProjectDiffTable: React.FC<{ diff: ProjectFftDiff, user: string, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, user, type, defaultOpen = true }) => {
+export const ProjectDiffTable: React.FC<{ diff: ProjectDiff, user: string, type: 'new' | 'updated' | 'missing' | 'identical' | 'listOfIdenticalDevices', defaultOpen?: boolean }> = ({ diff, user, type, defaultOpen = true }) => {
     const [collapsed, setCollapsed] = useState(!defaultOpen);
     const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
 

@@ -163,7 +163,9 @@ def get_project_devices(licco_db: MongoDb, prjid, asoftimestamp=None, device_id=
     """
     Get the current devices with their data from a project id
     """
-    return get_latest_project_data(licco_db, prjid, asoftimestamp=asoftimestamp, device_id=device_id)
+    # @REFACTOR: return error as well
+    devices, err = get_latest_project_data(licco_db, prjid, asoftimestamp=asoftimestamp, device_id=device_id)
+    return devices
 
 
 def get_fcs(licco_db: MongoDb) -> List[str]:
@@ -659,7 +661,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     return True, "\n".join(errors), insert_counter
 
 
-def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str]|List[ObjectId], changelog:Changelog=None, snapshot_name=None):
+def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices: List[str] | List[ObjectId], changelog: Changelog = None, snapshot_name=None):
     modification_time = datetime.datetime.now(datetime.UTC)
     snapshot = {
         "project_id": ObjectId(projectid),
@@ -1140,18 +1142,53 @@ def clone_project(licco_db: MongoDb, userid: str, prjid: str, name: str, descrip
     if existing_project:
         return False, f"Project with name {name} already exists", None
 
-    err, created_project = create_new_project(licco_db, userid, name, description, [], notifier)
-    if err:
-        return False, f"Failed to create a new project: {err}", None
-
-    # we are cloning an existing project
     original_project = get_recent_snapshot(licco_db, prjid)
     if not original_project:
         return False, f"Project {prjid} to clone from is not found, or has no values to copy", None
 
-    # @TODO: we should probably make a deep copy, otherwise the comment threads will be shared between original and
-    # a new project...
-    create_new_snapshot(licco_db, projectid=created_project["_id"], devices=original_project["devices"], userid=userid)
+    old_device_ids = original_project["devices"]
+    devices = list(mcd_db.get_devices(licco_db, old_device_ids).values())
+    for device in devices:
+        device.pop("_id", None)
+        device["device_id"] = str(uuid.uuid4())
+
+    # NOTE: we first validate old devices, before creating a new project
+    # this is to ensure that we don't create an empty project if device values are invalid
+    validation_result = mcd_validate.validate_project_devices(devices)
+    if validation_result.errors:
+        err = "\n".join([e.error for e in validation_result.errors])
+        return False, f"Failed to validate old devices we are trying to copy: {err}", None
+
+    # devices were validated, create a new project and insert copies of existing devices
+    err, created_project = create_new_project(licco_db, userid, name, description, [], notifier)
+    if err:
+        return False, f"Failed to create a new project: {err}", None
+
+    # replace the project id in devices with a new project
+    for device in devices:
+        # we are copying devices, hence we have to get rid of device ids
+        # if this id was set, we would update existing device instead of creating a new one
+        device.pop("_id", None)
+        device["device_id"] = str(uuid.uuid4())
+        device["project_id"] = created_project["_id"]
+
+    # validate new devices once again, just to be absolutely sure we didn't introduce an invalid device field
+    # (in case 'device_id' field above has changed to 'id_device' in the validator)
+    validation_result = mcd_validate.validate_project_devices(devices)
+    if validation_result.errors:
+        err = "\n".join([e.error for e in validation_result.errors])
+        return False, f"Failed to validate new devices we are trying insert: {err}", None
+
+    # device values are valid, insert them into db and craete a new snapshot
+    new_device_ids = []
+    fcs = []
+    if devices:
+        new_device_ids = list(licco_db["device_history"].insert_many(devices).inserted_ids)
+        fcs = [device['fc'] for device in devices]
+
+    changelog = Changelog()
+    changelog.created = fcs
+    create_new_snapshot(licco_db, projectid=created_project["_id"], devices=new_device_ids, userid=userid, changelog=changelog)
 
     if editors:
         status, err = update_project_details(licco_db, userid, created_project["_id"], {'editors': editors}, notifier)
@@ -1249,47 +1286,34 @@ def delete_project(licco_db: MongoDb, userid, project_id):
         licco_db["tags"].delete_many({'prj': ObjectId(project_id)})
         return True, ""
 
-    new_project_name = 'hidden' + '_' + prj['name'] + '_'+ datetime.date.today().strftime('%m/%d/%Y')
+    new_project_name = 'hidden' + '_' + prj['name'] + '_' + datetime.datetime.now(datetime.UTC).isoformat()
     # user is just the owner, delete in this case means 'hide the project'
     licco_db["projects"].update_one({'_id': ObjectId(project_id)}, {'$set': {'status': 'hidden', 'name': new_project_name}})
     return True, ""
 
 
-def get_tags_for_project(licco_db: MongoDb, prjid):
-    """
-    Get the tags for the specified project
-    """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
-    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
-    return True, "", tags
-
-
-def add_project_tag(licco_db: MongoDb, prjid, tagname, asoftimestamp):
-    """
-    Add a tag at the specified time for the project.
-    """
-    prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
-    if not prj:
-        return False, f"Cannot find project for {prjid}", None
-
-    existing_tag = licco_db["tags"].find_one({"name": tagname, "prj": ObjectId(prjid)})
-    if existing_tag:
-        return False, f"Tag {tagname} already exists for project {prjid}", None
-
-    licco_db["tags"].insert_one({"prj": ObjectId(prjid), "name": tagname, "time": asoftimestamp})
-    tags = list(licco_db["tags"].find({"prj": ObjectId(prjid)}))
-    return True, "", tags
-
-
-def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tuple[List[McdSnapshot], str]:
+def get_project_snapshots(licco_db: MongoDb, prjid: str, limit: int = 0, start_time: datetime.datetime = None, end_time: datetime.datetime = None) -> Tuple[List[McdSnapshot], str]:
     # mongo returns an empty list if the project_id is not find, hence the check for project before that
     prj = get_project(licco_db, prjid)
     if not prj:
         return [], f"Project {prjid} does not exist"
 
-    out = licco_db["project_snapshots"].find({"project_id": ObjectId(prjid)}).sort("created", -1)
+    query = {"project_id": ObjectId(prjid)}
+
+    is_bounded_by_date = start_time or end_time
+    if is_bounded_by_date:
+        if start_time and end_time:
+            if start_time > end_time:  # swap start end time so that boundaries are correct
+                start_time, end_time = end_time, start_time
+
+        q = []
+        if start_time:
+            q.append({'created': {'$gte': start_time}})
+        if end_time:
+            q.append({'created': {'$lte': end_time}})
+        query["$and"] = q
+
+    out = licco_db["project_snapshots"].find(query).sort("created", -1)
     if limit > 0:
         out.limit(limit)
 
@@ -1299,3 +1323,30 @@ def get_project_history(licco_db: MongoDb, prjid: str, limit: int = 100) -> Tupl
             changelog = Changelog()
             snap["changelog"] = changelog.to_dict()
     return snapshots, ""
+
+
+_empty_snapshot: McdSnapshot = {
+  '_id': ObjectId(), 'project_id': ObjectId(), 'author': '', 'created': datetime.datetime.now(), 'devices': [],
+    'changelog': {}, 'name': '', 'description': '',
+}
+
+def edit_snapshot_name(licco_db: MongoDb, userid: str, prjid: str, snapshot_id: str, new_name: str) -> Tuple[McdSnapshot, str]:
+    """Edit snapshot name, so that the past snapshot is easier to find"""
+    if not new_name or new_name.lstrip() == "":
+        return _empty_snapshot, "Can't edit a snapshot name: name should not be empty"
+
+    snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    if not snapshot:
+        return _empty_snapshot, f"Can't edit a snapshot name: snapshot {snapshot_id} was not found"
+
+    project = get_project(licco_db, snapshot["project_id"])
+    if not is_user_allowed_to_edit_project(licco_db, userid, project):
+        return _empty_snapshot, f"Can't edit a snapshot name: insufficient permissions: you are not the project editor"
+
+    # NOTE: for now we don't check for the project owner, anyone can change the name of the snapshot
+    licco_db["project_snapshots"].update_one({"_id": ObjectId(snapshot_id)}, {"$set": {'name': new_name}})
+    snapshot = licco_db["project_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    if not snapshot:
+        return _empty_snapshot, "Failed to find the latest project snapshot after updating it's name: this is a programming bug that should never happen"
+    return snapshot, ""
+

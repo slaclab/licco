@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchMasterProjectInfo, fetchProjectDevices, fetchProjectInfo } from "../../project_model";
 import { sortDeviceDataByColumn } from "../project_details";
 
-export interface ProjectFftDiff {
+export interface ProjectDiff {
     a: ProjectInfo;
     b: ProjectInfo;
 
@@ -19,8 +19,8 @@ export interface ProjectFftDiff {
 }
 
 
-export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails[], bProject: ProjectInfo, bFfts: ProjectDeviceDetails[]): ProjectFftDiff => {
-    let fftDiff: ProjectFftDiff = {
+export const createFftDiff = (aProject: ProjectInfo, aDevices: ProjectDeviceDetails[], bProject: ProjectInfo, bDevices: ProjectDeviceDetails[]): ProjectDiff => {
+    let diff: ProjectDiff = {
         a: aProject,
         b: bProject,
 
@@ -32,38 +32,38 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
 
     let fftGroup = new Map<string, { a?: ProjectDeviceDetails, b?: ProjectDeviceDetails }>();
     // assign fft elements to each group, so we can detect which one is new, deleted or changed
-    for (let fft of aFfts) {
-        let name = `${fft.fc}__${fft.fg}`;
+    for (let device of aDevices) {
+        let name = `${device.fc}__${device.fg}`;
         let group = fftGroup.get(name);
         if (!group) {
             group = {};
         }
-        group.a = fft;
+        group.a = device;
         fftGroup.set(name, group);
     }
-    for (let fft of bFfts) {
-        let name = `${fft.fc}__${fft.fg}`;
+    for (let device of bDevices) {
+        let name = `${device.fc}__${device.fg}`;
         let group = fftGroup.get(name);
         if (!group) {
             group = {};
         }
-        group.b = fft;
+        group.b = device;
         fftGroup.set(name, group);
     }
 
     for (let group of fftGroup.values()) {
-        if (group.a == undefined) {
+        if (group.a === undefined) {
             // there is an element in b, but no in a - this means a is missing an element
-            if (group.b != undefined) { // this should always execute
-                fftDiff.missing.push(group.b);
+            if (group.b !== undefined) { // this should always execute
+                diff.missing.push(group.b);
             }
             continue;
         }
 
-        if (group.b == undefined) {
+        if (group.b === undefined) {
             // there is an element in a but no in b - this means a has a new fft
-            if (group.a != undefined) {
-                fftDiff.new.push(group.a);
+            if (group.a !== undefined) {
+                diff.new.push(group.a);
             }
             continue;
         }
@@ -74,17 +74,17 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
         let a = group.a!;
         let b = group.b!;
         if (deviceHasChangedValue(a, b)) {
-            fftDiff.updated.push({ a: a, b: b });
+            diff.updated.push({ a: a, b: b });
         } else {
-            fftDiff.identical.push(a);
+            diff.identical.push(a);
         }
     }
 
     // sort in ascending order (based on fc, fg name fields)
-    sortDeviceDataByColumn(fftDiff.new, 'fc', false);
-    sortDeviceDataByColumn(fftDiff.missing, 'fc', false);
-    sortDeviceDataByColumn(fftDiff.identical, 'fc', false);
-    fftDiff.updated.sort((a, b) => {
+    sortDeviceDataByColumn(diff.new, 'fc', false);
+    sortDeviceDataByColumn(diff.missing, 'fc', false);
+    sortDeviceDataByColumn(diff.identical, 'fc', false);
+    diff.updated.sort((a, b) => {
         let first = a.a;
         let second = b.a;
         let diff = sortString(first.fc, second.fc, false);
@@ -94,7 +94,7 @@ export const createFftDiff = (aProject: ProjectInfo, aFfts: ProjectDeviceDetails
         return sortString(first.fg, second.fg, false);
     })
 
-    return fftDiff;
+    return diff;
 }
 
 
@@ -153,7 +153,7 @@ export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetail
 }
 
 
-export const loadProjectDiff = async (projectIdA: string, projectIdB: string): Promise<ProjectFftDiff> => {
+export const loadProjectDiff = async (projectIdA: string, projectIdB: string): Promise<ProjectDiff> => {
     let projectAInfo = fetchProjectInfo(projectIdA);
     let projectBInfo = fetchProjectInfo(projectIdB);
 
@@ -176,7 +176,7 @@ export const loadProjectDiff = async (projectIdA: string, projectIdB: string): P
 export const useFetchProjectDiffDataHook = (projectIdA: string, projectIdB: string) => {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
-    const [diff, setDiff] = useState<ProjectFftDiff>();
+    const [diff, setDiff] = useState<ProjectDiff>();
 
     useEffect(() => {
         setIsLoading(true);
@@ -195,7 +195,7 @@ export const useFetchProjectDiffDataHook = (projectIdA: string, projectIdB: stri
 }
 
 
-export async function fetchDiffWithMasterProject(projectId: string): Promise<ProjectFftDiff> {
+export async function fetchDiffWithMasterProject(projectId: string): Promise<ProjectDiff> {
     const masterProject = await fetchMasterProjectInfo();
 
     if (!masterProject) {

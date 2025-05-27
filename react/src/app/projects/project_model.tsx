@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isArrayEqual } from "../utils/arr_utils";
-import { toUnixSeconds } from "../utils/date_utils";
+import { toUnixMilliseconds, toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { DeviceType } from "./device_model";
 
@@ -243,10 +243,12 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
 
 
 // compare every value field for a change 
+const deviceMetadataFields = new Set<keyof ProjectDeviceDetails>(["discussion", "device_id", "_id", "project_id", "created"])
+
 export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     let key: keyof ProjectDeviceDetails;
     for (key in a) {
-        if (key === "fc" || key === "fg" || key === "discussion") { // ignored 
+        if (deviceMetadataFields.has(key)) { // ignore device metadata fields
             continue;
         }
 
@@ -277,9 +279,8 @@ export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceD
     return false;
 }
 
-export async function fetchProjectDevices(projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
+export async function fetchProjectDevices(projectId: string, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();
-    queryParams.set('showallentries', showAllEntries.toString());
     if (sinceTime != undefined) {
         queryParams.set("asoftimestamp", sinceTime.toISOString());
     }
@@ -296,6 +297,7 @@ export async function fetchProjectDevices(projectId: string, showAllEntries: boo
             return devices.map(d => deviceDetailsBackendToFrontend(d));
         });
 }
+
 
 function numberOrDefault(input: number | string | undefined, defaultVal: number | undefined): number | undefined {
     if (input == undefined) {
@@ -442,12 +444,48 @@ export interface ProjectSnapshot {
     changelog: Changelog;
 }
 
-export function fetchHistoryOfChanges(projectId: string, numberOfChanges: number = 100): Promise<ProjectSnapshot[]> {
-    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/changes/?limit=${numberOfChanges}`)
+export function fetchHistoryOfChanges(projectId: string, startDate?: Date, endDate?: Date, limit: number = 0): Promise<ProjectSnapshot[]> {
+    let params = new URLSearchParams();
+    if (startDate || endDate) {
+        if (startDate && endDate) {
+            if (toUnixMilliseconds(startDate) > toUnixMilliseconds(endDate)) {
+                // swap dates so startDate < endDate
+                let temp = startDate;
+                startDate = endDate;
+                endDate = temp;
+            }
+        }
+
+        if (startDate) {
+            params.append("start", startDate.toISOString())
+        }
+        if (endDate) {
+            params.append("end", endDate.toISOString())
+        }
+    }
+
+    if (limit > 0) {
+        params.append("limit", limit.toString())
+    }
+
+    return Fetch.get<ProjectSnapshot[]>(`/ws/projects/${projectId}/snapshots/?${params.toString()}`)
         .then((data) => {
             // create date objects from given date
             data.forEach(d => d.created = new Date(d.created));
             return data;
+        });
+}
+
+export async function fetchLatestSnapshot(projectId: string): Promise<ProjectSnapshot | undefined> {
+    return Fetch.get<ProjectSnapshot>(`/ws/projects/${projectId}/snapshots/latest/`)
+        .then(snapshot => {
+            snapshot.created = new Date(snapshot.created);
+            return snapshot;
+        }).catch((err: JsonErrorMsg) => {
+            if (err.code === 404) { // snapshot does not exist
+                return undefined;
+            }
+            throw err;
         });
 }
 

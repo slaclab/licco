@@ -14,9 +14,10 @@ import React, { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useStat
 import { DeviceState, NewDeviceInfo, MASTER_PROJECT_NAME, ProjectDeviceDetails, ProjectDeviceDetailsNumericKeys, ProjectInfo, addDevicesToProject, deviceHasSubdevice, fetchKeymap, fetchProjectDevices, fetchProjectInfo, isProjectInDevelopment, isUserAProjectApprover, isUserAProjectEditor, removeDevicesFromProject, whoAmI } from "../project_model";
 import { renderTableField } from "../project_utils";
 import { ProjectExportDialog, ProjectImportDialog } from "../projects_overview_dialogs";
-import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog, ProjectHistoryDialog, SnapshotCreationDialog } from "./project_dialogs";
+import { CommentDialog, CopyDeviceValuesDialog, FilterDeviceDialog, ProjectEditConfirmDialog } from "./project_dialogs";
 
 import styles from './project_details.module.css';
+import { ProjectHistoryDialog, ProjectHistoryDialogState } from "./project_history_dialog";
 
 type deviceDetailsColumn = (keyof Omit<ProjectDeviceDetails, "_id" | "comments" | "discussion">);
 
@@ -92,8 +93,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isLoading, setIsLoading] = useState(true);
     const [fftDataLoadingError, setFftDataLoadingError] = useState('');
     const [project, setProject] = useState<ProjectInfo>();
-    const [fftData, setFftData] = useState<ProjectDeviceDetails[]>([]);
-    const [fftDataDisplay, setFftDataDisplay] = useState<ProjectDeviceDetails[]>([]);
+
+    const [deviceData, setDeviceData] = useState<ProjectDeviceDetails[]>([]);
+    const [deviceDataDisplay, setDeviceDataDisplay] = useState<ProjectDeviceDetails[]>([]);
     const [currentlyLoggedInUser, setCurrentlyLoggedInUser] = useState<string>('');
     const [keymap, setKeymap] = useState<Record<string, string>>({});
     /* @FUTURE: these two fields may come from backend in the future */
@@ -105,10 +107,12 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCopyFFTDialogOpen, setIsCopyFFTDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
-    const [isTagCreationDialogOpen, setIsTagCreationDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [isProjectHistoryDialogOpen, setIsProjectHistoryDialogOpen] = useState(false);
+    // history state (when a user displays previous snapshot we should retain the state of the history dialog
+    // otherwise we will lose the user set date boundaries)
+    const [historyDialogState, setHistoryDialogState] = useState<ProjectHistoryDialogState>({ snapshotHistory: [] });
 
     const [isFftCommentViewerOpen, setIsFftCommentViewerOpen] = useState(false);
     const [commentDevice, setCommentDevice] = useState<ProjectDeviceDetails>();
@@ -119,12 +123,9 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // filters to apply
     const [fcFilter, setFcFilter] = useState("");
     const [fgFilter, setFgFilter] = useState("");
-    const [availableFftStates, setAvailableFftStates] = useState<DeviceState[]>(DeviceState.allStates);
     const [stateFilter, setStateFilter] = useState("");
-    const [asOfTimestampFilter, setAsOfTimestampFilter] = useState("");
-
-    // tag creation
-    const [tagName, setTagName] = useState("");
+    const [timestampFilter, setTimestampFilter] = useState<Date>();
+    const [availableDeviceStates, setAvailableDeviceStates] = useState<DeviceState[]>(DeviceState.allStates);
 
     // state suitable for row updates
     const [editedDevice, setEditedDevice] = useState<ProjectDeviceDetails>();
@@ -137,16 +138,16 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         setSortedByColumn(newSortOrder);
     }
 
-    const loadFFTData = (projectId: string, showAllEntries: boolean = true, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
+    const loadDeviceData = (projectId: string, sinceTime?: Date): Promise<void | ProjectDeviceDetails[]> => {
         setIsLoading(true);
         setFftDataLoadingError('');
-        return fetchProjectDevices(projectId, showAllEntries, sinceTime)
+        return fetchProjectDevices(projectId, sinceTime)
             .then(devices => {
-                setFftData(devices);
+                setDeviceData(devices);
                 return devices;
             }).catch((e: JsonErrorMsg) => {
                 let msg = `Failed to load device data: ${e.error}`;
-                setFftData([]);
+                setDeviceData([]);
                 setFftDataLoadingError(msg);
                 console.error(msg, e);
             }).finally(() => {
@@ -157,22 +158,34 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     // load project data on load
     useEffect(() => {
         setIsLoading(true);
+        let asOfTimestamp = undefined;
         {
+            // parse timestamp filter from a query. Usually this filter will be set by clicking
+            // on the project within the project history dialog, but it's possible that the user
+            // will manually tweak the date: in this case we have to verify that date is valid.
+            const timeQueryParam = queryParams.get("asoftimestamp");
+            if (timeQueryParam) {
+                let timeFilter = Date.parse(timeQueryParam);
+                if (isNaN(timeFilter)) { // failed to parse a date
+                    asOfTimestamp = undefined;
+                } else {
+                    asOfTimestamp = new Date(timeFilter);
+                }
+            } else {
+                asOfTimestamp = undefined;
+            }
+
             // set filters based on query params
             setFcFilter(queryParams.get("fc") ?? "");
             setFgFilter(queryParams.get("fg") ?? "");
             setStateFilter(queryParams.get("state") ?? "");
-            setAsOfTimestampFilter(queryParams.get("asoftimestamp") ?? "");
+            setTimestampFilter(asOfTimestamp);
         }
-
-        const showAllEntries = true;
-        const timestampFilter = queryParams.get("asoftimestamp") ?? '';
-        const asOfTimestamp = timestampFilter ? new Date(timestampFilter) : undefined;
 
         const loadInitialData = async () => {
             const [data, fftData, keymapData, whoami] = await Promise.all([
                 fetchProjectInfo(projectId),
-                fetchProjectDevices(projectId, showAllEntries, asOfTimestamp),
+                fetchProjectDevices(projectId, asOfTimestamp),
                 fetchKeymap(),
                 whoAmI(),
             ])
@@ -181,9 +194,14 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         loadInitialData().then(d => {
             setProject(d.data);
-            setFftData(d.fftData);
+            setDeviceData(d.fftData);
             setKeymap(d.keymapData);
             setCurrentlyLoggedInUser(d.whoami);
+            if (asOfTimestamp) {
+                // TODO: it's possible that the user will set the timestamp manually and find
+                // the closest snapshot. In this case we should also manually update timestamp
+                // otherwise the snapshot will not be selected in the history dialog.
+            }
         }).catch((e: JsonErrorMsg) => {
             console.error("Failed to load required project data", e);
             setErrorAlertMsg("Failed to load project info: most actions will be disabled.\nError: " + e.error);
@@ -197,7 +215,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
     useEffect(() => {
         let fcGlobMatcher = createGlobMatchRegex(fcFilter)
         let fgGlobMatcher = createGlobMatchRegex(fgFilter);
-        let filteredFftData = fftData.filter(d => {
+        let filteredFftData = deviceData.filter(d => {
             if (fcFilter) {
                 return fcGlobMatcher.test(d.fc);
             }
@@ -215,8 +233,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         })
 
         sortDeviceDataByColumn(filteredFftData, sortedByColumn.column, sortedByColumn.sortDesc);
-        setFftDataDisplay(filteredFftData);
-    }, [fftData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
+        setDeviceDataDisplay(filteredFftData);
+    }, [deviceData, fcFilter, fgFilter, stateFilter, sortedByColumn]);
 
 
     const displayFilterIconInColumn = (filterValue: string) => {
@@ -259,8 +277,10 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
         return addDevicesToProject(project._id, [newDevice])
             .then(data => {
-                // TODO: we only need the device that was updated, not all devices of the project
-                setFftData(data)
+                // TODO: when we try to add an fft that is already there, the backend doesn't complain
+                // it just returns success: true, erromsg: no changes detected.
+                // TODO: we only need the fft that was updated, not all ffts of the project
+                setDeviceData(data)
                 setIsAddNewDeviceDialogOpen(false);
             }).catch((e: JsonErrorMsg) => {
                 let msg = "Failed to add an fft to a project: " + e.error;
@@ -314,12 +334,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
         )
     }
 
-    const isProjectApproved = project && project.name == MASTER_PROJECT_NAME;
     const isProjectInDevelopment = project && project.name !== MASTER_PROJECT_NAME && project.status === "development";
     const isFilterApplied = fcFilter != "" || fgFilter != "" || stateFilter != "";
-    const isRemoveFilterEnabled = isFilterApplied || asOfTimestampFilter;
+    const isRemoveFilterEnabled = isFilterApplied || timestampFilter !== undefined;
     const isEditedTable = editedDevice != undefined;
-    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser) || asOfTimestampFilter !== ""
+    const disableActionButtons = !project || project.name === MASTER_PROJECT_NAME || project.status != "development" || !isUserAProjectEditor(project, currentlyLoggedInUser) || timestampFilter !== undefined
 
     return (
         <HtmlPage>
@@ -344,7 +363,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         variant="minimal" size="small"
                                         disabled={!isFilterApplied}
                                         onClick={e => {
-                                            let data = createCsvStringFromDevices(fftDataDisplay)
+                                            let data = createCsvStringFromDevices(deviceDataDisplay)
                                             let blob = new Blob([data], { type: "text/plain" });
                                             let url = window.URL.createObjectURL(blob);
                                             let a = document.createElement('a');
@@ -377,11 +396,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                             setFcFilter('')
                                             setFgFilter('');
                                             setStateFilter('');
-                                            let timestampFilter = asOfTimestampFilter;
-                                            setAsOfTimestampFilter('');
-                                            if (timestampFilter) {
+                                            let timeFilter = timestampFilter;
+                                            setTimestampFilter(undefined);
+                                            if (timeFilter !== undefined) {
                                                 // timestamp filter was applied and now we have to load original data
-                                                loadFFTData(project._id, true);
+                                                loadDeviceData(project._id);
                                             }
                                             updateQueryParams('', '', '', '');
                                         }}
@@ -389,17 +408,8 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
                                     <Divider />
 
-                                    {isProjectApproved ?
-                                        <>
-                                            <Button icon="tag-add" title="Create a snapshot" variant="minimal" size="small"
-                                                onClick={(e) => { setIsTagCreationDialogOpen(true) }} />
-                                            <Divider />
-                                        </>
-                                        : null
-                                    }
-
                                     <Button icon="history" title="Show the history of changes" variant="minimal" size="small"
-                                        intent={asOfTimestampFilter ? "danger" : "none"}
+                                        intent={timestampFilter ? "danger" : "none"}
                                         onClick={(e) => setIsProjectHistoryDialogOpen(true)}
                                     />
 
@@ -448,7 +458,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                         </tr>
                     </thead>
                     <tbody>
-                        {fftDataDisplay.map(device => {
+                        {deviceDataDisplay.map(device => {
                             const isEditedDevice = editedDevice == device;
                             const disableRow = isEditedTable && !isEditedDevice
                             if (!isEditedDevice) {
@@ -473,7 +483,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                             }
 
                             return <DeviceDataEditTableRow key={device._id} keymap={keymap} project={project} device={device}
-                                availableFftStates={availableFftStates}
+                                availableFftStates={availableDeviceStates}
                                 availableLocations={deviceLocations}
                                 availableBeamlines={beamlineLocations}
                                 onEditDone={(updatedDeviceData, action) => {
@@ -486,7 +496,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                     // if the user replaced 'fc' or 'fg' of the device, the new device
                                     // will have a different id.
                                     const oldDevice = device;
-                                    let updatedDevices = [...fftData];
+                                    let updatedDevices = [...deviceData];
                                     for (let i = 0; i < updatedDevices.length; i++) {
                                         const device = updatedDevices[i];
                                         if (device._id === oldDevice._id) {
@@ -496,7 +506,7 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                                         }
                                     }
 
-                                    setFftData(updatedDevices);
+                                    setDeviceData(updatedDevices);
                                     setEditedDevice(undefined);
                                 }}
                             />
@@ -506,11 +516,11 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                 </table>
             </div>
 
-            {!isLoading && !fftDataLoadingError && !isFilterApplied && fftDataDisplay.length == 0 ?
+            {!isLoading && !fftDataLoadingError && !isFilterApplied && deviceDataDisplay.length == 0 ?
                 <NonIdealState icon="search" title="No FCs Found" description={<>Project {project?.name} does not have any FCs</>} />
                 : null}
 
-            {!isLoading && isFilterApplied && fftDataDisplay.length == 0 ?
+            {!isLoading && isFilterApplied && deviceDataDisplay.length == 0 ?
                 <NonIdealState icon="filter" title="No FCs Found" description="Try changing your filters"></NonIdealState>
                 : null
             }
@@ -527,19 +537,20 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
 
             <FilterDeviceDialog
                 isOpen={isFilterDialogOpen}
-                possibleStates={availableFftStates}
+                possibleStates={availableDeviceStates}
                 onClose={() => setIsFilterDialogOpen(false)}
                 onSubmit={(newFcFilter, newFgFilter, newStateFilter) => {
                     setFcFilter(newFcFilter);
                     setFgFilter(newFgFilter);
                     newStateFilter = newStateFilter.startsWith("---") ? "" : newStateFilter;
                     setStateFilter(newStateFilter);
-                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter, asOfTimestampFilter);
+                    const timeFilter = timestampFilter ? timestampFilter.toISOString() : "";
+                    updateQueryParams(newFcFilter, newFgFilter, newStateFilter, timeFilter);
                     setIsFilterDialogOpen(false);
                 }}
             />
 
-            {project && selectedDevice && isCopyFFTDialogOpen ?
+            {selectedDevice && isCopyFFTDialogOpen ?
                 <CopyDeviceValuesDialog
                     isOpen={isCopyFFTDialogOpen}
                     currentProject={project}
@@ -548,56 +559,53 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onSubmit={(newDeviceDetails) => {
                         // find current fft and update device details
                         let updatedData = [];
-                        for (let d of fftData) {
+                        for (let d of deviceData) {
                             if (d._id != newDeviceDetails._id) {
                                 updatedData.push(d);
                                 continue;
                             }
                             updatedData.push(newDeviceDetails);
                         }
-                        setFftData(updatedData);
+                        setDeviceData(updatedData);
                         setIsCopyFFTDialogOpen(false);
                     }}
                 /> : null}
 
-            {project ?
-                <Alert className="alert-default"
-                    intent="danger"
-                    cancelButtonText="Cancel"
-                    confirmButtonText="Delete"
-                    isOpen={isDeleteDialogOpen}
-                    onClose={e => {
-                        setSelectedDevice(undefined);
-                        setIsDeleteDialogOpen(false);
-                    }}
-                    onConfirm={(e) => {
-                        const device = selectedDevice;
-                        if (!device) {
-                            return;
-                        }
+            <Alert className="alert-default"
+                intent="danger"
+                cancelButtonText="Cancel"
+                confirmButtonText="Delete"
+                isOpen={isDeleteDialogOpen}
+                onClose={e => {
+                    setSelectedDevice(undefined);
+                    setIsDeleteDialogOpen(false);
+                }}
+                onConfirm={(e) => {
+                    const device = selectedDevice;
+                    if (!device) {
+                        return;
+                    }
 
-                        removeDevicesFromProject(project._id, [device._id])
-                            .then(() => {
-                                setSelectedDevice(undefined);
-                                setIsDeleteDialogOpen(false);
+                    removeDevicesFromProject(project._id, [device._id])
+                        .then(() => {
+                            setSelectedDevice(undefined);
+                            setIsDeleteDialogOpen(false);
 
-                                // update data 
-                                let updatedFftData = fftData.filter(d => d._id != device._id);
-                                setFftData(updatedFftData);
-                            }).catch((e: JsonErrorMsg) => {
-                                let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
-                                setErrorAlertMsg(msg);
-                            });
-                    }}
-                >
-                    <h5 className="alert-title"><Icon icon="trash" />Delete {selectedDevice?.fc ?? ''}?</h5>
-                    <p>Do you really want to delete a device <b>{selectedDevice?.fc ?? ''}</b> from a project <b>{project.name}</b>?</p>
-                    <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
-                </Alert>
-                : null
-            }
+                            // update data 
+                            let updatedFftData = deviceData.filter(d => d._id != device._id);
+                            setDeviceData(updatedFftData);
+                        }).catch((e: JsonErrorMsg) => {
+                            let msg = `Failed to delete a device ${device.fc}-${device.fg}: ${e.error}`;
+                            setErrorAlertMsg(msg);
+                        });
+                }}
+            >
+                <h5 className="alert-title"><Icon icon="trash" />Delete {selectedDevice?.fc ?? ''}?</h5>
+                <p>Do you really want to delete a device <b>{selectedDevice?.fc ?? ''}</b> from a project <b>{project.name}</b>?</p>
+                <p><i>This will permanently delete the entire history of device value changes, as well as all related discussion comments!</i></p>
+            </Alert>
 
-            {project && commentDevice ?
+            {commentDevice ?
                 <CommentDialog
                     isOpen={isFftCommentViewerOpen}
                     project={project}
@@ -611,71 +619,61 @@ export const ProjectDetails: React.FC<{ projectId: string }> = ({ projectId }) =
                     onCommentAdd={(updatedDevice) => {
                         // TODO: this is repeated multiple times, extract into method at some point
                         let updatedFftData = [];
-                        for (let fft of fftData) {
+                        for (let fft of deviceData) {
                             if (fft._id != updatedDevice._id) {
                                 updatedFftData.push(fft);
                                 continue;
                             }
                             updatedFftData.push(updatedDevice);
                         }
-                        setFftData(updatedFftData);
+                        setDeviceData(updatedFftData);
                         setCommentDevice(updatedDevice);
                     }
                     }
                 />
                 : null}
 
-            {project ?
-                <ProjectHistoryDialog
-                    currentProject={project}
-                    isOpen={isProjectHistoryDialogOpen}
-                    onClose={() => setIsProjectHistoryDialogOpen(false)}
-                    displayProjectSince={(time) => {
-                        loadFFTData(project._id, true, time);
-                        setIsProjectHistoryDialogOpen(false);
+            <ProjectHistoryDialog
+                project={project}
+                isOpen={isProjectHistoryDialogOpen}
+                onClose={() => setIsProjectHistoryDialogOpen(false)}
+                onStateChange={(newState) => setHistoryDialogState(newState)}
+                selectedTimestamp={timestampFilter}
+                state={historyDialogState}
+                displayProjectSince={(time) => {
+                    // NOTE: when we update query params, we will also trigger a data load
+                    // hence we don't need to do this manually. If the query params don't change
+                    // that means there is nothing to update and we keep displaying fft data as is
+                    setIsProjectHistoryDialogOpen(false);
+                    let timeFilterStr = time ? time.toISOString() : '';
+                    updateQueryParams(fcFilter, fgFilter, stateFilter, timeFilterStr);
+                }}
+            />
 
-                        let timestampFilter = time.toISOString();
-                        updateQueryParams(fcFilter, fgFilter, stateFilter, timestampFilter);
-                        setAsOfTimestampFilter(timestampFilter);
-                    }}
-                />
-                : null}
-            {project && isProjectApproved ?
-                <SnapshotCreationDialog
-                    isOpen={isTagCreationDialogOpen}
-                    projectId={project._id}
-                    onSubmit={() => setIsTagCreationDialogOpen(false)}
-                    onClose={() => setIsTagCreationDialogOpen(false)}
-                />
-                : null}
-            {project ?
-                <ProjectImportDialog
-                    isOpen={isImportDialogOpen}
-                    project={project}
-                    onClose={(dataImported) => {
-                        if (dataImported) {
-                            // clear filters and reload devices so that the user can see the imported devices right away 
-                            setFcFilter('')
-                            setFgFilter('');
-                            setStateFilter('');
-                            setAsOfTimestampFilter('');
-                            updateQueryParams('', '', '', '');
-                            const showAllEntries = true;
-                            loadFFTData(projectId, showAllEntries);
-                        }
-                        setIsImportDialogOpen(false);
-                    }}
-                />
-                : null}
-            {project ?
-                <ProjectExportDialog
-                    isOpen={isExportDialogOpen}
-                    project={project}
-                    onSubmit={() => setIsExportDialogOpen(false)}
-                    onClose={() => setIsExportDialogOpen(false)}
-                />
-                : null
-            }
+            <ProjectImportDialog
+                isOpen={isImportDialogOpen}
+                project={project}
+                onClose={(dataImported) => {
+                    if (dataImported) {
+                        // clear filters and reload devices so that the user can see the imported devices right away 
+                        setFcFilter('')
+                        setFgFilter('');
+                        setStateFilter('');
+                        setTimestampFilter(undefined);
+                        updateQueryParams('', '', '', '');
+                        loadDeviceData(projectId);
+                    }
+                    setIsImportDialogOpen(false);
+                }}
+            />
+
+            <ProjectExportDialog
+                isOpen={isExportDialogOpen}
+                project={project}
+                onSubmit={() => setIsExportDialogOpen(false)}
+                onClose={() => setIsExportDialogOpen(false)}
+            />
+
             {/* Alert for displaying error messages that may happen in other dialogs */}
             <Alert
                 className="alert-default"

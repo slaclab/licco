@@ -193,6 +193,21 @@ def create_new_device_format(project_id, old_values, creation_time = None):
         'fg': old_values['fft']['fg'],
         'discussion': [],
     }
+
+    # some projects may have stored old names of the values (nom_dim_x)
+    old_values_to_remove = ["nom_dim_x", "nom_dim_y", "nom_dim_z"]
+    new_values_to_check = ["nom_loc_x", "nom_loc_y", "nom_loc_z"]
+    for i, old_dim_name in enumerate(old_values_to_remove):
+        if old_dim_name in old_values:
+            new_dim_name = new_values_to_check[i]
+            # check if new_dim name exist (if it does, we simply get rid of the old value, since we have a new value already)
+            if new_dim_name in old_values:
+                old_values.pop(old_dim_name, None)
+            else:
+                # new_dim name doesn't exist, hence we simply rename the old dimension value
+                old_values[new_dim_name] = old_values[old_dim_name]
+                old_values.pop(old_dim_name, None)
+
     for key, val in old_values.items():
         if key == 'fft':
             continue
@@ -277,7 +292,8 @@ def migrate_project(old_db, new_db, project,  output_dir):
         writer.writerows([[], []])  # 2 empty rows to separate diffs
 
     os.makedirs(output_dir, exist_ok=True)
-    csv_name = f"{project_name.replace(' ', '_')}.csv"
+
+    csv_name = f"{project_name.replace(' ', '_').replace('/', '_')}.csv"
     fpath = f'{output_dir}/{csv_name}'
     with open(fpath, 'w') as f:
         f.write(buffer.getvalue())

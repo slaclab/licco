@@ -146,9 +146,11 @@ def test_create_delete_project(db):
     found_after_delete = list(db['projects'].find({'_id': prj['_id']}))
     assert len(found_after_delete) == 1, "project should not be deleted"
     assert found_after_delete[0]['status'] == 'hidden', "project should be hidden"
+
     # verify name of project is changed to reflect hidden status
-    hidden_name = 'hidden' + '_' + prj['name'] + '_' + datetime.date.today().strftime('%m/%d/%Y')
-    assert hidden_name == found_after_delete[0]['name']
+    # (we just check the prefix, since we can't know the exact timestamp up to a millisecond)
+    hidden_name = 'hidden' + '_' + prj['name'] + '_'
+    assert found_after_delete[0]['name'].startswith(hidden_name)
 
 
 def test_create_delete_project_admin(db):
@@ -226,7 +228,8 @@ def test_get_recent_snapshot(db):
     mcd_model.create_new_snapshot(db, "test_user", prjid, [device_id])
 
     # compare the device values from recent snapshot to those of the get_latest_project_data
-    data = mcd_db.get_latest_project_data(db, prjid)
+    data, err = mcd_db.get_latest_project_data(db, prjid)
+    assert err == ""
     assert len(data) == 1
     found_device = data["TESTFC"]
 
@@ -243,7 +246,8 @@ def test_get_recent_snapshot(db):
     mcd_model.create_new_snapshot(db, "test_user", prjid, [new_device_id])
 
     # compare data once again
-    data = mcd_db.get_latest_project_data(db, prjid)
+    data, err = mcd_db.get_latest_project_data(db, prjid)
+    assert err == ""
     assert len(data) == 1
     updated_device = data["TESTFC"]
     assert updated_device["_id"] != found_device["_id"], "ids should be different, since it's a different device"
@@ -806,7 +810,8 @@ def test_project_approval_workflow(db):
     assert prj['status'] == 'development'
 
     # the changed fft data should reflect in the master project
-    ffts = mcd_model.get_latest_project_data(db, projectid=master_project['_id'])
+    ffts, err = mcd_model.get_latest_project_data(db, projectid=master_project['_id'])
+    assert err == ""
     fft = ffts[fft_update['fc']]
     assert fft['tc_part_no'] == "PART 123"
 

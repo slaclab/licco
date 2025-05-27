@@ -1,5 +1,4 @@
 import datetime
-import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import TypeAlias, Dict, TypedDict, List
@@ -133,21 +132,3 @@ class DeviceState(Enum):
     NonOperational = "NonOperational"
     Decommissioned = "Decommissioned"
     Removed = "Removed"
-
-    def describe(self):
-        d = self.descriptions()
-        return d[self]
-
-    @classmethod
-    def descriptions(cls):
-        return {
-            DeviceState.Conceptual: {"sortorder": 0, "label": "Conceptual", "description": "There are no firm plans to proceed with applying this configuration, it is still under heavy development. Configuration changes are frequent."},
-            DeviceState.Planned: {"sortorder": 1, "label": "Planned", "description": "A planned configuration, installation planning is underway. Configuration changes are less frequent."},
-            DeviceState.ReadyForInstallation: {"sortorder": 2, "label": "Ready for installation", "description": "Configuration is designated as ready for installation. Installation is imminent. Installation effort is planned and components may be fully assembled and bench-tested."},
-            DeviceState.Installed: {"sortorder": 3, "label": "Installed", "description": "Component is physically installed but not fully operational"},
-            DeviceState.Commissioned: {"sortorder": 4, "label": "Commissioned", "description": "Component is commissioned."},
-            DeviceState.Operational: {"sortorder": 5, "label": "Operational", "description": "Component is operational, commissioning and TTO is complete"},
-            DeviceState.NonOperational: {"sortorder": 6, "label": "Non-operational", "description": "Component remains installed but is slated for removal"},
-            DeviceState.Decommissioned: {"sortorder": 7, "label": "De-commissioned", "description": "Component is de-commissioned."},
-            DeviceState.Removed: {"sortorder": 8, "label": "Removed", "description": "Component is no longer a part of the configuration, record is maintained"},
-        }
