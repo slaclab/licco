@@ -433,7 +433,9 @@ class DeviceUpdate:
     def __init__(self, old_device_id="", new_device_id="", field_changes=None):
         self.old_device_id = old_device_id
         self.new_device_id = new_device_id
-        self.field_changes = field_changes if not None else {}
+        self.field_changes = field_changes
+        if self.field_changes == None:
+            self.field_changes = {}
 
     def was_device_created(self):
         created = self.old_device_id == "" and len(self.field_changes) > 0
