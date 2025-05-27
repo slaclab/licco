@@ -631,9 +631,11 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
                                                                           current_project_attributes=project_devices,
                                                                           remove_discussion_comments=remove_discussion_comments,
                                                                           create_snapshot=False)
-        def_logger.info(f"Import happened for {device_update.get('fc', '')}. New Id: {update.new_device_id}")
-        # failed to insert a device
+        if update.was_device_created() or update.was_device_updated():
+            def_logger.info(f"Import happened for {device_update.get('fc', '')}. New Id: {update.new_device_id}")
+
         if errormsg:
+            # failed to insert a device
             errors.append(errormsg)
             insert_counter.fail += 1
             terminate = not keep_going_on_error
@@ -652,6 +654,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
                 existing_ids.append(ObjectId(update.old_device_id))
             insert_counter.ignored += 1
             continue
+
 
         # device was either updated (any of the device field was updated), or it was created
         fc = device_update["fc"]

@@ -33,7 +33,7 @@ export const createFftDiff = (aProject: ProjectInfo, aDevices: ProjectDeviceDeta
     let fftGroup = new Map<string, { a?: ProjectDeviceDetails, b?: ProjectDeviceDetails }>();
     // assign fft elements to each group, so we can detect which one is new, deleted or changed
     for (let device of aDevices) {
-        let name = `${device.fc}__${device.fg}`;
+        let name = `${device.fc}`;
         let group = fftGroup.get(name);
         if (!group) {
             group = {};
@@ -42,7 +42,7 @@ export const createFftDiff = (aProject: ProjectInfo, aDevices: ProjectDeviceDeta
         fftGroup.set(name, group);
     }
     for (let device of bDevices) {
-        let name = `${device.fc}__${device.fg}`;
+        let name = `${device.fc}`;
         let group = fftGroup.get(name);
         if (!group) {
             group = {};
@@ -141,7 +141,7 @@ export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetail
 }
 
 
-function isDeviceFieldDifferent(key: keyof ProjectDeviceDetails, a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
+export function isDeviceFieldDifferent(key: keyof ProjectDeviceDetails, a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
     const valA = a[key];
     const valB = b[key];
     if (valA === valB) {
