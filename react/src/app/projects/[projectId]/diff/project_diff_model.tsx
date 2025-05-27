@@ -2,7 +2,7 @@ import { isArrayEqual } from "@/app/utils/arr_utils";
 import { JsonErrorMsg } from "@/app/utils/fetching";
 import { sortString } from "@/app/utils/sort_utils";
 import { useEffect, useState } from "react";
-import { ProjectDeviceDetails, ProjectInfo, deviceHasChangedValue, fetchMasterProjectInfo, fetchProjectDevices, fetchProjectInfo } from "../../project_model";
+import { ProjectDeviceDetails, ProjectInfo, fetchMasterProjectInfo, fetchProjectDevices, fetchProjectInfo } from "../../project_model";
 import { sortDeviceDataByColumn } from "../project_details";
 
 export interface ProjectDiff {
@@ -104,9 +104,9 @@ export interface DeviceValueDiff {
     newVal: any;
 }
 
-const IGNORED_DEVICE_METADATA_FIELDS: Set<keyof ProjectDeviceDetails> = new Set(["_id", "device_id", "project_id", "created", "discussion"])
+export const DEVICE_METADATA_FIELDS: Set<keyof ProjectDeviceDetails> = new Set(["_id", "device_id", "project_id", "created", "discussion"]);
 
-export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetails, ignoredFields: Set<string> = IGNORED_DEVICE_METADATA_FIELDS): DeviceValueDiff[] => {
+export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetails, ignoredFields: Set<string> = DEVICE_METADATA_FIELDS): DeviceValueDiff[] => {
     let diffs: Record<string, DeviceValueDiff> = {};
 
     // We have to iterate over each device, since it's possible that a device field is missing from one
@@ -116,23 +116,11 @@ export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetail
             continue;
         }
 
-        const valB = b[key];
-        if (valA === valB) {
+        if (isDeviceFieldDifferent(key, a, b)) {
+            const valB = b[key];
+            diffs[key] = { fieldName: key, oldVal: valA, newVal: valB };
             continue;
         }
-
-        if (valA === '' && valB === undefined || valA === undefined && valB === '') {
-            // empty fields should not be considered a diff
-            continue;
-        }
-
-        if (Array.isArray(valA)) {
-            if (isArrayEqual(valA as any[], valB as any[])) {
-                continue;
-            }
-        }
-
-        diffs[key] = { fieldName: key, oldVal: valA, newVal: valB };
     }
 
     // since 'a' and 'b' could be a different device, it's possible that 'a' does not have 
@@ -151,6 +139,57 @@ export const diffDeviceFields = (a: ProjectDeviceDetails, b: ProjectDeviceDetail
     const fieldDiff = [...Object.values(diffs)];
     return fieldDiff;
 }
+
+
+function isDeviceFieldDifferent(key: keyof ProjectDeviceDetails, a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
+    const valA = a[key];
+    const valB = b[key];
+    if (valA === valB) {
+        return false;
+    }
+
+    // values are different, check how they are different
+    if ((valA === undefined && valB === '') || (valA === '' && valB === undefined)) {
+        // both fields are empty, and we shouldn't display them as a change of value 
+        // since that would cause <empty>-<empty> to be displayed in the GUI which
+        // would look confusing.
+        //
+        // In this case we do nothing and simply retry this check for another key
+        return false;
+    }
+
+    if (Array.isArray(valA)) {
+        if (!isArrayEqual(valA as any[], valB as any[])) {
+            return true;
+        }
+        return false;
+    }
+
+    // field is different
+    return true;
+}
+
+
+export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
+    // NOTE: it's possible that device 'a' and device 'b' are of different types and have different fields
+    // We don't check for both device fields, since devices will also have a different 'device_type' field
+    // and that will detect a change in value.
+    let key: keyof ProjectDeviceDetails;
+    for (key in a) {
+        if (DEVICE_METADATA_FIELDS.has(key)) { // ignore device metadata fields
+            continue;
+        }
+
+        const isDifferent = isDeviceFieldDifferent(key, a, b);
+        if (isDifferent) {
+            return true;
+        }
+    }
+
+    // there was no difference in values
+    return false;
+}
+
 
 
 export const loadProjectDiff = async (projectIdA: string, projectIdB: string): Promise<ProjectDiff> => {
@@ -209,3 +248,5 @@ export async function fetchDiffWithMasterProject(projectId: string): Promise<Pro
     const projectDiff = await loadProjectDiff(projectId, masterProject._id);
     return projectDiff;
 }
+
+
