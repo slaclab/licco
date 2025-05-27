@@ -164,8 +164,10 @@ def test_create_delete_project_admin(db):
 
     # add fft to the project
     device_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'project_id': prjid, 'comments': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, device_id = mcd_model.update_device_in_project(db, user_id, prjid, device_update)
+    update, err = mcd_model.update_device_in_project(db, user_id, prjid, device_update)
     assert err == ""
+    device_id = update.new_device_id
+    assert device_id
 
     # ensure device was added into database
     ok, insert_dev_id = mcd_model.get_device_id_from_name(db, prjid, device_update['fc'])
@@ -272,11 +274,11 @@ def test_store_retrieve_changelog(db):
     project = create_test_project(db, "test_user", 'test_store_retrieve_changelog', "original_description")
     prjid = project["_id"]
     device = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23})
-    ok, err, changes, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], device)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], device)
 
     snapshot = mcd_model.get_recent_snapshot(db, prjid)
     assert snapshot
-    assert snapshot["devices"] == [ObjectId(dev_id)]
+    assert snapshot["devices"] == [ObjectId(update.new_device_id)]
     changelog = snapshot["changelog"]
     assert changelog
     assert changelog['created'] == ['TESTFC']
@@ -289,13 +291,13 @@ def test_clone_project(db):
     prjid = project["_id"]
 
     # add ffts to the project
-    device = create_test_device({'fc': "TESTFC", "fg": "TESTFG", 'comments': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, device)
+    og_device = create_test_device({'fc': "TESTFC", "fg": "TESTFG", 'comments': 'some comment', 'nom_ang_x': 1.23})
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, og_device)
     assert err == ""
 
     # add discussion comment to the project
     new_comment = "my comment"
-    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=dev_id, comment=new_comment)
+    ok, err = mcd_model.add_fft_comment(db, user_id="test_user", project_id=prjid, device_id=update.new_device_id, comment=new_comment)
     assert err == ""
 
     # clone the project and verify that all ffts (including discussion comments) are cloned
@@ -307,14 +309,16 @@ def test_clone_project(db):
     assert project['description'] != cloned_project['description']
 
     # in cloned project, there should be 1 fft with the same fields and same discussion comments
-    ffts = mcd_model.get_project_devices(db, cloned_project["_id"])
-    assert len(ffts) == 1
-    fft = list(ffts.values())[0]
-    assert fft.get('nom_ang_y', None) is None, "nom_ang_y was not set and should be None"
-    assert fft['nom_ang_x'] == 1.23
-    assert fft['comments'] == 'some comment'
-    assert len(fft['discussion']) == 1
-    assert fft['discussion'][0]['comment'] == 'my comment'
+    devices = mcd_model.get_project_devices(db, cloned_project["_id"])
+    assert len(devices) == 1
+    cloned_device = list(devices.values())[0]
+    assert cloned_device['project_id'] != og_device['project_id']
+    assert cloned_device['device_id'] != og_device['device_id']
+    assert cloned_device.get('nom_ang_y', None) is None, "nom_ang_y was not set and should be None"
+    assert cloned_device['nom_ang_x'] == 1.23
+    assert cloned_device['comments'] == 'some comment'
+    assert len(cloned_device['discussion']) == 1
+    assert cloned_device['discussion'][0]['comment'] == 'my comment'
 
 
 def test_copy_fft_values(db):
@@ -327,17 +331,15 @@ def test_copy_fft_values(db):
 
     # add fft to 'a'
     fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20, 'comments': 'project_a comment'})
-    ok, err, field_changes, device_id = mcd_model.update_device_in_project(db, user_id, a["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, user_id, a["_id"], fft_update)
     assert err == ""
-    assert ok
 
     # 'b' should have no fft
     b_ffts = mcd_model.get_project_devices(db, b["_id"])
     assert len(b_ffts) == 0, "there should be no ffts in project 'b'"
     b_fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 0.51})
-    ok, err, field_changes, b_device_id = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
+    update, err = mcd_model.update_device_in_project(db, user_id, b["_id"], b_fft_update)
     assert err == ""
-    assert ok
 
     snapshot_before_copy = mcd_model.get_recent_snapshot(db, b["_id"])
 
@@ -369,8 +371,9 @@ def test_change_of_device_fc_in_a_project(db):
 
     # create fft device with some data
     fft_update = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'comments': 'initial comment', 'nom_ang_x': 2.45, 'nom_ang_y': 1.20})
-    _, err, _, dev_id = mcd_model.update_device_in_project(db, "test_user", prj["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", prj["_id"], fft_update)
     assert err == ""
+    dev_id = update.new_device_id
     snapshot = mcd_model.get_recent_snapshot(db, prj["_id"])
     assert snapshot["changelog"]["created"] == ["TESTFC"]
     assert snapshot["changelog"]["updated"] == []
@@ -508,9 +511,9 @@ def test_add_device_to_project(db):
 
     # add fft change
     fft_update = create_test_device({'fc': 'TESTFC', 'fg':'TESTFG', 'comments': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert err == "", "there should be no error"
-    assert ok, "fft should be inserted"
+    dev_id = update.new_device_id
 
     project_ffts = mcd_model.get_project_devices(db, project["_id"])
     assert len(project_ffts) == 1, "we should have at least 1 fft inserted"
@@ -528,19 +531,20 @@ def test_add_unchanged_fft_to_project(db):
     project = create_test_project(db, "test_user", "test_add_unchanged_fft_to_project", "")
 
     device = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23, 'nom_ang_y': 2.54})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], device, create_snapshot=True)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], device, create_snapshot=True)
     assert err == ""
-    assert ok
-    assert len(changelog) > 0
+    assert len(update.field_changes) > 0
     snapshot = mcd_model.get_recent_snapshot(db, project["_id"])
+    dev_id = update.new_device_id
     assert snapshot["devices"] == [ObjectId(dev_id)]
 
     # there should be no updates, since device data is the same
-    ok, err, changelog, updated_device_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], device, create_snapshot=True)
-    assert len(changelog) == 0
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], device, create_snapshot=True)
+    assert len(update.field_changes) == 0
     assert err == ""
-    assert ok
-    assert updated_device_id == ""
+    assert update.new_device_id == ""
+    assert update.was_device_updated() == False
+    assert update.was_device_created() == False
 
     snapshot = mcd_model.get_recent_snapshot(db, project["_id"])
     assert snapshot["devices"] == [ObjectId(dev_id)]
@@ -552,7 +556,7 @@ def test_invalid_fft_due_to_missing_attributes(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_missing_attributes", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'state': 'Installed', 'nom_ang_x': 123}
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "FFTs should remain in the Conceptual state while the dimensions are still being determined."
 
@@ -563,7 +567,7 @@ def test_invalid_fft_due_to_invalid_value(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_value", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 123}
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "invalid range for nom_ang_x: expected range [-3.14, 3.14], but got 123.0"
 
@@ -573,7 +577,7 @@ def test_invalid_fft_due_to_invalid_type(db):
     project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_type", "")
 
     fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 'this is a string'}
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     #assert not ok
     #assert err == "Wrong type - nom_ang_x, ('this is a string')"
 
@@ -584,9 +588,10 @@ def test_remove_fft_from_project(db):
 
     # insert new fft
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 1.23})
-    ok, err, field_changes, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
-    assert ok
+    dev_id = update.new_device_id
+    assert dev_id != ""
 
     snapshot = mcd_model.get_recent_snapshot(db, prjid)
     assert snapshot["changelog"]["deleted"] == []
@@ -619,9 +624,8 @@ def test_get_project_ffts(db):
 
     # insert new fft
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
-    assert ok
 
     inserted_ffts = mcd_model.get_project_devices(db, prjid)
     assert len(inserted_ffts) == 1
@@ -672,9 +676,8 @@ def test_get_project_ffts_after_timestamp(db):
     # insert new fft
     timestamp = datetime.datetime.now(tz=pytz.UTC) - datetime.timedelta(seconds=1)
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
     assert err == ""
-    assert ok
 
 
     ffts = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
@@ -693,16 +696,10 @@ def test_create_delete_comment(db):
     """Create and delete a fft comment as the project owner"""
     project = create_test_project(db, "test_user", "test_create_delete_comment", "")
 
-    # NOTE: a comment will never be returned, if there is not at least 1 fft field present therefore we
-    # have to insert 1 field first before verifying a comment insert
-    #
-    # insert and verify a comment insertion
-
     fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
     assert err == ""
-    assert ok
-
+    dev_id = update.new_device_id
 
     ok, err = mcd_model.add_fft_comment(db, "test_user", project["_id"], dev_id, "my comment")
     assert err == ""
@@ -748,9 +745,8 @@ def test_project_approval_workflow(db):
 
     # an editor user should be able to save an fft
     fft_update = create_test_device({'fc': 'APPROVAL_FC', 'fg': 'APPROVAL_FG', "tc_part_no": "PART 123"})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "editor_user", project["_id"], fft_update)
+    update, err = mcd_model.update_device_in_project(db, "editor_user", project["_id"], fft_update)
     assert err == ""
-    assert ok
 
     # verify status and submitter (should not exist right now)
     project = mcd_model.get_project(db, prjid)
@@ -828,6 +824,103 @@ def test_project_approval_workflow(db):
     assert email['to'] == ['approve_user', 'editor_user', 'editor_user_2', 'super_approver', 'test_user']
     assert email['subject'] == '(MCD) Project test_approval_workflow was approved'
     email_sender.clear()
+
+
+def _all_users_approve_project(db, prjid, users, notifier):
+    for i, user in enumerate(users):
+        ok, all_approved, err, updated_project = mcd_model.approve_project(db, prjid, user, notifier)
+        assert ok
+        assert err == ""
+        if i < len(users) - 1:
+            assert all_approved == False
+        else:
+            assert all_approved == True
+
+
+def test_project_approval_only_diff_is_merged(db):
+    """When one project is merged into another, only devices that are different should be merged.
+       Devices that didn't change should stay the same in the master project."""
+
+    # delete master snapshots, to get rid of all master changes
+    master_prj = mcd_model.get_master_project(db)
+    assert master_prj
+    db["project_snapshots"].delete_many({"project_id": master_prj["_id"]})
+
+    # create project and devices
+    prj = create_test_project(db, "test_user", "test_project_approval_only_diff_is_merged", "")
+    deviceA1 = create_test_device({'fc': 'AAAA', 'nom_ang_x': 1.23})
+    deviceA2 = create_test_device({'fc': 'BBBB', 'nom_ang_x': 2.31})
+    update, err = mcd_model.update_device_in_project(db, "test_user", prj["_id"], deviceA1)
+    assert err == ""
+    update, err = mcd_model.update_device_in_project(db, "test_user", prj["_id"], deviceA2)
+    assert err == ""
+
+    # submit project for approval and merge its data to the master project
+    email_sender = _TestEmailSender()
+    notifier = Notifier('', email_sender, 'admin@example.com')
+    ok, err, prj = mcd_model.submit_project_for_approval(db, prj["_id"], "test_user", [], ["approve_user"], notifier)
+    assert err == ""
+
+    ok, all_approved, err, updated_project = mcd_model.approve_project(db, prj["_id"], "approve_user", notifier)
+    assert err == ""
+    assert ok
+    assert all_approved == False
+
+    # there should be no master snapshot by now
+    master_snapshot = mcd_model.get_recent_snapshot(db, master_prj["_id"])
+    assert master_snapshot is None
+
+    ok, all_approved, err, updated_project = mcd_model.approve_project(db, prj["_id"], "super_approver", notifier)
+    assert err == ""
+    assert ok
+    assert all_approved == True
+
+    # now we merged to master for the first time
+    master_snapshot = mcd_model.get_recent_snapshot(db, master_prj["_id"])
+    master_devices = master_snapshot["devices"]
+    assert len(master_devices) == 2
+
+    # verify master project data
+    master_data = mcd_model.get_project_devices(db, master_prj["_id"])
+    a_device = master_data['AAAA']
+    assert a_device['fc'] == 'AAAA'
+    assert a_device['nom_ang_x'] == 1.23
+    b_device = master_data['BBBB']
+    assert b_device['fc'] == 'BBBB'
+    assert b_device['nom_ang_x'] == 2.31
+
+    # 2. Update a device in the existing project and submit it for approval once again
+    # Only the updated device should be merged
+    # (this is a regression test as every device used to be merged, but this test is checking for this problem)
+    deviceA2['nom_ang_x'] = 2.41
+    update, err = mcd_model.update_device_in_project(db, "test_user", prj["_id"], deviceA2)
+    assert err == ""
+    assert len(update.field_changes) == 1
+    assert 'nom_ang_x' in update.field_changes
+
+    # 3. submit the project once again and approve it
+    ok, err, prj = mcd_model.submit_project_for_approval(db, prj["_id"], "test_user", [], ["approve_user"], notifier)
+    assert err == ""
+    _all_users_approve_project(db, prj["_id"], ["approve_user", "super_approver"], notifier)
+
+    # project was approved
+    # check if a device in a master project has changed
+    master_snapshot_2 = mcd_model.get_recent_snapshot(db, master_prj["_id"])
+    assert master_snapshot["_id"] != master_snapshot_2["_id"], "we should find a different master snapshot"
+    assert len(master_snapshot_2["devices"]) == 2
+
+    # check that the values are correct
+    dev_a = master_snapshot["devices"]   # AAAA, BBBB
+    dev_b = master_snapshot_2["devices"] # BBBB, AAAA
+    assert dev_a[0] == dev_b[1], "AAAA id should not be changed (and it should be a second element in the array)"
+    assert dev_a[1] != dev_b[0], "BBBB id should differ"
+
+    # verify that the data was saved correctly
+    latest_data = mcd_model.get_project_devices(db, master_prj["_id"])
+    aaa = latest_data["AAAA"]
+    assert aaa['nom_ang_x'] == 1.23
+    bbb = latest_data['BBBB']
+    assert bbb['nom_ang_x'] == 2.41
 
 
 def test_project_rejection(db):

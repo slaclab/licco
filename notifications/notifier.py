@@ -180,8 +180,11 @@ class Notifier:
         """
         if not self.email_sender:
             return
+
         if len(receivers) == 0:
-            raise ValueError("No receiver emails were specified: at least one is expected")
+            # we could early return here, but it's also possible that this is a programming bug
+            # the user wanted to send emails and by accident sent them to an empty list (no-one).
+            raise ValueError("Email notifier: no receiver emails were specified: at least one is expected")
 
         # we are sending notifications in a separate thread, to avoid blocking the main thread
         # that is supposed to send a response back to the user.

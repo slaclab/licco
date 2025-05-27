@@ -429,10 +429,25 @@ def change_device_fc(licco_db: MongoDb, userid: str, prjid: str, update: Dict[st
     return str(new_device_id), ""
 
 
+class DeviceUpdate:
+    def __init__(self, old_device_id="", new_device_id="", field_changes=None):
+        self.old_device_id = old_device_id
+        self.new_device_id = new_device_id
+        self.field_changes = field_changes if not None else {}
+
+    def was_device_created(self):
+        created = self.old_device_id == "" and len(self.field_changes) > 0
+        return created
+
+    def was_device_updated(self):
+        was_updated = not self.was_device_created() and len(self.field_changes) > 0
+        return was_updated
+
+
 def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates: Dict[str, any],
                              modification_time=None, remove_discussion_comments=None,
                              current_project_attributes=None,
-                             create_snapshot=True) -> Tuple[bool, str, Dict[str, any], str]:
+                             create_snapshot=True) -> Tuple[DeviceUpdate, str]:
     """
     Update the value(s) of a device in a project. In case of any changes (or if it's a new device) it will be saved
     in a db (it will also create a snapshot if the flag is set to true; if persist flag is set to false, the
@@ -443,7 +458,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     # this is an internal method and at this stage we already know that the user is allowed to edit the project
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", {}, ''
+        return DeviceUpdate(), f"Cannot find project for {prjid}"
 
     if not modification_time:
         modification_time = datetime.datetime.now(datetime.UTC)
@@ -452,7 +467,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
     fc = updates.get("fc", None)
     if not fc:
-        return False, f"Device update failed: 'fc' field is missing", {}, ''
+        return DeviceUpdate(), f"Device update failed: 'fc' field is missing"
 
     # detect whether we should create a new device based on its FC (which should be unique within the project)
     if current_project_attributes:
@@ -460,8 +475,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     else:
         # the user didn't set the existing device, hence we have to query the project for it
         device, err = get_recent_device_by_fc_name(licco_db, prjid, fc)
-        if err:
-            # device was not found
+        if err:  # device was not found
             existing_device = None
         else:
             existing_device = device
@@ -478,14 +492,12 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
         err = mcd_validate.validate_device(updates)
         if err:
-            return False, err, changes, ""
+            return DeviceUpdate(), err
 
         # we have a unique fc name, so we can create a new device
         new_device_id, err = insert_new_device(licco_db, userid, prjid, values=updates, modification_time=modification_time)
         if err:
-            return False, err, changes, ""
-
-        changes = updates
+            return DeviceUpdate(), err
 
         if create_snapshot:
             updated_devices = [ObjectId(new_device_id)]
@@ -495,13 +507,19 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
             changelog = Changelog()
             changelog.add_created(fc)
             create_new_snapshot(licco_db, userid, prjid, updated_devices, changelog=changelog)
-        return True, "", changes, str(new_device_id)
+
+        update = DeviceUpdate(new_device_id=str(new_device_id), field_changes=updates)
+        return update, ""
 
     err, changes, device_id = _overwrite_device_data(licco_db, userid, prjid, existing_device, updates, create_snapshot=create_snapshot, modification_time=modification_time)
     if err:
-        return False, err, changes, ""
-    return True, "", changes, device_id
+        return DeviceUpdate(), err
 
+    update = DeviceUpdate(old_device_id=existing_device["_id"], new_device_id=device_id, field_changes=changes)
+    return update, ""
+
+
+fields_to_not_overwrite = ["_id", "created", "project_id", ""]
 
 def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, modification_time=None) -> Tuple[str, Dict[str, any], str]:
     device_changes : Dict[str, any] = {}
@@ -510,9 +528,8 @@ def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: M
     # create a copy of a device, so we don't mutate an existing device
     new_device = copy_device(existing_device)
     for field, val in updates.items():
-        # skip metadata fields
-        if field == "_id" or field == "created":
-            # skip id
+        # skip metadata fields (that shouldn't change)
+        if field in fields_to_not_overwrite:
             continue
 
         if field == "discussion":
@@ -604,47 +621,53 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     project_devices = get_project_devices(licco_db, prjid)
 
     new_ids = []
+    existing_ids = []
     changelog = Changelog()
     errors = []
-    # Try to add each device/fft to project
+
+    # Try to add each device to a project
     for device_update in devices:
-        # TODO: device changelog should contain what has changed in a device?
-        status, errormsg, device_changes, device_id = update_device_in_project(licco_db, userid, prjid, device_update,
+        update, errormsg = update_device_in_project(licco_db, userid, prjid, device_update,
                                                                           current_project_attributes=project_devices,
                                                                           remove_discussion_comments=remove_discussion_comments,
                                                                           create_snapshot=False)
-        def_logger.info(f"Import happened for {device_update.get('fc', '')}. ID number {device_id}")
+        def_logger.info(f"Import happened for {device_update.get('fc', '')}. New Id: {update.new_device_id}")
+        # failed to insert a device
         if errormsg:
             errors.append(errormsg)
-
-        if not status:  # failed to insert a device
             insert_counter.fail += 1
             terminate = not keep_going_on_error
             if terminate:
                 return False, "\n".join(errors), insert_counter
+
+            # if there was an error, we keep the old device (if any)
+            if update.old_device_id:
+                existing_ids.append(ObjectId(update.old_device_id))
             continue
 
         # there were no changes
-        if len(device_changes) == 0:
+        no_changes = len(update.field_changes) == 0
+        if no_changes:
+            if update.old_device_id:
+                existing_ids.append(ObjectId(update.old_device_id))
             insert_counter.ignored += 1
             continue
 
-        # device was either updated (any of the device field was udpated), or it was created
+        # device was either updated (any of the device field was updated), or it was created
         fc = device_update["fc"]
-        device_was_updated = fc in project_devices
-        if device_was_updated:
+        if update.was_device_updated():
             changelog.add_updated(fc)
         else:
             changelog.add_created(fc)
+        new_ids.append(ObjectId(update.new_device_id))
 
-        new_ids.append(device_id)
         insert_counter.success += 1
 
-    for remain_dev in project_devices:
-        new_ids.append(project_devices[remain_dev]["_id"])
-
+    all_devices = []
+    all_devices.extend(new_ids)
+    all_devices.extend(existing_ids)
     changelog.sort()
-    create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=new_ids, changelog=changelog)
+    create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=all_devices, changelog=changelog)
     return True, "\n".join(errors), insert_counter
 
 
@@ -907,8 +930,10 @@ def submit_project_for_approval(licco_db: MongoDb, project_id: str, userid: str,
         project_editors = list(set([prj["owner"]] + editors))
         # inform all editors, super approvers, and approvers
         notifier.project_submitted_for_approval(project_editors, project_name, project_id)
-        notifier.add_project_superapprovers(list(superapp_diff.in_both), project_name, project_id)
-        notifier.add_project_approvers(list(superapp_diff.new), project_name, project_id)
+        if superapp_diff.in_both:
+            notifier.add_project_superapprovers(list(superapp_diff.in_both), project_name, project_id)
+        if superapp_diff.new:
+            notifier.add_project_approvers(list(superapp_diff.new), project_name, project_id)
 
     else:
         # project was edited
