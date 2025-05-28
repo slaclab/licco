@@ -473,9 +473,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     # this is an internal method and at this stage we already know that the user is allowed to edit the project
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
-        return False, f"Cannot find project for {prjid}", {}, ''
-
-    changes = {}
+        return DeviceUpdate(), f"Cannot find project for {prjid}"
 
     fc = updates.get("fc", None)
     if not fc:
@@ -524,7 +522,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     return update, ""
 
 
-fields_to_not_overwrite = ["_id", "created", "project_id"]
+fields_to_not_overwrite = ["_id", "created", "project_id", "device_id"]
 
 def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, ignore_discussion_comments=False) -> Tuple[str, Dict[str, any], str]:
     device_changes : Dict[str, any] = {}
@@ -641,7 +639,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     project_devices = get_project_devices(licco_db, prjid)
 
     new_ids = []
-    existing_ids = []
+    existing_ids = {str(dev["_id"]): None for dev in project_devices.values()}
     changelog = Changelog()
     errors = []
 
@@ -663,15 +661,11 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
                 return False, "\n".join(errors), insert_counter
 
             # if there was an error, we keep the old device (if any)
-            if update.old_device_id:
-                existing_ids.append(ObjectId(update.old_device_id))
             continue
 
         # there were no changes
         no_changes = len(update.field_changes) == 0
         if no_changes:
-            if update.old_device_id:
-                existing_ids.append(ObjectId(update.old_device_id))
             insert_counter.ignored += 1
             continue
 
@@ -680,15 +674,16 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         fc = device_update["fc"]
         if update.was_device_updated():
             changelog.add_updated(fc)
+            existing_ids.pop(str(update.old_device_id), None)
         else:
             changelog.add_created(fc)
-        new_ids.append(ObjectId(update.new_device_id))
 
+        new_ids.append(ObjectId(update.new_device_id))
         insert_counter.success += 1
 
     all_devices = []
     all_devices.extend(new_ids)
-    all_devices.extend(existing_ids)
+    all_devices.extend([ObjectId(dev_id) for dev_id in existing_ids.keys()])
     changelog.sort()
     create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=all_devices, changelog=changelog)
     return True, "\n".join(errors), insert_counter
