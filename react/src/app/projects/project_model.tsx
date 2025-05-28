@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { isArrayEqual } from "../utils/arr_utils";
 import { toUnixMilliseconds, toUnixSeconds } from "../utils/date_utils";
 import { Fetch, JsonErrorMsg } from "../utils/fetching";
 import { DeviceType } from "./device_model";
@@ -241,43 +240,6 @@ export const ProjectDeviceDetailsNumericKeys: (keyof deviceDetailFields)[] = [
     'ray_trace'
 ]
 
-
-// compare every value field for a change 
-const deviceMetadataFields = new Set<keyof ProjectDeviceDetails>(["discussion", "device_id", "_id", "project_id", "created"])
-
-export function deviceHasChangedValue(a: ProjectDeviceDetails, b: ProjectDeviceDetails): boolean {
-    let key: keyof ProjectDeviceDetails;
-    for (key in a) {
-        if (deviceMetadataFields.has(key)) { // ignore device metadata fields
-            continue;
-        }
-
-        const aVal = a[key];
-        const bVal = b[key];
-        if (key == 'beamline') {
-            if (!isArrayEqual(aVal as any[], bVal as any[])) {
-                // found a difference
-                return true;
-            }
-            // keep looking for differences in other fields
-            continue;
-        }
-
-        if (aVal !== bVal) {
-            if ((aVal === undefined && bVal === '') || (aVal === '' && bVal === undefined)) {
-                // both fields are empty, and we shouldn't display them as a change of value 
-                // since that would cause <empty>-<empty> to be displayed in the GUI which 
-                // would look confusing.
-                // 
-                // In this case we do nothing and simply retry this check for another key
-            } else {
-                // there is a difference in value
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
 export async function fetchProjectDevices(projectId: string, sinceTime?: Date): Promise<ProjectDeviceDetails[]> {
     const queryParams = new URLSearchParams();

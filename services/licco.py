@@ -365,9 +365,10 @@ def update_device_in_project(prjid, fftid):
             fc = device['fc']
             fcupdate['fc'] = fc
 
-        ok, err, changed_fields, device_id = mcd_model.update_device_in_project(licco_db, userid, prjid, fcupdate)
+        updated, err = mcd_model.update_device_in_project(licco_db, userid, prjid, fcupdate)
         if err:
             return json_error(err)
+        device_id = updated.new_device_id
 
     if not device_id:   # device fields have not changed.
         device_id = fftid

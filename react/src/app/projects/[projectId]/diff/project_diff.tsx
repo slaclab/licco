@@ -3,7 +3,7 @@ import Link from "next/link";
 import React, { ReactNode, useMemo, useState } from "react";
 import { ProjectDeviceDetails, ProjectDevicePositionKeys, ProjectInfo, useWhoAmIHook } from "../../project_model";
 import { formatDevicePositionNumber } from "../project_details";
-import { ProjectDiff, useFetchProjectDiffDataHook } from "./project_diff_model";
+import { isDeviceFieldDifferent, ProjectDiff, useFetchProjectDiffDataHook } from "./project_diff_model";
 
 import { capitalizeFirstLetter } from "@/app/utils/string_utils";
 import { Col, Row } from "react-bootstrap";
@@ -114,6 +114,11 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectDiff, user: string, type:
             if (field == "_id" || field == "fc" || field == "fg") {
                 return val;
             }
+
+            if (Array.isArray(val)) {
+                return val.join(", ");
+            }
+
             const isPositionField = ProjectDevicePositionKeys.indexOf(field) >= 0;
             if (isPositionField) {
                 return formatDevicePositionNumber(val);
@@ -146,7 +151,7 @@ export const ProjectDiffTable: React.FC<{ diff: ProjectDiff, user: string, type:
         }
 
         const renderField = (a: ProjectDeviceDetails, b: ProjectDeviceDetails, field: keyof ProjectDeviceDetails) => {
-            let isChanged = a[field] != b[field];
+            let isChanged = isDeviceFieldDifferent(field, a, b);
             if (!isChanged) {
                 // if the value is empty, we just render empty tag
                 return <span style={{ color: Colors.GRAY1 }}>{formatValueIfNumber(a[field], field)}</span>
