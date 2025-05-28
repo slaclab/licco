@@ -33,13 +33,13 @@ test('diff algorithm grouping', () => {
 
     let devicesA: ProjectDeviceDetails[] = [];
     {
-        let newDevice = createMockDeviceDetails("A", "NEW_DEVICE");
+        let newDevice = createMockDeviceDetails("A_NEW", "NEW_DEVICE");
         newDevice.nom_ang_x = 0.01
 
-        let updatedDevice = createMockDeviceDetails("A", "UPDATED_DEVICE");
+        let updatedDevice = createMockDeviceDetails("A_UPDATED", "UPDATED_DEVICE");
         updatedDevice.ray_trace = 0;
 
-        let identicalDevice = createMockDeviceDetails("A", "IDENTICAL_DEVICE");
+        let identicalDevice = createMockDeviceDetails("A_IDENTICAL", "IDENTICAL_DEVICE");
         identicalDevice.nom_ang_z = 1.2;
 
         devicesA.push(newDevice, updatedDevice, identicalDevice);
@@ -48,13 +48,13 @@ test('diff algorithm grouping', () => {
     // B parts
     let devicesB: ProjectDeviceDetails[] = [];
     {
-        let missingDevice = createMockDeviceDetails("B", "MISSING_DEVICE");
+        let missingDevice = createMockDeviceDetails("B_MISSING", "MISSING_DEVICE");
         missingDevice.nom_ang_x = 0.2;
 
-        let updatedDevice = createMockDeviceDetails("A", "UPDATED_DEVICE");
+        let updatedDevice = createMockDeviceDetails("A_UPDATED", "UPDATED_DEVICE");
         updatedDevice.ray_trace = 1;
 
-        let identicalDevice = createMockDeviceDetails("A", "IDENTICAL_DEVICE");
+        let identicalDevice = createMockDeviceDetails("A_IDENTICAL", "IDENTICAL_DEVICE");
         identicalDevice.nom_ang_z = 1.2;
 
         devicesB.push(missingDevice, updatedDevice, identicalDevice);
@@ -71,14 +71,14 @@ test('diff algorithm grouping', () => {
     { // check if found the right new device
         expect(diff.new.length).toBe(1);
         let newDevice = diff.new[0];
-        expect(newDevice.fc).toBe("A");
+        expect(newDevice.fc).toBe("A_NEW");
         expect(newDevice.fg).toBe("NEW_DEVICE");
     }
 
     { // check if we found the right missing device
         expect(diff.missing.length).toBe(1);
         let missingDevice = diff.missing[0];
-        expect(missingDevice.fc).toBe("B");
+        expect(missingDevice.fc).toBe("B_MISSING");
         expect(missingDevice.fg).toBe("MISSING_DEVICE");
         expect(missingDevice.nom_ang_x).toBe(0.2);
     }
@@ -88,12 +88,12 @@ test('diff algorithm grouping', () => {
         let updatedDevices = diff.updated[0];
 
         let updatedA = updatedDevices.a;
-        expect(updatedA.fc).toBe("A");
+        expect(updatedA.fc).toBe("A_UPDATED");
         expect(updatedA.fg).toBe("UPDATED_DEVICE");
         expect(updatedA.ray_trace).toBe(0);
 
         let updatedB = updatedDevices.b;
-        expect(updatedB.fc).toBe("A");
+        expect(updatedB.fc).toBe("A_UPDATED");
         expect(updatedB.fg).toBe("UPDATED_DEVICE");
         expect(updatedB.ray_trace).toBe(1);
     }
@@ -101,7 +101,7 @@ test('diff algorithm grouping', () => {
     { // check if we found the right identical device
         expect(diff.identical.length).toBe(1);
         let identicalDevice = diff.identical[0];
-        expect(identicalDevice.fc).toBe("A");
+        expect(identicalDevice.fc).toBe("A_IDENTICAL");
         expect(identicalDevice.fg).toBe("IDENTICAL_DEVICE");
         expect(identicalDevice.nom_ang_z).toBe(1.2);
     }
