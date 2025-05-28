@@ -447,7 +447,7 @@ class DeviceUpdate:
 
 
 def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates: Dict[str, any],
-                             modification_time=None, remove_discussion_comments=None,
+                             modification_time=None, ignore_discussion_comments=False,
                              current_project_attributes=None,
                              create_snapshot=True) -> Tuple[DeviceUpdate, str]:
     """
@@ -513,7 +513,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
         update = DeviceUpdate(new_device_id=str(new_device_id), field_changes=updates)
         return update, ""
 
-    err, changes, device_id = _overwrite_device_data(licco_db, userid, prjid, existing_device, updates, create_snapshot=create_snapshot, modification_time=modification_time)
+    err, changes, device_id = _overwrite_device_data(licco_db, userid, prjid, existing_device, updates, create_snapshot=create_snapshot, modification_time=modification_time, ignore_discussion_comments=ignore_discussion_comments)
     if err:
         return DeviceUpdate(), err
 
@@ -521,9 +521,9 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
     return update, ""
 
 
-fields_to_not_overwrite = ["_id", "created", "project_id", ""]
+fields_to_not_overwrite = ["_id", "created", "project_id"]
 
-def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, modification_time=None) -> Tuple[str, Dict[str, any], str]:
+def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: McdDevice, updates: Dict[str, any], create_snapshot=False, modification_time=None, ignore_discussion_comments=False) -> Tuple[str, Dict[str, any], str]:
     device_changes : Dict[str, any] = {}
 
     # the user wants to update an existing device with new values
@@ -535,6 +535,11 @@ def _overwrite_device_data(licco_db, userid: str, prjid: str, existing_device: M
             continue
 
         if field == "discussion":
+            if ignore_discussion_comments:
+                # when merging one project into another, we don't want to merge due to discussion
+                # comments being different
+                continue
+
             # the user most likely wanted to add a discussion comment
             if len(val) > 0:
                 existing_comments = existing_device.get(field, [])
@@ -630,9 +635,9 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     # Try to add each device to a project
     for device_update in devices:
         update, errormsg = update_device_in_project(licco_db, userid, prjid, device_update,
-                                                                          current_project_attributes=project_devices,
-                                                                          remove_discussion_comments=remove_discussion_comments,
-                                                                          create_snapshot=False)
+                                                    current_project_attributes=project_devices,
+                                                    ignore_discussion_comments=remove_discussion_comments,
+                                                    create_snapshot=False)
         if update.was_device_created() or update.was_device_updated():
             def_logger.info(f"Import happened for {device_update.get('fc', '')}. New Id: {update.new_device_id}")
 
