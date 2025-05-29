@@ -294,6 +294,10 @@ function transformProjectDeviceDetails(device: deviceDetailFields) {
     } else if (device.discussion === undefined) {
         device.discussion = [];
     }
+
+    if (device.beamline === undefined) {
+        device.beamline = [];
+    }
 }
 
 export interface NewDeviceInfo {

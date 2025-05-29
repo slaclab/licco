@@ -159,10 +159,24 @@ export function isDeviceFieldDifferent(key: keyof ProjectDeviceDetails, a: Proje
     }
 
     if (Array.isArray(valA)) {
+        // it's possible that one field is an empty array, while the other is undefined (array was not set)
+        // In this case we determine that the fields are the same 
+        if (valA.length === 0 && valB === undefined) {
+            return false;
+        }
+
         if (!isArrayEqual(valA as any[], valB as any[])) {
             return true;
         }
         return false;
+    }
+
+    // a is not an array, but b is
+    // perform the same array check as above
+    if (Array.isArray(valB)) {
+        if (valA === undefined && valB.length === 0) {
+            return false;
+        }
     }
 
     // field is different
