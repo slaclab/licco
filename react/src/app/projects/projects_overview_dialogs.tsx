@@ -441,7 +441,7 @@ export const ProjectImportDialog: React.FC<{
                 setFileButtonState(false);
             })
             .catch((e: JsonErrorMsg) => {
-                let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}'`;
+                let msg = `Failed to upload file '${selectedFile.name}' to project '${project.name}': ${e.error}`;
                 setDialogError(msg);
                 console.error(msg, e);
             })

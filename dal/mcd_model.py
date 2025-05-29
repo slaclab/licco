@@ -385,7 +385,7 @@ def insert_new_device(licco_db: MongoDb, userid: str, prjid: str, values: Dict[s
     # validate device before inserting
     err = mcd_validate.validate_device(values)
     if err:
-        return None, err
+        return ObjectId(), err
 
     device_id = licco_db["device_history"].insert_one(values).inserted_id
     return device_id, ""
@@ -685,7 +685,10 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
     all_devices.extend(new_ids)
     all_devices.extend([ObjectId(dev_id) for dev_id in existing_ids.keys()])
     changelog.sort()
-    create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=all_devices, changelog=changelog)
+
+    if insert_counter.success > 0:
+        # only create a new snapshot if we have successfully inserted some data
+        create_new_snapshot(licco_db, userid=userid, projectid=prjid, devices=all_devices, changelog=changelog)
     return True, "\n".join(errors), insert_counter
 
 

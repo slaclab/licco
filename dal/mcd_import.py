@@ -41,7 +41,8 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
     import_counter = ImportCounter()
 
     devices = {}
-    with StringIO(csv_content) as fp:
+    universalNewline = None  # avoids csv parsing errors if csv file contains carriage return \r at the end of the line
+    with StringIO(csv_content, newline=universalNewline) as fp:
         fp.seek(0)
         # Find the header row
         loc = 0
@@ -63,19 +64,25 @@ def import_project(licco_db: MongoDb, userid: str, prjid: str, csv_content: str,
         fp.seek(loc)
         reader = csv.DictReader(fp)
         # Add each valid line of data to import dictionary
-        for line in reader:
-            # No FC present in the data line
-            if not line["FC"]:
-                import_counter.fail += 1
-                continue
+        line_num = 1
+        try:
+            for line in reader:
+                # No FC present in the data line
+                if not line["FC"]:
+                    import_counter.fail += 1
+                    continue
 
-            # NOTE: if fc already exists, we will simply overwrite values with the later values
-            # Sanitize/replace unicode quotes
-            clean_fc = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
-            if not clean_fc:
-                import_counter.fail += 1
-                continue
-            devices[clean_fc] = line
+                # NOTE: if fc already exists, we will simply overwrite values with the later values
+                # Sanitize/replace unicode quotes
+                clean_fc = re.sub(u'[\u201c\u201d\u2018\u2019]', '', line["FC"])
+                if not clean_fc:
+                    import_counter.fail += 1
+                    continue
+                devices[clean_fc] = line
+            line_num += 1
+        except Exception as e:
+            msg = f"Failed to parse csv device data (line: {line_num}): str{e}"
+            return False, msg, import_counter
 
         if not devices:
             err = "Import Error: No data detected in import file."
