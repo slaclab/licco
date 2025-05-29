@@ -462,7 +462,8 @@ class DeviceUpdate:
 
 def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates: Dict[str, any],
                              ignore_discussion_comments=False, current_project_attributes=None,
-                             create_snapshot=True) -> Tuple[DeviceUpdate, str]:
+                             create_snapshot=True,
+                             ignore_user_permission_check=False) -> Tuple[DeviceUpdate, str]:
     """
     Update the value(s) of a device in a project. In case of any changes (or if it's a new device) it will be saved
     in a db (it will also create a snapshot if the flag is set to true; if persist flag is set to false, the
@@ -470,10 +471,19 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
 
     Returns: a tuple containing (success flag (true/false if error), error message (if any), and newly created device_id
     """
-    # this is an internal method and at this stage we already know that the user is allowed to edit the project
+    
     prj = licco_db["projects"].find_one({"_id": ObjectId(prjid)})
     if not prj:
         return DeviceUpdate(), f"Cannot find project for {prjid}"
+    
+    # If the user has already been validated, allow skipping the user permission check.
+    # This is useful for example when updating multiple devices at the same time, 
+    # so the same user permissions are not checked for every device individually.
+    if not ignore_user_permission_check:
+        # check that only owner/editor/admin are allowed to update this project
+        allowed_to_update = is_user_allowed_to_edit_project(licco_db, userid, prj)
+        if not allowed_to_update:
+            return DeviceUpdate(), f"user '{userid}' is not allowed to update a project {prj['name']}", {}, ''
 
     fc = updates.get("fc", None)
     if not fc:
@@ -648,7 +658,7 @@ def update_ffts_in_project(licco_db: MongoDb, userid: str, prjid: str, devices, 
         update, errormsg = update_device_in_project(licco_db, userid, prjid, device_update,
                                                     current_project_attributes=project_devices,
                                                     ignore_discussion_comments=remove_discussion_comments,
-                                                    create_snapshot=False)
+                                                    create_snapshot=False, ignore_user_permission_check=True)
         if update.was_device_created() or update.was_device_updated():
             def_logger.info(f"Import happened for {device_update.get('fc', '')}. New Id: {update.new_device_id}")
 
@@ -708,7 +718,7 @@ def create_new_snapshot(licco_db: MongoDb, userid: str, projectid: str, devices:
         snapshot["changelog"] = changelog.to_dict()
 
     if snapshot_name:
-        snapshot["snapshot_name"] = snapshot_name
+        snapshot["name"] = snapshot_name
 
     licco_db["project_snapshots"].insert_one(snapshot)
     return

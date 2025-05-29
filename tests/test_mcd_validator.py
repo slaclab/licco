@@ -5,7 +5,7 @@ from dal.mcd_validate import DeviceType, validator_mcd
 
 # tests for mcd validation routines
 
-def validate_field__valid_field():
+def test_validate_field__valid_field():
     err = validator_mcd.validate_field("nom_ang_x", 1.2351)
     assert err == ""
 

@@ -3,7 +3,7 @@ import io
 import logging
 import time
 import uuid
-from typing import List, Dict, Mapping, Any
+from typing import List, Dict, Mapping, Any, Optional
 
 import mongomock.mongo_client
 import pytest
@@ -117,6 +117,29 @@ def create_test_device(device: McdDevice) -> McdDevice:
     if 'state' not in device:
         device['state'] = DeviceState.Conceptual.value
     return device
+
+# helper method to verify snaphsot fields
+def verify_snapshot(snapshot: dict[str, Any], prjid: str, author: str, devices: List[str], 
+                    created: Optional[List[str]] = None, updated: Optional[List[str]] = None, deleted: Optional[List[str]] = None):
+    
+    # verify that the snapshot is not None
+    assert snapshot
+    # verify metadata
+    assert snapshot["project_id"] == ObjectId(prjid), f"Wrong project name."
+    assert snapshot["author"] == author, f"Wrong author."
+    # verify a time was included
+    assert snapshot["created"], f"Missing timestamp."
+    # verify the devices match
+    assert snapshot["devices"] == [ObjectId(x) for x in devices], f"Devices do not match."
+    
+    # verify the correct fcs are named in the changelog
+    if created is not None:
+        assert snapshot["changelog"]["created"] == created
+    if updated is not None:
+        assert snapshot["changelog"]["updated"] == updated
+    if deleted is not None:
+        assert snapshot["changelog"]["deleted"] == deleted
+
 
 # -------- tests ---------
 
@@ -263,10 +286,86 @@ def test_get_recent_snapshot(db):
     assert device_by_fc["nom_ang_x"] == updated_device["nom_ang_x"]
     assert device_by_fc["nom_ang_y"] == updated_device["nom_ang_y"]
     assert device_by_fc.get("nom_ang_z", None) == updated_device.get("nom_ang_z", None)
+    
+    
+def test_get_project_snapshots(db):
+    project = create_test_project(db, "test_user", "test_get_project_snapshots", "")
+    prjid = project["_id"]
+    
+    # check that the initial state of the project is an empty snapshot
+    snapshots, err = mcd_model.get_project_snapshots(db, prjid)
+    assert len(snapshots) == 1
+    [snapshot_1] = snapshots
+    verify_snapshot(snapshot_1, prjid, "test_user", [])
+    
+    
+    device = create_test_device({'fc': 'TESTFC'})
+    update_1, err = mcd_model.update_device_in_project(db, "test_user", prjid, device, create_snapshot=True)
+    assert err == ""
+    
+    # check that the snapshot is added
+    snapshots, err = mcd_model.get_project_snapshots(db, prjid)
+    assert len(snapshots) == 2
+    [snapshot_2, snapshot_1] = snapshots
+    verify_snapshot(snapshot_1, prjid, "test_user", [])
+    verify_snapshot(snapshot_2, prjid, "test_user", [update_1.new_device_id])
+
+    # change existing data and update the device
+    device["nom_ang_x"] = 2.55
+    device["nom_ang_y"] = 1.88
+    update_2, err = mcd_model.update_device_in_project(db, "test_user", prjid, device, create_snapshot=True)
+    assert err == ""
+    
+    # check that both snapshots are saved
+    snapshots, err = mcd_model.get_project_snapshots(db, prjid)
+    assert len(snapshots) == 3
+    [snapshot_3, snapshot_2, snapshot_1] = snapshots
+    verify_snapshot(snapshot_1, prjid, "test_user", [])
+    verify_snapshot(snapshot_2, prjid, "test_user", [update_1.new_device_id])
+    verify_snapshot(snapshot_3, prjid, "test_user", [update_2.new_device_id])
 
 
-# @TODO: TEST: when inserting or updating a device within a snapshot, we should test that FC is unique within
-# the device array. Write a test case for that
+def test_edit_snapshot_name(db):
+    project = create_test_project(db, "test_user", "test_edit_snapshot_name", "")
+    prjid = project["_id"]
+    device = create_test_device({'fc': 'TESTFC', 'fg': 'TESTFG', 'nom_ang_x': 1.23, 'device_type': DeviceType.MCD.value})
+    
+    # insert a new device
+    device_id, err = mcd_model.insert_new_device(db, "test_user", prjid, device)
+    assert err == ""
+    
+    # create the snapshot
+    mcd_model.create_new_snapshot(db, "test_user", prjid, [device_id], snapshot_name="snapshot_1")
+    [snapshot], err = mcd_model.get_project_snapshots(db, prjid, limit=1)
+    assert err == ""
+    
+    assert snapshot["name"] == "snapshot_1"
+    
+    # rename the snapshot
+    mcd_model.edit_snapshot_name(db, "test_user", prjid, snapshot["_id"], "renamed_snapshot_1")
+    [snapshot], err = mcd_model.get_project_snapshots(db, prjid, limit=1)
+    assert err == ""
+    
+    assert snapshot["name"] == "renamed_snapshot_1"
+    
+
+def test_fc_is_unique(db):
+    """When inserting a device within a snapshot, the FC should be unique within the device array."""
+    user_id = "test_user"
+    prj = create_test_project(db, user_id, "test_fc_is_unique", "")
+    assert prj
+    
+    # add device
+    fft_update = create_test_device({'fc': 'TESTFC'})
+    ok, err, count = mcd_model.insert_new_devices_in_project(db, user_id, prj["_id"], [fft_update])
+    assert err == ""
+    assert ok
+    
+    # add a device with the same FC. Should throw an error.
+    fft_update = create_test_device({'fc': 'TESTFC'})
+    ok, err, count = mcd_model.insert_new_devices_in_project(db, user_id, prj["_id"], [fft_update])
+    assert err == "Devices already present in the project: ['TESTFC']"
+    assert not ok
 
 
 def test_store_retrieve_changelog(db):
@@ -502,7 +601,6 @@ def test_project_filter_for_admins(db):
 
 
 def test_add_device_to_project(db):
-    # TODO: check what happens if non editor is trying to update fft: we should return an error
     project = create_test_project(db, "test_user", "test_add_device_to_project", "")
 
     # get ffts for project, there should be none
@@ -524,6 +622,21 @@ def test_add_device_to_project(db):
     assert inserted_fft["comments"] == fft_update["comments"]
     assert inserted_fft["nom_ang_x"] == pytest.approx(fft_update["nom_ang_x"], "0.001")
     assert len(inserted_fft["discussion"]) == 0, "there should be no discussion comments"
+
+
+def test_add_device_to_project_invalid_user(db):
+    # If non editor is trying to update fft: we should return an error
+    project = create_test_project(db, "test_user", "test_add_device_to_project_invalid_user", "")
+
+    # get ffts for project, there should be none
+    project_ffts = mcd_model.get_project_devices(db, project["_id"])
+    assert len(project_ffts) == 0, "there should be no ffts in a new project"
+
+    # add fft change
+    fft_update = create_test_device({'fc': 'TESTFC', 'fg':'TESTFG', 'comments': 'some comment', 'nom_ang_x': 1.23})
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "non_editor", project["_id"], fft_update)
+    assert not ok
+    assert err == "user 'non_editor' is not allowed to update a project test_add_device_to_project_invalid_user"
 
 
 def test_add_unchanged_fft_to_project(db):
@@ -550,36 +663,30 @@ def test_add_unchanged_fft_to_project(db):
     assert snapshot["devices"] == [ObjectId(dev_id)]
 
 
-def test_invalid_fft_due_to_missing_attributes(db):
+def test_invalid_device_due_to_missing_attributes(db):
     """If state is not development, certain attributes are expected. An error should be returned if we don't provide them"""
-    #TODO: update test once we add in validation
-    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_missing_attributes", "")
+    project = create_test_project(db, "test_user", "test_invalid_device_due_to_missing_attributes", "")
 
-    fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'state': 'Installed', 'nom_ang_x': 123}
+    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'state': 'Installed', 'nom_ang_x': 1.23})
     update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
-    #assert not ok
-    #assert err == "FFTs should remain in the Conceptual state while the dimensions are still being determined."
+    assert "missing required fields: ['nom_ang_y', 'nom_ang_z', 'nom_loc_x', 'nom_loc_y', 'nom_loc_z']" in err
 
 
-def test_invalid_fft_due_to_invalid_value(db):
+def test_invalid_device_due_to_invalid_value(db):
     """If an fft value is outside its required range, an error should be returned"""
-    #TODO: update test once we add in validation
-    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_value", "")
+    project = create_test_project(db, "test_user", "test_invalid_device_due_to_invalid_value", "")
 
-    fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 123}
+    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 123})
     update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
-    #assert not ok
-    #assert err == "invalid range for nom_ang_x: expected range [-3.14, 3.14], but got 123.0"
+    assert "invalid range of 'nom_ang_x' value" in err
 
 
-def test_invalid_fft_due_to_invalid_type(db):
-    #TODO: update test once we add in validation
-    project = create_test_project(db, "test_user", "test_invalid_fft_due_to_invalid_type", "")
+def test_invalid_device_due_to_invalid_type(db):
+    project = create_test_project(db, "test_user", "test_invalid_device_due_to_invalid_type", "")
 
-    fft_update = {'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 'this is a string'}
+    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_x': 'this is a string'})
     update, err = mcd_model.update_device_in_project(db, "test_user", project["_id"], fft_update)
-    #assert not ok
-    #assert err == "Wrong type - nom_ang_x, ('this is a string')"
+    assert "invalid 'nom_ang_x' value" in err
 
 
 def test_remove_fft_from_project(db):
@@ -618,78 +725,104 @@ def test_remove_fft_from_project(db):
     assert len(project_ffts) == 0, "there should be no ffts after deletion"
 
 
-def test_get_project_ffts(db):
-    project = create_test_project(db, "test_user", "test_get_project_ffts", "")
+def test_get_project_devices(db):
+    project = create_test_project(db, "test_user", "test_get_project_devices", "")
     prjid = str(project["_id"])
 
-    # insert new fft
-    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
-    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    # insert new device
+    device_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, device_update)
     assert err == ""
 
-    inserted_ffts = mcd_model.get_project_devices(db, prjid)
-    assert len(inserted_ffts) == 1
+    inserted_devices = mcd_model.get_project_devices(db, prjid)
+    assert len(inserted_devices) == 1
 
-    fft = inserted_ffts[fft_update['fc']]
-    assert fft['nom_ang_y'] == 1.23
-    assert fft['nom_ang_x'] == 2.31
-    assert fft.get('nom_ang_z', None) is None
-
-    # check what is stored in the database, we should find only the values that we have stored
-    snapshot = mcd_model.get_recent_snapshot(db, prjid=prjid)
-    assert snapshot
-
-    # @TODO: once we know the structure of a changelog, we should verify the changelog behavior
-    #
-    # _id, discussion, state(default Conceptual), created, prjid are extra fields
-    # default_fields = 5
-    # inserted fc, fg, nom_ang_x, nom_ang_y
-    # inserted_fields = 4
-    # assert len(snapshot["changelog"]) == (default_fields + inserted_fields), "we made 4 value changes, and have 5 defaults, totalling 9 in db"
-    #
-    # verify the value of each change is correct
-    # for change in snapshot["changelog"]:
-    #     # verify the correct fc is named
-    #     assert change['fc'] == fft_update['fc']
-    #     assert str(change['prj']) == project["name"], f"wrong project name; change: {change}"
-    #     # verify the key is correctly named
-    #     assert change['key'] in fft_update
-    #     # verify metadata
-    #     assert change['user'] == "test_user", f"expected something else for change: {change}"
-    #     # verify a time was included
-    #     assert change['time']
-    #     # filter out insertion time
-    #     if change['key'] == 'created':
-    #         continue
-    #     assert not change['previous']
-    #     # verify the correct value is set
-    #     assert change['val'] == fft_update[change['key']]
+    device = inserted_devices[device_update['fc']]
+    assert device['nom_ang_y'] == 1.23
+    assert device['nom_ang_x'] == 2.31
+    assert device.get('nom_ang_z', None) is None
 
 
-def test_get_project_ffts_after_timestamp(db):
-    """Only fetch the ffts inserted after a certain timestamp"""
+def test_snapshot_changelog(db):
+    user = "test_user"
+    
+    project = create_test_project(db, user, "test_snapshot_changelog", "")
+    prjid = str(project["_id"])
+    
+
+    # insert a new device
+    device_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
+    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, user, prjid, device_update)
+    assert err == ""
+
+    inserted_devices = mcd_model.get_project_devices(db, prjid)
+    assert len(inserted_devices) == 1
+
+    device = inserted_devices[device_update['fc']]
+    assert device['nom_ang_y'] == 1.23
+    assert device['nom_ang_x'] == 2.31
+    assert device.get('nom_ang_z', None) is None
+
+
+def test_snapshot_changelog(db):
+    user = "test_user"
+    
+    project = create_test_project(db, user, "test_snapshot_changelog", "")
+    prjid = str(project["_id"])
+    
+
+    # insert a new device
+    device_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23, 'nom_ang_x': 2.31})
+    update, err = mcd_model.update_device_in_project(db, user, prjid, device_update)
+    assert err == ""
+
+    # verify the inserted device is in the changelog
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    verify_snapshot(snapshot, prjid, user, [update.new_device_id], created=[device_update["fc"]], updated=[], deleted=[])
+
+    # update the device
+    device_update = create_test_device({'fc':'TESTFC', 'nom_ang_x': -1.23})
+    update, err = mcd_model.update_device_in_project(db, user, prjid, device_update)
+    assert err == ""
+    
+    # verify the updated device is in the changelog
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    verify_snapshot(snapshot, prjid, user, [update.new_device_id], created=[], updated=[device_update["fc"]], deleted=[])
+    
+    # delete the device
+    ok, err = mcd_model.delete_devices_from_project(db, user, prjid, [update.new_device_id])
+    assert err == ""
+    assert ok
+    
+    # verify the deleted device is in the changelog
+    snapshot = mcd_model.get_recent_snapshot(db, prjid)
+    verify_snapshot(snapshot, prjid, user, devices=[], created=[], updated=[], deleted=[device_update["fc"]])
+
+
+def test_get_project_devices_after_timestamp(db):
+    """Only fetch the devices inserted after a certain timestamp"""
     #TODO: not sure the use case of this test now. We do a filter by snapshot system, not a timestamp based insert.
     # Is this targeting some specific functionality that we have?
-    project = create_test_project(db, "test_user", "test_get_project_ffts_after_timestamp", "")
+    project = create_test_project(db, "test_user", "test_get_project_devices_after_timestamp", "")
     prjid = str(project["_id"])
 
     # insert new fft
     timestamp = datetime.datetime.now(tz=pytz.UTC) - datetime.timedelta(seconds=1)
-    fft_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
-    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, fft_update)
+    device_update = create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'nom_ang_y': 1.23})
+    update, err = mcd_model.update_device_in_project(db, "test_user", prjid, device_update)
     assert err == ""
 
 
-    ffts = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
-    #assert len(ffts) == 0, "there should be no fft before insertion"
+    devices = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
+    assert len(devices) == 0, "there should be no fft before insertion"
 
     timestamp = datetime.datetime.now(tz=pytz.UTC)
-    ffts = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
-    #assert len(ffts) == 1, "there should be 1 fft insert"
+    devices = mcd_model.get_project_devices(db, prjid, asoftimestamp=timestamp)
+    assert len(devices) == 1, "there should be 1 fft insert"
 
-    #fft = ffts[fft_id]
-    #assert fft['nom_ang_y'] == 1.23
-    #assert fft.get('nom_ang_x', None) is None
+    device = devices['TESTFC']
+    assert device['nom_ang_y'] == 1.23
+    assert device.get('nom_ang_x', None) is None
 
 
 def test_create_delete_comment(db):
@@ -990,13 +1123,19 @@ def test_update_ffts_invalid(db):
 
 
 def test_update_ffts_invalid_empty_value(db):
-    #TODO: update test once we add in validation
     project = create_test_project(db, "test_user", "test_update_ffts_invalid_empty_value", "")
 
-    ffts = [{'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.DeviceState.Installed.value, "nom_loc_z": ""}]
+    ffts = [create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.DeviceState.Installed.value, "nom_loc_z": ""})]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
-    #assert updates.fail == 1
-    #assert err == "'nom_loc_z' value is required for a Non-Conceptual device"
+    assert updates.fail == 1
+    """
+    Full error at time of last update: 
+    
+    validation failed for a device MCD (fc: TESTFC):
+    invalid 'nom_loc_z' value: value should be present
+    missing required fields: ['nom_ang_x', 'nom_ang_y', 'nom_ang_z', 'nom_loc_x', 'nom_loc_y']
+    """
+    assert "invalid 'nom_loc_z' value: value should be present" in err
 
 def test_update_ffts_wrong_type(db):
     project = create_test_project(db, "test_user", "test_update_wrong_type", "")
@@ -1004,6 +1143,12 @@ def test_update_ffts_wrong_type(db):
     ffts = [create_test_device({'fc':'TESTFC', 'fg':'TESTFG', 'state': mcd_datatypes.DeviceState.Installed.value, "nom_loc_z": "aaa"})]
     ok, err, updates = mcd_model.update_ffts_in_project(db, "test_user", project["_id"], ffts)
     assert updates.fail == 1
+    """Full error at time of last update:
+    
+    validation failed for a device MCD (fc: TESTFC):
+    invalid 'nom_loc_z' value: could not convert string to float: 'aaa'
+    missing required fields: ['nom_ang_x', 'nom_ang_y', 'nom_ang_z', 'nom_loc_x', 'nom_loc_y']
+    """
     assert "invalid 'nom_loc_z' value: could not convert string to float: 'aaa'" in err
 
 
