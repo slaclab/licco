@@ -6,9 +6,10 @@ import os
 import random
 import uuid
 from typing import List, Dict
-import pytest
 from bson import ObjectId
 from pymongo import MongoClient
+
+from dal import mcd_validate
 
 # ----------------------------------------------------------------------------------------------
 # This script is used for migrating from: MCD 1.0 -> MCD 2.0
@@ -194,6 +195,11 @@ def create_new_device_format(project_id, old_values, creation_time = None):
         'discussion': [],
     }
 
+    # TODO: I am not sure what is fg_desc or why would we need one
+    fg_desc = old_values.pop("fg_desc", None)
+    #if fg_desc:
+    #    print("fg_desc", fg_desc)
+
     # some projects may have stored old names of the values (nom_dim_x)
     old_values_to_remove = ["nom_dim_x", "nom_dim_y", "nom_dim_z"]
     new_values_to_check = ["nom_loc_x", "nom_loc_y", "nom_loc_z"]
@@ -252,6 +258,20 @@ def migrate_project(old_db, new_db, project,  output_dir):
 
     # we have to get back the document ids in order to reference devices in a project snapshot
     if devices:
+        # validate all devices before inserting them, so we don't end up inserting devices that are not validated
+        validated = mcd_validate.validate_project_devices(devices)
+        if validated.errors:
+            print("")
+            print("======================================================")
+            print(f"Project {project_name} has a validation error")
+            for err in validated.errors:
+                print(err.error)
+            print("======================================================")
+            print("")
+            return
+
+        created_fcs = [dev['fc'] for dev in devices]
+        created_fcs.sort()
         out = new_db['device_history'].insert_many(devices)
         ids = list(out.inserted_ids)
         project_snapshot = {
@@ -260,9 +280,8 @@ def migrate_project(old_db, new_db, project,  output_dir):
             'author': project['owner'],  # snapshot author
             'created': created,  # created timestamp
             'devices': ids,
-            'description': "Migration from MCD 1.0",   # explanation if necessary
             'changelog': {
-                "created": [],
+                "created": created_fcs,
                 "updated": [],
                 "deleted": [],
             },
