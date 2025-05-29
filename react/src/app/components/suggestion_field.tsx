@@ -62,6 +62,8 @@ export const StringSuggest: React.FC<StringSuggestProps> = (props) => {
         itemRenderer={renderItem}
         onItemSelect={setValue}
         itemPredicate={filter}
+        onQueryChange={setValue}
+        selectedItem={value}
 
         createNewItemFromQuery={(query) => query}
         createNewItemRenderer={renderNewItem}
