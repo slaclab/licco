@@ -634,8 +634,7 @@ def test_add_device_to_project_invalid_user(db):
 
     # add fft change
     fft_update = create_test_device({'fc': 'TESTFC', 'fg':'TESTFG', 'comments': 'some comment', 'nom_ang_x': 1.23})
-    ok, err, changelog, dev_id = mcd_model.update_device_in_project(db, "non_editor", project["_id"], fft_update)
-    assert not ok
+    update, err = mcd_model.update_device_in_project(db, "non_editor", project["_id"], fft_update)
     assert err == "user 'non_editor' is not allowed to update a project test_add_device_to_project_invalid_user"
 
 

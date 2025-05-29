@@ -483,7 +483,7 @@ def update_device_in_project(licco_db: MongoDb, userid: str, prjid: str, updates
         # check that only owner/editor/admin are allowed to update this project
         allowed_to_update = is_user_allowed_to_edit_project(licco_db, userid, prj)
         if not allowed_to_update:
-            return DeviceUpdate(), f"user '{userid}' is not allowed to update a project {prj['name']}", {}, ''
+            return DeviceUpdate(), f"user '{userid}' is not allowed to update a project {prj['name']}"
 
     fc = updates.get("fc", None)
     if not fc:
